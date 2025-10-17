@@ -1,0 +1,178 @@
+
+x-common-env: &common_env
+  TZ: Africa/Cairo
+  PUID: "1001"
+  PGID: "988"
+  UVICORN_WORKERS: "1"
+  HTTP_TIMEOUT: "30"
+
+x-common-deploy: &common_deploy
+  restart: always
+  user: "1001:988"
+  deploy:
+    resources:
+      limits:
+        cpus: "2.0"
+        memory: 2048M
+
+networks:
+  stack_appnet:
+    external: true
+    name: stack_appnet
+
+volumes:
+  pg_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/stack/livetranslator/data/db
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/stack/livetranslator/data/redis
+  models_store:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/stack/livetranslator/data/models
+  audio_buf:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/stack/livetranslator/data/audio
+  api_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/stack/livetranslator/data/logs
+
+services:
+  postgres:
+    image: postgres:16
+    networks: [stack_appnet]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-livetranslator}
+      POSTGRES_USER: ${POSTGRES_USER:-livetranslator}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - /opt/stack/livetranslator/data/pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7
+    networks: [stack_appnet]
+    command: ["redis-server","--appendonly","yes","--dir","/data"]
+    volumes:
+      - /opt/stack/livetranslator/data/redis:/data
+    healthcheck:
+      test: ["CMD","redis-cli","ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    container_name: api
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    <<: *common_deploy
+    env_file:
+      - .env
+    environment:
+      <<: *common_env
+      LT_ENV: prod
+      LT_DOMAIN: livetranslator.pawelgawliczek.cloud
+      #LT_DB_URL: postgresql+psycopg://$${LT_DB_USER:-lt}:$${LT_DB_PASSWORD:-ltpass}@postgres:5432/$${LT_DB_NAME:-livetranslator}
+      LT_DB_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      LT_REDIS_URL: redis://redis:6379/0
+      LT_JWT_SECRET_FILE: /run/secrets/jwt_secret
+      LT_GOOGLE_CLIENT_ID_FILE: /run/secrets/google_oauth_client_id.txt
+      LT_GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_oauth_client_secret.txt
+      LT_AUDIO_DIR: /data/audio
+      LT_MODELS_DIR: /models
+      LT_MT_BASE_URL: http://mt_worker:8081
+      HTTP_TIMEOUT: 30
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mt_worker:
+        condition: service_started
+    volumes:
+      - api_logs:/logs
+      - audio_buf:/data/audio
+      - models_store:/models:ro
+      - /opt/stack/secrets:/run/secrets:ro
+    networks:
+      stack_appnet:
+        aliases: [api]
+    restart: always
+    user: "1001:988"
+    ports: ["9003:8000"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  stt_worker:
+    build:
+      context: ./workers/stt
+      dockerfile: Dockerfile
+    <<: *common_deploy
+    environment:
+      <<: *common_env
+      REDIS_URL: redis://redis:6379/0
+      WHISPER_MODEL: base
+      CHUNK_MS: "400"
+      COMPUTE_TYPE: int8
+      NUM_THREADS: "2"
+      CONDITION_ON_PREVIOUS_TEXT: "true"
+      MAX_REDECODE_SEC: "3"
+      VAD: "true"
+      AUDIO_DIR: /data/audio
+      MODELS_DIR: /models
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - audio_buf:/data/audio
+      - models_store:/models
+    networks: [stack_appnet]
+    healthcheck:
+      test: ["CMD","python","-c","print(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  mt_worker:
+    build:
+      context: ./workers/mt
+      dockerfile: Dockerfile
+    environment:
+      <<: *common_env
+      MODELS_DIR: /models
+      PORT: "8081"
+      DEBUG_MT: "1"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - models_store:/models
+      - ./workers/mt/app.py:/app/app.py:ro   # <-- add this
+#      - ./workers/mt/app_nllb.py:/app/app.py:ro
+    networks: [stack_appnet]
+    healthcheck:
+      test: ["CMD","curl","-f","http://localhost:8081/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5

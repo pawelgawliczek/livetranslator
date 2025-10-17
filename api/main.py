@@ -28,6 +28,12 @@ structlog.configure(
     ]
 )
 log = structlog.get_logger("api")
+import logging
+class _MuteHealthMetrics(logging.Filter):
+    def filter(self, record):
+        msg = record.getMessage()
+        return (" GET /metrics " not in msg) and (" GET /healthz " not in msg)
+logging.getLogger("uvicorn.access").addFilter(_MuteHealthMetrics())
 
 app.add_middleware(
     CORSMiddleware,
