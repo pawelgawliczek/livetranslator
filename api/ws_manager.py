@@ -2,26 +2,67 @@ import asyncio
 from typing import Dict, Set
 from fastapi import WebSocket
 import redis.asyncio as redis
-import orjson
+import orjson, httpx, structlog
 
 class WSManager:
-    def __init__(self, redis_url):
+    def __init__(self, redis_url: str, mt_base_url: str, default_tgt: str = "en"):
         self.redis: redis.Redis = redis.from_url(str(redis_url), decode_responses=True)
         self.rooms: Dict[str, Set[WebSocket]] = {}
+        self.mt_url_final = str(mt_base_url).rstrip("/") + "/translate/final"
+        self.default_tgt = default_tgt
+        self.log = structlog.get_logger("wsman")
 
     async def run_pubsub(self):
         pubsub = self.redis.pubsub()
         await pubsub.subscribe("stt_events")
-        async for msg in pubsub.listen():
-            if not msg or msg.get("type") != "message":
-                continue
-            try:
-                data = orjson.loads(msg["data"])
+        self.log.info("subscribed", channel="stt_events")
+        async with httpx.AsyncClient(timeout=30) as cli:
+            async for msg in pubsub.listen():
+                if not msg or msg.get("type") != "message":
+                    continue
+                raw = msg.get("data")
+                try:
+                    data = orjson.loads(raw if isinstance(raw, (bytes, bytearray)) else raw.encode("utf-8"))
+                except Exception as e:
+                    self.log.error("bad_message", err=str(e), kind=type(raw).__name__)
+                    continue
+
                 room = data.get("room_id")
-                if room:
-                    await self.broadcast(room, data)
-            except Exception:
-                continue
+                if not room:
+                    continue
+
+                kind = "final" if data.get("final") else "partial"
+                self.log.info("stt_event", kind=kind, room=room,
+                              segment=data.get("segment_id"), revision=data.get("revision"))
+
+                await self.broadcast(room, data)
+
+                if data.get("final") is True and (txt := data.get("text")):
+                    try:
+                        self.log.info("mt_request", room=room, segment=data.get("segment_id"),
+                                      src=data.get("lang") or "auto", tgt=self.default_tgt, bytes=len(txt.encode()))
+                        resp = await cli.post(self.mt_url_final, json={
+                            "src": data.get("lang") or "auto",
+                            "tgt": self.default_tgt,
+                            "text": txt,
+                        })
+                        resp.raise_for_status()
+                        ttext = resp.json().get("text", "")
+                        self.log.info("mt_response", room=room, segment=data.get("segment_id"))
+                        out = {
+                            "type": "translation_final",
+                            "room_id": room,
+                            "device": data.get("device"),
+                            "segment_id": data.get("segment_id"),
+                            "ts_iso": data.get("ts_iso"),
+                            "src": data.get("lang") or "auto",
+                            "tgt": self.default_tgt,
+                            "text": ttext,
+                            "final": True,
+                        }
+                        await self.broadcast(room, out)
+                    except Exception as e:
+                        self.log.error("mt_error", room=room, segment=data.get("segment_id"), err=str(e))
 
     async def connect(self, room_id: str, ws: WebSocket):
         await ws.accept()

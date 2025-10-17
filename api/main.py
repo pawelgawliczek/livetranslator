@@ -1,10 +1,13 @@
+import structlog
+from . import metrics
 import asyncio
 import re
 import orjson
 import httpx
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Request, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from .settings import settings
 from .db import migrate
@@ -14,6 +17,8 @@ from .mt_client import MTClient
 from . import auth
 
 app = FastAPI(title="LiveTranslator API")
+structlog.configure(processors=[structlog.processors.TimeStamper(fmt="iso"), structlog.processors.add_log_level, structlog.processors.JSONRenderer()])
+log = structlog.get_logger("api")
 app.include_router(auth.router)
 
 app.add_middleware(
@@ -22,7 +27,7 @@ app.add_middleware(
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 
-wsman = WSManager(str(settings.LT_REDIS_URL))
+wsman = WSManager(str(settings.LT_REDIS_URL), str(settings.LT_MT_BASE_URL), getattr(settings, "LT_DEFAULT_TGT", "en"))
 stt = STTClient(str(settings.LT_REDIS_URL))
 mt = MTClient(str(settings.LT_MT_BASE_URL))
 
@@ -82,3 +87,17 @@ async def translate_stream(q: str, src: str = "auto", tgt: str = "en"):
                 await asyncio.sleep(0.02)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+# ----- readiness -----
+import httpx, asyncio
+@app.get("/readyz")
+async def readyz():
+    async with httpx.AsyncClient(timeout=5) as cli:
+        r1 = await cli.get(str(settings.LT_MT_BASE_URL).rstrip("/") + "/health")
+        r1.raise_for_status()
+    await wsman.redis.ping()
+    return {"ok": True}
+
+@app.get("/metrics", response_class=JSONResponse)
+def metrics_endpoint():
+    return JSONResponse({"text": metrics.scrape()})

@@ -13,3 +13,4 @@ orjson==3.10.7
 itsdangerous==2.2.0
 psycopg2-binary==2.9.9
 email-validator==2.2.0
+structlog==24.4.0
