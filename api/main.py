@@ -14,9 +14,11 @@ from .db import migrate
 from .ws_manager import WSManager
 from .stt_client import STTClient
 from .mt_client import MTClient
+from .auth import router as auth_router
 from . import auth
 
 app = FastAPI(title="LiveTranslator API")
+app.include_router(auth_router)
 structlog.configure(processors=[structlog.processors.TimeStamper(fmt="iso"), structlog.processors.add_log_level, structlog.processors.JSONRenderer()])
 log = structlog.get_logger("api")
 app.include_router(auth.router)
