@@ -1,16 +1,21 @@
-from .persistence import save_stt_event, upsert_final_translation
-from .persistence import save_stt_event
 import asyncio
 from typing import Dict, Set
-from fastapi import WebSocket
+
+import httpx
+import orjson
 import redis.asyncio as redis
-import orjson, httpx, structlog
+import structlog
+from fastapi import WebSocket
+
+from .persistence import save_stt_event, upsert_final_translation
+from .metrics import MET_STT_EVENTS, MET_MT_REQ, MET_MT_ERR, MET_MT_LAT
+
 
 class WSManager:
     def __init__(self, redis_url: str, mt_base_url: str, default_tgt: str = "en"):
-        self.redis: redis.Redis = redis.from_url(str(redis_url), decode_responses=True)
+        self.redis: redis.Redis = redis.from_url(redis_url, decode_responses=True)
         self.rooms: Dict[str, Set[WebSocket]] = {}
-        self.mt_url_final = str(mt_base_url).rstrip("/") + "/translate/final"
+        self.mt_url_final = mt_base_url.rstrip("/") + "/translate/final"
         self.default_tgt = default_tgt
         self.log = structlog.get_logger("wsman")
 
@@ -18,10 +23,12 @@ class WSManager:
         pubsub = self.redis.pubsub()
         await pubsub.subscribe("stt_events")
         self.log.info("subscribed", channel="stt_events")
+
         async with httpx.AsyncClient(timeout=30) as cli:
             async for msg in pubsub.listen():
                 if not msg or msg.get("type") != "message":
                     continue
+
                 raw = msg.get("data")
                 try:
                     data = orjson.loads(raw if isinstance(raw, (bytes, bytearray)) else raw.encode("utf-8"))
@@ -33,40 +40,57 @@ class WSManager:
                 if not room:
                     continue
 
-                kind = "final" if data.get("final") else "partial"
-                self.log.info("stt_event", kind=kind, room=room,
-                              segment=data.get("segment_id"), revision=data.get("revision"))
+                seg_id = int(data.get("segment_id") or 0)
+                rev = int(data.get("revision") or 0)
+                is_final = bool(data.get("final"))
+                src_lang = data.get("lang") or "auto"
+                text = data.get("text") or ""
+                kind = "final" if is_final else "partial"
 
+                MET_STT_EVENTS.labels(kind=kind).inc()
+                self.log.info("stt_event", kind=kind, room=room, segment=seg_id, revision=rev)
+
+                # broadcast STT
                 await self.broadcast(room, data)
-                save_stt_event(room, int(data.get("segment_id") or 0), int(data.get("revision") or 0), bool(data.get("final")), data.get("lang"), data.get("text") or "")
 
-                if data.get("final") is True and (txt := data.get("text")):
+                # persist STT
+                try:
+                    save_stt_event(room, seg_id, rev, is_final, src_lang, text)
+                except Exception as e:
+                    self.log.error("persist_error", room=room, segment=seg_id, err=str(e))
+
+                # on final, request MT and broadcast
+                if is_final and text:
                     try:
-                        self.log.info("mt_request", room=room, segment=data.get("segment_id"),
-                                      src=data.get("lang") or "auto", tgt=self.default_tgt, bytes=len(txt.encode()))
-                        resp = await cli.post(self.mt_url_final, json={
-                            "src": data.get("lang") or "auto",
-                            "tgt": self.default_tgt,
-                            "text": txt,
-                        })
+                        self.log.info("mt_request", room=room, segment=seg_id, src=src_lang, tgt=self.default_tgt, bytes=len(text.encode()))
+                        start_ts = asyncio.get_event_loop().time()
+                        resp = await cli.post(self.mt_url_final, json={"src": src_lang, "tgt": self.default_tgt, "text": text})
                         resp.raise_for_status()
                         ttext = resp.json().get("text", "")
-                        self.log.info("mt_response", room=room, segment=data.get("segment_id"))
+                        MET_MT_REQ.inc()
+                        MET_MT_LAT.observe(asyncio.get_event_loop().time() - start_ts)
+                        self.log.info("mt_response", room=room, segment=seg_id)
+
                         out = {
                             "type": "translation_final",
                             "room_id": room,
                             "device": data.get("device"),
-                            "segment_id": data.get("segment_id"),
+                            "segment_id": seg_id,
                             "ts_iso": data.get("ts_iso"),
-                            "src": data.get("lang") or "auto",
+                            "src": src_lang,
                             "tgt": self.default_tgt,
                             "text": ttext,
                             "final": True,
                         }
-                        upsert_final_translation(room, int(data.get("segment_id") or 0), data.get("lang"), data.get("text") or "", out.get("text") or "")
+                        try:
+                            upsert_final_translation(room, seg_id, src_lang, text, ttext)
+                        except Exception as e:
+                            self.log.error("persist_mt_error", room=room, segment=seg_id, err=str(e))
+
                         await self.broadcast(room, out)
                     except Exception as e:
-                        self.log.error("mt_error", room=room, segment=data.get("segment_id"), err=str(e))
+                        MET_MT_ERR.inc()
+                        self.log.error("mt_error", room=room, segment=seg_id, err=str(e))
 
     async def connect(self, room_id: str, ws: WebSocket):
         await ws.accept()

@@ -1,14 +1,10 @@
-import structlog
-from . import metrics
-import asyncio
-import re
-import orjson
-import httpx
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Request, HTTPException
-from fastapi.responses import JSONResponse
+import asyncio, re, httpx, orjson, structlog
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse, Response
 from pydantic import BaseModel
+from .metrics import MET_WS_CONNS, MET_STT_EVENTS, MET_MT_REQ, MET_MT_ERR, MET_MT_LAT, generate_latest, CONTENT_TYPE_LATEST
+
 from .settings import settings
 from .db import migrate
 from .ws_manager import WSManager
@@ -17,14 +13,21 @@ from .mt_client import MTClient
 from .jwt_tools import verify_token
 from .events import router as events_router
 from .auth import router as auth_router
-from . import auth
 
 app = FastAPI(title="LiveTranslator API")
 app.include_router(events_router)
 app.include_router(auth_router)
-structlog.configure(processors=[structlog.processors.TimeStamper(fmt="iso"), structlog.processors.add_log_level, structlog.processors.JSONRenderer()])
+
+# metrics
+
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.add_log_level,
+        structlog.processors.JSONRenderer(),
+    ]
+)
 log = structlog.get_logger("api")
-app.include_router(auth.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,7 +35,7 @@ app.add_middleware(
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 
-wsman = WSManager(str(settings.LT_REDIS_URL), str(settings.LT_MT_BASE_URL), getattr(settings, "LT_DEFAULT_TGT", "en"))
+wsman = WSManager(str(settings.LT_REDIS_URL), str(settings.LT_MT_BASE_URL), "en")
 stt = STTClient(str(settings.LT_REDIS_URL))
 mt = MTClient(str(settings.LT_MT_BASE_URL))
 
@@ -45,12 +48,15 @@ async def _startup():
 def healthz():
     return {"ok": True}
 
+@app.get("/metrics")
+def metrics():
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 @app.websocket("/ws/rooms/{room_id}")
 async def ws_room(ws: WebSocket, room_id: str):
-    # JWT from ?token= or Authorization: Bearer
-    qtok = ws.query_params.get("token") if hasattr(ws, "query_params") else None
-    auth = ws.headers.get("authorization", "") if hasattr(ws, "headers") else ""
-    htok = auth[7:] if auth.lower().startswith("bearer ") else ""
+    qtok = getattr(ws, "query_params", {}).get("token") if hasattr(ws, "query_params") else None
+    authv = ws.headers.get("authorization", "") if hasattr(ws, "headers") else ""
+    htok = authv[7:] if authv.lower().startswith("bearer ") else ""
     token = qtok or htok
     try:
         claims = verify_token(token)
@@ -58,18 +64,20 @@ async def ws_room(ws: WebSocket, room_id: str):
     except Exception:
         await ws.close(code=4401)
         return
+
+    MET_WS_CONNS.inc()
     await wsman.connect(room_id, ws)
     try:
         while True:
             msg = await ws.receive_json()
             if msg.get("type") != "audio_chunk":
                 continue
-            device = msg.get("deviceId", "dev")
-            await stt.push_chunk(room_id, device, msg.get("seq", 0), msg.get("pcm16_base64", ""))
+            device = msg.get("deviceId","dev")
+            await stt.push_chunk(room_id, device, msg.get("seq",0), msg.get("pcm16_base64",""))
     except WebSocketDisconnect:
         wsman.disconnect(room_id, ws)
+        MET_WS_CONNS.dec()
 
-# ---------- REST translate ----------
 class TReq(BaseModel):
     src: str
     tgt: str
@@ -87,11 +95,9 @@ async def translate(r: TReq):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"MT worker error: {e}")
 
-# ---------- SSE streaming ----------
 @app.get("/translate/stream")
 async def translate_stream(q: str, src: str = "auto", tgt: str = "en"):
     parts = [p for p in re.split(r"([.!?]+\s+)", q) if p]
-
     async def gen():
         buf = ""
         async with httpx.AsyncClient(timeout=30) as cli:
@@ -101,11 +107,8 @@ async def translate_stream(q: str, src: str = "auto", tgt: str = "en"):
                 r.raise_for_status()
                 yield f"data: {orjson.dumps({'text': r.json()['text']}).decode()}\n\n"
                 await asyncio.sleep(0.02)
-
     return StreamingResponse(gen(), media_type="text/event-stream")
 
-# ----- readiness -----
-import httpx, asyncio
 @app.get("/readyz")
 async def readyz():
     async with httpx.AsyncClient(timeout=5) as cli:
@@ -113,7 +116,3 @@ async def readyz():
         r1.raise_for_status()
     await wsman.redis.ping()
     return {"ok": True}
-
-@app.get("/metrics", response_class=JSONResponse)
-def metrics_endpoint():
-    return JSONResponse({"text": metrics.scrape()})
