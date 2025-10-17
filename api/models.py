@@ -1,34 +1,42 @@
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, Text, ForeignKey, DateTime, func, Boolean
 from datetime import datetime
-
-class Base(DeclarativeBase): pass
+from sqlalchemy import String, Integer, Text, DateTime, Boolean, ForeignKey, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from .db import Base
 
 class User(Base):
     __tablename__ = "users"
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    google_sub: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
-    preferred_lang: Mapped[str] = mapped_column(String(8), default="en")
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    preferred_lang: Mapped[str] = mapped_column(String(16), default="en", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 class Room(Base):
     __tablename__ = "rooms"
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    code: Mapped[str] = mapped_column(String(12), unique=True, index=True)
-    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    recording: Mapped[bool] = mapped_column(Boolean, default=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(16), unique=True, index=True, nullable=False)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    owner = relationship("User")
 
-class Segment(Base):
-    __tablename__ = "segments"
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), index=True)
-    speaker_id: Mapped[str] = mapped_column(String(64))  # device id
-    segment_id: Mapped[str] = mapped_column(String(64), index=True)
-    revision: Mapped[int] = mapped_column(default=0)
-    ts_iso: Mapped[str] = mapped_column(String(40))
-    text: Mapped[str] = mapped_column(Text)
-    lang: Mapped[str] = mapped_column(String(8))
-    final: Mapped[bool] = mapped_column(Boolean, default=False)
+class Device(Base):
+    __tablename__ = "devices"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(64), default="dev", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    room = relationship("Room")
+
+class Event(Base):
+    __tablename__ = "events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), index=True, nullable=False)
+    segment_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_final: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    src_lang: Mapped[str] = mapped_column(String(16), default="auto", nullable=False)
+    text: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    translated_text: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    __table_args__ = (Index("ix_room_seg_rev", "room_id", "segment_id", "revision"),)

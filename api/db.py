@@ -1,17 +1,12 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from .settings import settings
-from .models import Base
 
-engine = create_engine(settings.LT_DB_URL, pool_size=10, max_overflow=10, pool_pre_ping=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+class Base(DeclarativeBase): pass
 
-def get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+engine = create_engine(settings.LT_DB_URL, pool_pre_ping=True, pool_size=5, max_overflow=10, future=True)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 def migrate():
+    from .models import User, Room, Device, Event  # noqa
     Base.metadata.create_all(engine)
