@@ -1,3 +1,4 @@
+# /opt/stack/livetranslator/api/ws_manager.py
 import asyncio
 from typing import Dict, Set
 
@@ -8,7 +9,7 @@ import structlog
 from fastapi import WebSocket
 
 from .persistence import save_stt_event, upsert_final_translation
-from .metrics import MET_STT_EVENTS, MET_MT_REQ, MET_MT_ERR, MET_MT_LAT
+from .metrics import MET_STT_EVENTS, MET_MT_REQ, MET_MT_ERR, MET_MT_LAT, E2E_LAT
 
 
 class WSManager:
@@ -33,7 +34,7 @@ class WSManager:
                 try:
                     data = orjson.loads(raw if isinstance(raw, (bytes, bytearray)) else raw.encode("utf-8"))
                 except Exception as e:
-                    self.log.error("bad_message", err=str(e), kind=type(raw).__name__)
+                    self.log.error("bad_message", err=str(e))
                     continue
 
                 room = data.get("room_id")
@@ -50,7 +51,7 @@ class WSManager:
                 MET_STT_EVENTS.labels(kind=kind).inc()
                 self.log.info("stt_event", kind=kind, room=room, segment=seg_id, revision=rev)
 
-                # broadcast STT
+                # broadcast STT to clients
                 await self.broadcast(room, data)
 
                 # persist STT
@@ -62,14 +63,13 @@ class WSManager:
                 # on final, request MT and broadcast
                 if is_final and text:
                     try:
+                        e2e_start = asyncio.get_event_loop().time()
                         self.log.info("mt_request", room=room, segment=seg_id, src=src_lang, tgt=self.default_tgt, bytes=len(text.encode()))
-                        start_ts = asyncio.get_event_loop().time()
                         resp = await cli.post(self.mt_url_final, json={"src": src_lang, "tgt": self.default_tgt, "text": text})
                         resp.raise_for_status()
                         ttext = resp.json().get("text", "")
                         MET_MT_REQ.inc()
-                        MET_MT_LAT.observe(asyncio.get_event_loop().time() - start_ts)
-                        self.log.info("mt_response", room=room, segment=seg_id)
+                        MET_MT_LAT.observe(asyncio.get_event_loop().time() - e2e_start)
 
                         out = {
                             "type": "translation_final",
@@ -82,12 +82,14 @@ class WSManager:
                             "text": ttext,
                             "final": True,
                         }
+
                         try:
                             upsert_final_translation(room, seg_id, src_lang, text, ttext)
                         except Exception as e:
                             self.log.error("persist_mt_error", room=room, segment=seg_id, err=str(e))
 
                         await self.broadcast(room, out)
+                        E2E_LAT.observe(asyncio.get_event_loop().time() - e2e_start)
                     except Exception as e:
                         MET_MT_ERR.inc()
                         self.log.error("mt_error", room=room, segment=seg_id, err=str(e))
