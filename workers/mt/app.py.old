@@ -1,0 +1,99 @@
+import ctranslate2 as ct2
+from transformers import AutoTokenizer
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+# Paths inside the container
+TOK_PATH = "/models/mt/nllb_src"
+CT2_PATH = "/models/mt/nllb_ct2"
+
+# Load tokenizer and CT2 model
+tokenizer = AutoTokenizer.from_pretrained(TOK_PATH, use_fast=False)
+translator = ct2.Translator(CT2_PATH, device="cpu", compute_type="int8")
+
+# Supported langs
+LANGS = {"pl": "pol_Latn", "en": "eng_Latn"}
+
+def _lang_token(code: str) -> str:
+    vocab = tokenizer.get_vocab()
+    # common forms first
+    for tok in (f"<2{code}>", f"__{code}__", code):
+        if tok in vocab:
+            return tok
+    extra = getattr(tokenizer, "additional_special_tokens", None)
+    if extra:
+        for tok in extra:
+            if code in tok and tok in vocab:
+                return tok
+    for tok in vocab.keys():
+        if code in tok and (tok.startswith("<2") or tok.startswith("__")):
+            return tok
+    if hasattr(tokenizer, "lang_code_to_id") and code in tokenizer.lang_code_to_id:
+        tid = tokenizer.lang_code_to_id[code]
+        return tokenizer.convert_ids_to_tokens(tid)
+    raise KeyError(f"Missing language token for {code}")
+
+def _best_tokens(batch_result):
+    r0 = batch_result[0]
+    if hasattr(r0, "hypotheses"):
+        return r0.hypotheses[0]
+    if hasattr(r0, "sequences"):
+        return r0.sequences[0]
+    raise RuntimeError("Unknown TranslationResult fields")
+
+def nllb_translate(text: str, src: str, tgt: str) -> str:
+    if src not in LANGS or tgt not in LANGS:
+        raise HTTPException(status_code=400, detail="Unsupported language")
+
+    tgt_tok = _lang_token(LANGS[tgt])
+
+    # Source tokens: add BOS/EOS to match training format
+    src_tokens = []
+    if tokenizer.bos_token:
+        src_tokens.append(tokenizer.bos_token)
+    src_tokens.extend(tokenizer.tokenize(text))
+    if tokenizer.eos_token:
+        src_tokens.append(tokenizer.eos_token)
+
+    # Decode with beam search and anti-repetition
+    results = translator.translate_batch(
+        [src_tokens],
+        target_prefix=[[tgt_tok]],
+        beam_size=8,
+        length_penalty=1.0,
+        repetition_penalty=1.1,
+        no_repeat_ngram_size=3,
+        max_decoding_length=min(128, len(src_tokens) * 3),
+        min_decoding_length=1,
+        end_token=tokenizer.eos_token or "</s>",
+    )
+
+    out_tokens = _best_tokens(results)
+    if out_tokens and out_tokens[0] == tgt_tok:
+        out_tokens = out_tokens[1:]
+
+    text_out = tokenizer.decode(
+        tokenizer.convert_tokens_to_ids(out_tokens),
+        skip_special_tokens=True
+    ).strip()
+
+    return text_out
+
+# FastAPI
+class Req(BaseModel):
+    src: str
+    tgt: str
+    text: str
+
+app = FastAPI()
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+@app.post("/translate/fast")
+def translate_fast(r: Req):
+    try:
+        return {"text": nllb_translate(r.text, r.src, r.tgt), "mode": "fast"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

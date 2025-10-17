@@ -1,0 +1,29 @@
+# env & secrets
+.env
+/run/secrets/*
+/opt/stack/secrets/*
+*.key
+*.pem
+
+# runtime data
+data/
+!data/README.md
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+
+# node (future web)
+web/node_modules/
+web/dist/
+web/build/
+
+# logs
+*.log
+data/logs/
+
+# misc
+.DS_Store
