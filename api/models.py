@@ -13,6 +13,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 class Room(Base):
+    recording: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     __tablename__ = "rooms"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     code: Mapped[str] = mapped_column(String(16), unique=True, index=True, nullable=False)

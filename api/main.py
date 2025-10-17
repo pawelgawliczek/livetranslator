@@ -14,10 +14,13 @@ from .db import migrate
 from .ws_manager import WSManager
 from .stt_client import STTClient
 from .mt_client import MTClient
+from .jwt_tools import verify_token
+from .events import router as events_router
 from .auth import router as auth_router
 from . import auth
 
 app = FastAPI(title="LiveTranslator API")
+app.include_router(events_router)
 app.include_router(auth_router)
 structlog.configure(processors=[structlog.processors.TimeStamper(fmt="iso"), structlog.processors.add_log_level, structlog.processors.JSONRenderer()])
 log = structlog.get_logger("api")
@@ -44,6 +47,17 @@ def healthz():
 
 @app.websocket("/ws/rooms/{room_id}")
 async def ws_room(ws: WebSocket, room_id: str):
+    # JWT from ?token= or Authorization: Bearer
+    qtok = ws.query_params.get("token") if hasattr(ws, "query_params") else None
+    auth = ws.headers.get("authorization", "") if hasattr(ws, "headers") else ""
+    htok = auth[7:] if auth.lower().startswith("bearer ") else ""
+    token = qtok or htok
+    try:
+        claims = verify_token(token)
+        ws.state.user = claims.get("sub")
+    except Exception:
+        await ws.close(code=4401)
+        return
     await wsman.connect(room_id, ws)
     try:
         while True:

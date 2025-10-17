@@ -1,3 +1,5 @@
+from .persistence import save_stt_event, upsert_final_translation
+from .persistence import save_stt_event
 import asyncio
 from typing import Dict, Set
 from fastapi import WebSocket
@@ -36,6 +38,7 @@ class WSManager:
                               segment=data.get("segment_id"), revision=data.get("revision"))
 
                 await self.broadcast(room, data)
+                save_stt_event(room, int(data.get("segment_id") or 0), int(data.get("revision") or 0), bool(data.get("final")), data.get("lang"), data.get("text") or "")
 
                 if data.get("final") is True and (txt := data.get("text")):
                     try:
@@ -60,6 +63,7 @@ class WSManager:
                             "text": ttext,
                             "final": True,
                         }
+                        upsert_final_translation(room, int(data.get("segment_id") or 0), data.get("lang"), data.get("text") or "", out.get("text") or "")
                         await self.broadcast(room, out)
                     except Exception as e:
                         self.log.error("mt_error", room=room, segment=data.get("segment_id"), err=str(e))
