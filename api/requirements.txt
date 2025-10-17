@@ -19,3 +19,4 @@ psycopg[binary]==3.2.3
 passlib[bcrypt]==1.7.4
 python-jose==3.3.0
 bcrypt==3.2.2
+prometheus-client==0.20.0
