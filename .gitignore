@@ -27,3 +27,12 @@ data/logs/
 
 # misc
 .DS_Store
+
+
+/data/
+/api/__pycache__/
+/workers/**/__pycache__/
+/opt/caddy/caddy_data/
+/opt/caddy/caddy_config/
+/.env
+/run/secrets/*

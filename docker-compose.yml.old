@@ -1,42 +1,3 @@
-# /opt/stack/livetranslator/docker-compose.yml
-x-common-env: &common_env
-  TZ: Africa/Cairo
-  PUID: "1001"
-  PGID: "988"
-  UVICORN_WORKERS: "1"
-  HTTP_TIMEOUT: "30"
-
-x-common-deploy: &common_deploy
-  restart: always
-  user: "1001:988"
-  deploy:
-    resources:
-      limits:
-        cpus: "2.0"
-        memory: 2048M
-
-networks:
-  stack_appnet:
-    external: true
-    name: stack_appnet
-
-volumes:
-  pg_data:
-    driver: local
-    driver_opts: { type: none, o: bind, device: /opt/stack/livetranslator/data/pg }
-  redis_data:
-    driver: local
-    driver_opts: { type: none, o: bind, device: /opt/stack/livetranslator/data/redis }
-  models_store:
-    driver: local
-    driver_opts: { type: none, o: bind, device: /opt/stack/livetranslator/data/models }
-  audio_buf:
-    driver: local
-    driver_opts: { type: none, o: bind, device: /opt/stack/livetranslator/data/audio }
-  api_logs:
-    driver: local
-    driver_opts: { type: none, o: bind, device: /opt/stack/livetranslator/data/logs }
-
 services:
   postgres:
     image: postgres:16
@@ -46,9 +7,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-livetranslator}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - /opt/stack/livetranslator/data/pg:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL","pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -56,11 +17,11 @@ services:
   redis:
     image: redis:7
     networks: [stack_appnet]
-    command: ["redis-server","--appendonly","yes","--dir","/data"]
+    command: ["redis-server", "--appendonly", "yes", "--dir", "/data"]
     volumes:
-      - redis_data:/data
+      - /opt/stack/livetranslator/data/redis:/data
     healthcheck:
-      test: ["CMD","redis-cli","ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -71,7 +32,8 @@ services:
       context: ./api
       dockerfile: Dockerfile
     <<: *common_deploy
-    env_file: [.env]
+    env_file:
+      - .env
     environment:
       <<: *common_env
       LT_ENV: prod
@@ -88,19 +50,24 @@ services:
       UVICORN_CMD_ARGS: "--no-access-log --log-level warning"
       LOG_LEVEL: "WARNING"
     depends_on:
-      redis: { condition: service_healthy }
-      postgres: { condition: service_healthy }
-      mt_worker: { condition: service_started }
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mt_worker:
+        condition: service_started
     volumes:
       - api_logs:/logs
       - audio_buf:/data/audio
       - models_store:/models:ro
       - /opt/stack/secrets:/run/secrets:ro
     networks:
-      stack_appnet: { aliases: [api] }
-    ports: ["9003:8000"]
+      stack_appnet:
+        aliases: [api]
+    ports:
+      - "9003:8000"
     healthcheck:
-      test: ["CMD","curl","-f","http://localhost:8000/healthz"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -114,7 +81,7 @@ services:
     environment:
       <<: *common_env
       REDIS_URL: redis://redis:6379/0
-      WHISPER_MODEL: base-int8
+      WHISPER_MODEL: base
       CHUNK_MS: "400"
       COMPUTE_TYPE: int8
       NUM_THREADS: "2"
@@ -124,13 +91,14 @@ services:
       AUDIO_DIR: /data/audio
       MODELS_DIR: /models
     depends_on:
-      redis: { condition: service_healthy }
+      redis:
+        condition: service_healthy
     volumes:
       - audio_buf:/data/audio
       - models_store:/models
     networks: [stack_appnet]
     healthcheck:
-      test: ["CMD","python","-c","print(1)"]
+      test: ["CMD", "python", "-c", "print(1)"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -150,14 +118,14 @@ services:
       - ./workers/mt/app.py:/app/app.py:ro
     networks: [stack_appnet]
     healthcheck:
-      test: ["CMD","curl","-f","http://localhost:8081/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 30s
       timeout: 5s
       retries: 5
-
   web:
     build:
       context: ./web
       dockerfile: Dockerfile
     restart: always
     networks: [stack_appnet]
+
