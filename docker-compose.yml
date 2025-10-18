@@ -112,17 +112,21 @@ services:
       dockerfile: Dockerfile
     <<: *common_deploy
     environment:
+      PYTHONUNBUFFERED: "1"
       <<: *common_env
       REDIS_URL: redis://redis:6379/0
-      WHISPER_MODEL: base-int8
+      WHISPER_MODEL: base
       CHUNK_MS: "400"
       COMPUTE_TYPE: int8
       NUM_THREADS: "2"
       CONDITION_ON_PREVIOUS_TEXT: "true"
-      MAX_REDECODE_SEC: "3"
+      MAX_REDECODE_SEC: "1.5"
       VAD: "true"
       AUDIO_DIR: /data/audio
       MODELS_DIR: /models
+      HF_HOME: /models/.cache
+      TRANSFORMERS_CACHE: /models/.cache
+      HOME: /home/app
     depends_on:
       redis: { condition: service_healthy }
     volumes:

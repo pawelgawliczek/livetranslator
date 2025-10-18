@@ -14,3 +14,7 @@ class STTClient:
             "pcm16_base64": pcm16_base64,
         }
         await self.redis.publish("stt_input", orjson.dumps(payload).decode())
+
+    async def push_raw(self, payload: dict):
+        await self.redis.publish("stt_input", orjson.dumps(payload).decode())
+

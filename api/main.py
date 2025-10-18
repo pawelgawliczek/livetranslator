@@ -18,8 +18,6 @@ app = FastAPI(title="LiveTranslator API")
 app.include_router(events_router)
 app.include_router(auth_router)
 
-# metrics
-
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso"),
@@ -28,6 +26,7 @@ structlog.configure(
     ]
 )
 log = structlog.get_logger("api")
+
 import logging
 class _MuteHealthMetrics(logging.Filter):
     def filter(self, record):
@@ -76,10 +75,16 @@ async def ws_room(ws: WebSocket, room_id: str):
     try:
         while True:
             msg = await ws.receive_json()
-            if msg.get("type") != "audio_chunk":
-                continue
-            device = msg.get("deviceId","dev")
-            await stt.push_chunk(room_id, device, msg.get("seq",0), msg.get("pcm16_base64",""))
+            # Always ensure room id
+            if "room_id" not in msg:
+                msg["room_id"] = room_id
+
+            if msg.get("type") == "audio_chunk":
+                device = msg.get("deviceId","dev")
+                await stt.push_chunk(room_id, device, msg.get("seq",0), msg.get("pcm16_base64",""))
+            else:
+                # forward control events like {"type":"audio_end", ...}
+                await stt.push_raw(msg)
     except WebSocketDisconnect:
         wsman.disconnect(room_id, ws)
         MET_WS_CONNS.dec()

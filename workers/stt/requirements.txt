@@ -1,7 +1,6 @@
---only-binary=av
-av==12.0.0
-faster-whisper==1.0.3
+redis[hiredis]==5.0.7
+orjson==3.10.7
 numpy==1.26.4
-redis==5.0.8
 soundfile==0.12.1
-aiohttp==3.9.5
+av==16.0.1
+faster-whisper==1.2.0

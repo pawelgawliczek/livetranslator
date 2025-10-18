@@ -1,12 +1,21 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="manifest" href="/public/manifest.webmanifest"/>
     <title>LiveTranslator</title>
+    <style>
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif;max-width:960px;margin:24px auto;padding:0 16px}
+      input,button{font:inherit;padding:8px 10px;margin:4px 0}
+      .row{display:flex;gap:8px;flex-wrap:wrap}
+      .partial{color:#777}
+      .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eee;margin-left:8px}
+      .log{height:180px;overflow:auto;background:#111;color:#0f0;padding:8px;border-radius:6px}
+    </style>
   </head>
   <body>
+    <h1>LiveTranslator <span id="status" class="pill">idle</span></h1>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
