@@ -77,7 +77,7 @@ services:
       LT_ENV: prod
       LT_DOMAIN: livetranslator.pawelgawliczek.cloud
       LT_DB_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
-      LT_REDIS_URL: redis://redis:6379/0
+      LT_REDIS_URL: redis://redis:6379/5
       LT_JWT_SECRET_FILE: /run/secrets/jwt_secret
       LT_GOOGLE_CLIENT_ID_FILE: /run/secrets/google_oauth_client_id.txt
       LT_GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_oauth_client_secret.txt
@@ -114,7 +114,8 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       <<: *common_env
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/5
+      STT_CHAN_LOCAL_IN: stt_local_in
       WHISPER_MODEL: base
       CHUNK_MS: "400"
       COMPUTE_TYPE: int8
@@ -164,4 +165,32 @@ services:
       context: ./web
       dockerfile: Dockerfile
     restart: always
+    networks: [stack_appnet]
+
+  stt_router:
+    build:
+      context: ./api/routers/stt
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      PYTHONUNBUFFERED: "1"
+      REDIS_URL: redis://redis:6379/5
+      STT_INPUT_CHANNEL: stt_input
+      STT_OUTPUT_CHANNEL: stt_local_in
+    depends_on:
+      redis: { condition: service_healthy }
+    networks: [stack_appnet]
+
+  mt_router:
+    build:
+      context: ./api/routers/mt
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      PYTHONUNBUFFERED: "1"
+      REDIS_URL: redis://redis:6379/5
+      MT_INPUT_CHANNEL: mt_requests
+      MT_OUTPUT_CHANNEL: mt_events
+    depends_on:
+      redis: { condition: service_healthy }
     networks: [stack_appnet]

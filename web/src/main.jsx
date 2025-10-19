@@ -57,12 +57,12 @@ function App(){
   function onMsg(ev){
     try{
       const m = JSON.parse(ev.data);
-      if(!m.segment_id || !m.text) return;
+      if(!m.text) return; m.segment_id = m.segment_id || Date.now();
       const id = m.segment_id|0;
       if(m.type==="translation_partial"||m.type==="translation_final"){
         const tid = id + 1000000;
         segsRef.current.set(tid, { ...m, segment_id: tid });
-      }else if(m.type==="partial"||m.type==="final"){
+      }else if(m.type==="partial" || m.type==="stt_partial"||m.type==="final" || m.type==="stt_final"){
         const prev = segsRef.current.get(id);
         segsRef.current.set(id, { ...(prev||{}), ...m });
       }else{

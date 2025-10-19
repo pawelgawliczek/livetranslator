@@ -67,6 +67,7 @@ async def ws_room(ws: WebSocket, room_id: str):
         claims = verify_token(token)
         ws.state.user = claims.get("sub")
     except Exception:
+        await ws.accept()
         await ws.close(code=4401)
         return
 
