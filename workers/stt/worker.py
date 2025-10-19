@@ -38,8 +38,8 @@ def pcm16_b64_to_float32(b64: str) -> np.ndarray:
 async def stt_loop():
     r = redis.from_url(REDIS_URL, decode_responses=True)
     pubsub = r.pubsub()
-    await pubsub.subscribe("stt_input")
-    print("STT listening on stt_input")
+    await pubsub.subscribe("stt_local_in")
+    print("STT local listening on stt_local_in")
 
     async for msg in pubsub.listen():
         if not msg or msg.get("type") != "message":
