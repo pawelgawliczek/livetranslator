@@ -6,6 +6,7 @@ class STTClient:
         self.redis: redis.Redis = redis.from_url(str(redis_url), decode_responses=True)
 
     async def push_chunk(self, room_id: str, device: str, seq: int, pcm16_base64: str):
+        print(f"[STT] push_chunk room={room_id} device={device} seq={seq} bytes={len(pcm16_base64)}", flush=True)
         payload = {
             "type": "audio_chunk",
             "room_id": room_id,
@@ -16,5 +17,5 @@ class STTClient:
         await self.redis.publish("stt_input", orjson.dumps(payload).decode())
 
     async def push_raw(self, payload: dict):
+        print(f"[STT] push_raw type={payload.get('type')}", flush=True)
         await self.redis.publish("stt_input", orjson.dumps(payload).decode())
-
