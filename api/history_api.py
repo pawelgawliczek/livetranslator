@@ -52,7 +52,7 @@ async def get_room_history(room_code: str, target_lang: str = "en", limit: int =
     if not room:
         raise HTTPException(404, "Room not found")
     
-    # Get segments with translations
+    # Get segments with translations - FIXED: Use room_code for translations join
     result = db.execute(
         text("""
         SELECT 
@@ -65,7 +65,7 @@ async def get_room_history(room_code: str, target_lang: str = "en", limit: int =
             t.text as translated_text,
             t.tgt_lang
         FROM segments s
-        LEFT JOIN translations t ON t.room_id = s.room_id::text 
+        LEFT JOIN translations t ON t.room_id = :room_code
             AND t.segment_id = CAST(s.segment_id AS INTEGER) 
             AND t.tgt_lang = :target_lang
             AND t.is_final = true
@@ -73,7 +73,7 @@ async def get_room_history(room_code: str, target_lang: str = "en", limit: int =
         ORDER BY s.id ASC
         LIMIT :limit
         """),
-        {"room_id": room.id, "target_lang": target_lang, "limit": limit}
+        {"room_id": room.id, "room_code": room_code, "target_lang": target_lang, "limit": limit}
     )
     
     segments = result.fetchall()
@@ -93,7 +93,8 @@ async def get_room_history(room_code: str, target_lang: str = "en", limit: int =
         stored_tgt_lang = s[7]
         
         # If translation doesn't exist and target_lang != source_lang, translate it
-        if not translated_text and target_lang != source_lang:
+        # Also handle "auto" as source lang - only translate if no cached translation exists
+        if not translated_text and target_lang != source_lang and source_lang != target_lang:
             try:
                 print(f"[History] Translating segment {segment_id}: {source_lang}→{target_lang}")
                 translated_text = await openai_translate(original_text, source_lang, target_lang)

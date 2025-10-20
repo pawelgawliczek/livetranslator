@@ -14,9 +14,15 @@ export default function RoomPage({ token, onLogout }) {
   const [showCosts, setShowCosts] = useState(false);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [userEmail, setUserEmail] = useState("");
-  const [sourceLang, setSourceLang] = useState("auto");
-  const [targetLang, setTargetLang] = useState("en");
-  const [pushToTalk, setPushToTalk] = useState(false);
+  const [sourceLang, setSourceLang] = useState(() => {
+    return localStorage.getItem('lt_source_lang') || "auto";
+  });
+  const [targetLang, setTargetLang] = useState(() => {
+    return localStorage.getItem('lt_target_lang') || "en";
+  });
+  const [pushToTalk, setPushToTalk] = useState(() => {
+    return localStorage.getItem('lt_push_to_talk') === 'true';
+  });
   const [isPressing, setIsPressing] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   
@@ -50,6 +56,19 @@ export default function RoomPage({ token, onLogout }) {
       console.error("Failed to decode token:", e);
     }
   }, [token]);
+  
+  // Save language preferences to localStorage
+  useEffect(() => {
+    localStorage.setItem('lt_source_lang', sourceLang);
+  }, [sourceLang]);
+  
+  useEffect(() => {
+    localStorage.setItem('lt_target_lang', targetLang);
+  }, [targetLang]);
+  
+  useEffect(() => {
+    localStorage.setItem('lt_push_to_talk', pushToTalk.toString());
+  }, [pushToTalk]);
   
   // Load history on mount and when target language changes
   useEffect(() => {
@@ -317,7 +336,9 @@ export default function RoomPage({ token, onLogout }) {
   
   async function fetchCosts() {
     try {
-      const r = await fetch(`/costs/room/${encodeURIComponent(roomId)}`);
+      const r = await fetch(`/costs/room/${encodeURIComponent(roomId)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (r.ok) setCosts(await r.json());
     } catch (e) {
       console.error("Failed to fetch costs:", e);
@@ -330,59 +351,70 @@ export default function RoomPage({ token, onLogout }) {
       setLines([]);
     }
     setLoadingHistory(true);
+    
     try {
-      const r = await fetch(`/history/room/${encodeURIComponent(roomId)}?target_lang=${encodeURIComponent(targetLang)}`);
-      if (r.ok) {
-        const data = await r.json();
-        
-        // Clear old history segments (keep live segments from current session)
-        const now = Date.now();
-        const recentThreshold = now - 30000; // Keep segments from last 30 seconds
-        const keysToDelete = [];
-        
-        for (const [key, msg] of segsRef.current.entries()) {
-          const msgTime = msg.ts_iso ? new Date(msg.ts_iso).getTime() : now;
-          if (msgTime < recentThreshold) {
-            keysToDelete.push(key);
-          }
+      console.log(`[History] Fetching: room=${roomId}, target=${targetLang}`);
+      const r = await fetch(
+        `/history/room/${encodeURIComponent(roomId)}?target_lang=${encodeURIComponent(targetLang)}`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
         }
-        
-        keysToDelete.forEach(key => segsRef.current.delete(key));
-        
-        // Load history into chat
-        if (data.segments && data.segments.length > 0) {
-          data.segments.forEach(seg => {
-            const id = parseInt(seg.segment_id) || Date.now();
-            
-            // Add original text
-            segsRef.current.set(`s-${id}`, {
-              type: "stt_final",
-              segment_id: id,
-              text: seg.original_text,
-              lang: seg.source_lang,
-              final: true,
-              speaker: seg.speaker,
-              ts_iso: seg.timestamp
-            });
-            
-            // Add translation
-            if (seg.translated_text && seg.translated_text !== seg.original_text) {
-              segsRef.current.set(`t-${id}`, {
-                type: "translation_final",
-                segment_id: id,
-                text: seg.translated_text,
-                src: seg.source_lang,
-                tgt: seg.target_lang,
-                final: true,
-                ts_iso: seg.timestamp
-              });
-            }
-          });
-          scheduleRender();
+      );
+      
+      if (!r.ok) {
+        console.error(`[History] HTTP ${r.status}: ${r.statusText}`);
+        setLoadingHistory(false);
+        return;
+      }
+      
+      const data = await r.json();
+      console.log(`[History] Loaded ${data.count} segments`);
+      
+      // Clear old history segments (keep live segments from current session)
+      const now = Date.now();
+      const recentThreshold = now - 30000;
+      const keysToDelete = [];
+      
+      for (const [key, msg] of segsRef.current.entries()) {
+        const msgTime = msg.ts_iso ? new Date(msg.ts_iso).getTime() : now;
+        if (msgTime < recentThreshold) {
+          keysToDelete.push(key);
         }
       }
+      
+      keysToDelete.forEach(key => segsRef.current.delete(key));
+      
+      // Load history into chat
+      if (data.segments && data.segments.length > 0) {
+        data.segments.forEach(seg => {
+          const id = parseInt(seg.segment_id) || Date.now();
+          
+          segsRef.current.set(`s-${id}`, {
+            type: "stt_final",
+            segment_id: id,
+            text: seg.original_text,
+            lang: seg.source_lang,
+            final: true,
+            speaker: seg.speaker,
+            ts_iso: seg.timestamp
+          });
+          
+          if (seg.translated_text && seg.translated_text !== seg.original_text) {
+            segsRef.current.set(`t-${id}`, {
+              type: "translation_final",
+              segment_id: id,
+              text: seg.translated_text,
+              src: seg.source_lang,
+              tgt: seg.target_lang,
+              final: true,
+              ts_iso: seg.timestamp
+            });
+          }
+        });
+        scheduleRender();
+      }
     } catch (e) {
-      console.error("Failed to fetch history:", e);
+      console.error("[History] Failed to fetch:", e);
     } finally {
       setLoadingHistory(false);
     }
@@ -404,101 +436,120 @@ export default function RoomPage({ token, onLogout }) {
   return (
     <div style={{
       height: "100vh",
+      height: "100dvh",
       display: "flex",
       flexDirection: "column",
       background: "#0a0a0a",
       color: "white",
-      fontFamily: "system-ui, -apple-system, sans-serif"
+      fontFamily: "system-ui, -apple-system, sans-serif",
+      overflow: "hidden"
     }}>
-      {/* Compact Header */}
+      {/* Top header - back, centered room name, language, costs */}
       <div style={{
         background: "#1a1a1a",
         borderBottom: "1px solid #333",
-        padding: "0.75rem",
+        padding: "0.5rem 0.75rem",
+        paddingTop: "max(0.5rem, env(safe-area-inset-top))",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
+        gap: "0.5rem",
         flexShrink: 0
       }}>
+        {/* Back button - left */}
         <button
           onClick={() => navigate("/rooms")}
           style={{
-            padding: "0.5rem",
-            background: "transparent",
-            border: "none",
+            background: "#2a2a2a",
+            border: "1px solid #444",
+            borderRadius: "8px",
             color: "white",
             cursor: "pointer",
-            fontSize: "1.25rem"
+            padding: "0.5rem 0.75rem",
+            fontSize: "1.1rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minWidth: "40px",
+            flexShrink: 0
           }}
         >
           ←
         </button>
         
-        <div style={{flex: 1, textAlign: "center"}}>
-          <div style={{fontSize: "0.95rem", fontWeight: "600"}}>{roomId}</div>
+        {/* Room name and status - center */}
+        <div style={{ 
+          flex: 1,
+          textAlign: "center",
+          minWidth: 0
+        }}>
+          <div style={{
+            fontSize: "0.9rem",
+            fontWeight: "600",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap"
+          }}>
+            {roomId}
+          </div>
           {vadStatus !== "idle" && (
-            <div style={{fontSize: "0.7rem", color: vadReady ? "#16a34a" : "#999"}}>
+            <div style={{
+              fontSize: "0.65rem",
+              color: vadReady ? "#16a34a" : "#999",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap"
+            }}>
               {vadStatus}
             </div>
           )}
         </div>
         
-        <div style={{display: "flex", gap: "0.5rem", alignItems: "center"}}>
-          <button
-            onClick={() => { setShowCosts(!showCosts); if (!showCosts) fetchCosts(); }}
-            style={{
-              padding: "0.5rem",
-              background: "transparent",
-              border: "none",
-              color: "#999",
-              cursor: "pointer",
-              fontSize: "1rem"
-            }}
-          >
-            💰
-          </button>
-          <button
-            onClick={onLogout}
-            style={{
-              padding: "0.5rem",
-              background: "transparent",
-              border: "none",
-              color: "#999",
-              cursor: "pointer",
-              fontSize: "0.9rem"
-            }}
-          >
-            ↪
-          </button>
-        </div>
-      </div>
-      
-      {/* Language Bar */}
-      <div style={{
-        background: "#161616",
-        padding: "0.5rem",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "0.5rem",
-        fontSize: "0.85rem",
-        borderBottom: "1px solid #333",
-        flexShrink: 0
-      }}>
+        {/* Language selector - right */}
         <button
-          onClick={() => setShowLangPicker(!showLangPicker)}
+          onClick={() => setShowLangPicker(true)}
+          disabled={status !== "idle"}
           style={{
             background: "#2a2a2a",
             border: "1px solid #444",
-            borderRadius: "6px",
-            padding: "0.4rem 0.75rem",
+            borderRadius: "8px",
             color: "white",
             cursor: status === "idle" ? "pointer" : "not-allowed",
-            fontSize: "0.85rem",
+            padding: "0.5rem 0.65rem",
+            fontSize: "0.75rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minWidth: "50px",
+            flexShrink: 0,
             opacity: status === "idle" ? 1 : 0.6
           }}
         >
-          {srcLang?.flag} {srcLang?.name} → {tgtLang?.flag} {tgtLang?.name}
+          🌐
+        </button>
+        
+        {/* Costs button - right */}
+        <button
+          onClick={() => {
+            fetchCosts();
+            setShowCosts(true);
+          }}
+          style={{
+            background: "#2a2a2a",
+            border: "1px solid #444",
+            borderRadius: "8px",
+            color: "white",
+            cursor: "pointer",
+            padding: "0.5rem 0.75rem",
+            fontSize: "1.1rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minWidth: "40px",
+            flexShrink: 0
+          }}
+        >
+          💰
         </button>
       </div>
       
@@ -510,7 +561,7 @@ export default function RoomPage({ token, onLogout }) {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(0,0,0,0.8)",
+          background: "rgba(0,0,0,0.85)",
           zIndex: 100,
           display: "flex",
           alignItems: "center",
@@ -521,7 +572,7 @@ export default function RoomPage({ token, onLogout }) {
         >
           <div style={{
             background: "#1a1a1a",
-            borderRadius: "12px",
+            borderRadius: "16px",
             padding: "1.5rem",
             maxWidth: "400px",
             width: "100%",
@@ -529,10 +580,10 @@ export default function RoomPage({ token, onLogout }) {
           }}
           onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{margin: "0 0 1rem 0"}}>Select Languages</h3>
+            <h3 style={{margin: "0 0 1rem 0", fontSize: "1.2rem"}}>Select Languages</h3>
             
             <div style={{marginBottom: "1rem"}}>
-              <label style={{display: "block", fontSize: "0.9rem", color: "#999", marginBottom: "0.5rem"}}>
+              <label style={{display: "block", fontSize: "0.85rem", color: "#999", marginBottom: "0.5rem"}}>
                 Source Language
               </label>
               <select
@@ -540,10 +591,10 @@ export default function RoomPage({ token, onLogout }) {
                 onChange={(e) => setSourceLang(e.target.value)}
                 style={{
                   width: "100%",
-                  padding: "0.75rem",
+                  padding: "0.85rem",
                   background: "#2a2a2a",
                   border: "1px solid #444",
-                  borderRadius: "8px",
+                  borderRadius: "10px",
                   color: "white",
                   fontSize: "1rem"
                 }}
@@ -557,7 +608,7 @@ export default function RoomPage({ token, onLogout }) {
             </div>
             
             <div style={{marginBottom: "1.5rem"}}>
-              <label style={{display: "block", fontSize: "0.9rem", color: "#999", marginBottom: "0.5rem"}}>
+              <label style={{display: "block", fontSize: "0.85rem", color: "#999", marginBottom: "0.5rem"}}>
                 Target Language
               </label>
               <select
@@ -565,10 +616,10 @@ export default function RoomPage({ token, onLogout }) {
                 onChange={(e) => setTargetLang(e.target.value)}
                 style={{
                   width: "100%",
-                  padding: "0.75rem",
+                  padding: "0.85rem",
                   background: "#2a2a2a",
                   border: "1px solid #444",
-                  borderRadius: "8px",
+                  borderRadius: "10px",
                   color: "white",
                   fontSize: "1rem"
                 }}
@@ -585,13 +636,14 @@ export default function RoomPage({ token, onLogout }) {
               onClick={() => setShowLangPicker(false)}
               style={{
                 width: "100%",
-                padding: "0.75rem",
+                padding: "0.85rem",
                 background: "#3b82f6",
                 color: "white",
                 border: "none",
-                borderRadius: "8px",
+                borderRadius: "10px",
                 cursor: "pointer",
-                fontWeight: "600"
+                fontWeight: "600",
+                fontSize: "1rem"
               }}
             >
               Done
@@ -599,7 +651,6 @@ export default function RoomPage({ token, onLogout }) {
           </div>
         </div>
       )}
-      
       
       {/* Costs Modal */}
       {showCosts && (
@@ -609,7 +660,7 @@ export default function RoomPage({ token, onLogout }) {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(0,0,0,0.8)",
+          background: "rgba(0,0,0,0.85)",
           zIndex: 100,
           display: "flex",
           alignItems: "center",
@@ -620,7 +671,7 @@ export default function RoomPage({ token, onLogout }) {
         >
           <div style={{
             background: "#1a1a1a",
-            borderRadius: "12px",
+            borderRadius: "16px",
             padding: "1.5rem",
             maxWidth: "400px",
             width: "100%",
@@ -628,21 +679,21 @@ export default function RoomPage({ token, onLogout }) {
           }}
           onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{margin: "0 0 0.5rem 0"}}>💰 Costs</h3>
+            <h3 style={{margin: "0 0 0.75rem 0", fontSize: "1.2rem"}}>💰 Costs</h3>
             {!costs ? (
-              <div style={{textAlign: "center", color: "#999", padding: "2rem"}}>
+              <div style={{textAlign: "center", color: "#999", padding: "2rem", fontSize: "0.9rem"}}>
                 Loading costs...
               </div>
             ) : (
               <>
-                <div style={{fontSize: "1.5rem", fontWeight: "bold", color: "#3b82f6", marginBottom: "1rem"}}>
+                <div style={{fontSize: "1.75rem", fontWeight: "bold", color: "#3b82f6", marginBottom: "1rem"}}>
                   ${costs.total_cost_usd.toFixed(6)}
                 </div>
                 
                 <div style={{display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem"}}>
                   {Object.entries(costs.breakdown || {}).map(([pipeline, data]) => (
-                    <div key={pipeline} style={{background: "#2a2a2a", padding: "0.75rem", borderRadius: "8px"}}>
-                      <div style={{fontWeight: "bold", fontSize: "0.9rem", marginBottom: "0.25rem"}}>
+                    <div key={pipeline} style={{background: "#2a2a2a", padding: "0.85rem", borderRadius: "10px"}}>
+                      <div style={{fontWeight: "600", fontSize: "0.95rem", marginBottom: "0.25rem"}}>
                         {pipeline === "mt" ? "🔤 Translation" : "🎤 STT"}
                       </div>
                       <div style={{fontSize: "0.8rem", color: "#999"}}>
@@ -658,13 +709,14 @@ export default function RoomPage({ token, onLogout }) {
               onClick={() => setShowCosts(false)}
               style={{
                 width: "100%",
-                padding: "0.75rem",
+                padding: "0.85rem",
                 background: "#3b82f6",
                 color: "white",
                 border: "none",
-                borderRadius: "8px",
+                borderRadius: "10px",
                 cursor: "pointer",
-                fontWeight: "600"
+                fontWeight: "600",
+                fontSize: "1rem"
               }}
             >
               Close
@@ -672,21 +724,25 @@ export default function RoomPage({ token, onLogout }) {
           </div>
         </div>
       )}
+      
       {/* Chat Messages - Scrollable */}
       <div style={{
         flex: 1,
         overflowY: "auto",
-        padding: "1rem",
+        overflowX: "hidden",
+        padding: "0.75rem",
         display: "flex",
         flexDirection: "column",
-        gap: "0.75rem"
+        gap: "0.75rem",
+        WebkitOverflowScrolling: "touch"
       }}>
         {loadingHistory && lines.length === 0 && (
           <div style={{
             textAlign: "center",
             color: "#666",
-            padding: "2rem 0",
-            margin: "auto"
+            padding: "2rem 1rem",
+            margin: "auto",
+            fontSize: "0.9rem"
           }}>
             📜 Loading history...
           </div>
@@ -696,8 +752,9 @@ export default function RoomPage({ token, onLogout }) {
           <div style={{
             textAlign: "center",
             color: "#666",
-            padding: "2rem 0",
-            margin: "auto"
+            padding: "2rem 1rem",
+            margin: "auto",
+            fontSize: "0.9rem"
           }}>
             Press the microphone to start
           </div>
@@ -708,8 +765,8 @@ export default function RoomPage({ token, onLogout }) {
           return (
             <div key={segId} style={{
               background: "#1a1a1a",
-              borderRadius: "12px",
-              padding: "0.75rem",
+              borderRadius: "14px",
+              padding: "0.85rem",
               border: "1px solid #333"
             }}>
               <div style={{
@@ -743,8 +800,8 @@ export default function RoomPage({ token, onLogout }) {
                   color: seg.translation.final ? "#fff" : "#bbb",
                   fontSize: "1rem",
                   fontWeight: "500",
-                  marginBottom: "0.35rem",
-                  lineHeight: "1.4"
+                  marginBottom: "0.4rem",
+                  lineHeight: "1.45"
                 }}>
                   {seg.translation.text}
                   {!seg.translation.final && <span style={{marginLeft: "0.5rem", color: "#666"}}>⋯</span>}
@@ -754,9 +811,9 @@ export default function RoomPage({ token, onLogout }) {
               {seg.source && (
                 <div style={{
                   color: "#666",
-                  fontSize: "0.75rem",
+                  fontSize: "0.8rem",
                   fontStyle: "italic",
-                  lineHeight: "1.3"
+                  lineHeight: "1.35"
                 }}>
                   {seg.source.text}
                 </div>
@@ -767,24 +824,26 @@ export default function RoomPage({ token, onLogout }) {
         <div ref={chatEndRef} />
       </div>
       
-      {/* Bottom Controls */}
+      {/* Bottom Controls - Fixed at bottom */}
       <div style={{
         background: "#1a1a1a",
         borderTop: "1px solid #333",
-        padding: "1rem",
+        padding: "0.75rem",
+        paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
         flexShrink: 0
       }}>
+        {/* Push to talk checkbox */}
         <div style={{
           display: "flex",
           alignItems: "center",
-          gap: "0.75rem",
-          marginBottom: "0.75rem"
+          justifyContent: "center",
+          marginBottom: "0.65rem"
         }}>
           <label style={{
             display: "flex",
             alignItems: "center",
             gap: "0.5rem",
-            fontSize: "0.85rem",
+            fontSize: "0.8rem",
             color: "#999",
             cursor: "pointer"
           }}>
@@ -793,12 +852,17 @@ export default function RoomPage({ token, onLogout }) {
               checked={pushToTalk}
               onChange={(e) => setPushToTalk(e.target.checked)}
               disabled={status !== "idle"}
-              style={{cursor: status === "idle" ? "pointer" : "not-allowed"}}
+              style={{
+                cursor: status === "idle" ? "pointer" : "not-allowed",
+                width: "18px",
+                height: "18px"
+              }}
             />
             Push to talk
           </label>
         </div>
         
+        {/* Microphone button */}
         <button
           onClick={status === "idle" ? start : stop}
           onTouchStart={pushToTalk && status === "streaming" ? () => setIsPressing(true) : undefined}
@@ -807,8 +871,8 @@ export default function RoomPage({ token, onLogout }) {
           onMouseUp={pushToTalk && status === "streaming" ? () => setIsPressing(false) : undefined}
           style={{
             width: "100%",
-            height: "60px",
-            borderRadius: "30px",
+            height: "56px",
+            borderRadius: "28px",
             background: status === "idle" 
               ? "#16a34a" 
               : (pushToTalk && isPressing) 
@@ -816,14 +880,15 @@ export default function RoomPage({ token, onLogout }) {
                 : "#dc2626",
             color: "white",
             border: "none",
-            fontSize: "1.1rem",
+            fontSize: "1.05rem",
             fontWeight: "600",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             gap: "0.5rem",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+            WebkitTapHighlightColor: "transparent"
           }}
         >
           {status === "idle" ? (
