@@ -1,5 +1,7 @@
+from decimal import Decimal
 from datetime import datetime
-from sqlalchemy import String, Integer, Text, DateTime, Boolean, ForeignKey, Index
+from typing import Optional
+from sqlalchemy import BigInteger, func, Numeric, String, Integer, Text, DateTime, Boolean, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .db import Base
 
@@ -41,3 +43,15 @@ class Event(Base):
     translated_text: Mapped[str] = mapped_column(Text, default="", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     __table_args__ = (Index("ix_room_seg_rev", "room_id", "segment_id", "revision"),)
+
+class RoomCost(Base):
+    __tablename__ = "room_costs"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    room_id: Mapped[str] = mapped_column(Text, nullable=False)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    pipeline: Mapped[str] = mapped_column(Text, nullable=False)
+    mode: Mapped[str] = mapped_column(Text, nullable=False)
+    units: Mapped[Optional[int]] = mapped_column(BigInteger)
+    unit_type: Mapped[Optional[str]] = mapped_column(Text)
+    amount_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=0)

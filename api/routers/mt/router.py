@@ -18,12 +18,17 @@ STT_EVENTS = os.getenv("STT_EVENTS_CHANNEL", "stt_events")
 MT_OUTPUT = os.getenv("MT_OUTPUT_CHANNEL", "mt_events")
 MT_MODE = os.getenv("LT_MT_MODE", "local")
 DEFAULT_TGT = os.getenv("LT_DEFAULT_TGT", "en")
+COST_TRACKING_CHANNEL = os.getenv("COST_TRACKING_CHANNEL", "cost_events")
 
 print(f"[MT Router] Starting...")
 print(f"  Mode:       {MT_MODE}")
 print(f"  Input:      {STT_EVENTS}")
 print(f"  Output:     {MT_OUTPUT}")
 print(f"  Target:     {DEFAULT_TGT}")
+
+def estimate_tokens(text: str) -> int:
+    """Rough token estimation: ~4 chars per token"""
+    return max(1, len(text) // 4)
 
 async def router_loop():
     r = redis.from_url(REDIS_URL, decode_responses=True)
@@ -72,6 +77,22 @@ async def router_loop():
                     
                     await r.publish(MT_OUTPUT, jdumps(mt_event))
                     print(f"[MT Router] ✓ Translated: {translated[:80]}...")
+                    
+                    # Track cost (estimate input + output tokens)
+                    input_tokens = estimate_tokens(text)
+                    output_tokens = estimate_tokens(translated)
+                    total_tokens = input_tokens + output_tokens
+                    
+                    cost_event = {
+                        "type": "cost_event",
+                        "room_id": room,
+                        "pipeline": "mt",
+                        "mode": "openai",
+                        "units": total_tokens,
+                        "unit_type": "tokens"
+                    }
+                    await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
+                    print(f"[MT Router] 💰 Cost tracked: {total_tokens} tokens")
                     
                 except Exception as e:
                     print(f"[MT Router] ✗ OpenAI error: {e}")

@@ -19,13 +19,14 @@ INPUT_CHANNEL = os.getenv("STT_INPUT_CHANNEL", "stt_input")
 OUTPUT_CHANNEL = os.getenv("STT_OUTPUT_CHANNEL", "stt_local_in")
 STT_MODE = os.getenv("LT_STT_PARTIAL_MODE", "local")
 STT_OUTPUT_EVENTS = os.getenv("STT_OUTPUT_EVENTS", "stt_events")
+COST_TRACKING_CHANNEL = os.getenv("COST_TRACKING_CHANNEL", "cost_events")
 
 print(f"[STT Router] Starting...")
 print(f"  Mode:   {STT_MODE}")
 print(f"  Input:  {INPUT_CHANNEL}")
 print(f"  Output: {OUTPUT_CHANNEL if STT_MODE == 'local' else STT_OUTPUT_EVENTS}")
 
-# Track audio buffers per room (store decoded bytes, not base64)
+# Track audio buffers per room
 audio_buffers = {}
 
 async def router_loop():
@@ -58,7 +59,11 @@ async def router_loop():
             elif msg_type == "audio_end" and STT_MODE == "openai_chunked":
                 audio_bytes = audio_buffers.get(room, b'')
                 if audio_bytes:
-                    print(f"[STT Router] Sending {len(audio_bytes)} bytes to OpenAI for room={room}")
+                    # Calculate audio duration (16kHz, 16-bit mono = 2 bytes per sample)
+                    sample_rate = 16000
+                    duration_sec = len(audio_bytes) / (sample_rate * 2)
+                    
+                    print(f"[STT Router] Sending {len(audio_bytes)} bytes ({duration_sec:.1f}s) to OpenAI for room={room}")
                     
                     # Re-encode combined bytes to base64
                     combined_b64 = base64.b64encode(audio_bytes).decode()
@@ -80,6 +85,18 @@ async def router_loop():
                         
                         await r.publish(STT_OUTPUT_EVENTS, jdumps(stt_event))
                         print(f"[STT Router] ✓ Transcribed: {result['text'][:80]}...")
+                        
+                        # Publish cost event
+                        cost_event = {
+                            "type": "cost_event",
+                            "room_id": room,
+                            "pipeline": "stt_final",
+                            "mode": "openai",
+                            "units": int(duration_sec),
+                            "unit_type": "audio_sec"
+                        }
+                        await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
+                        print(f"[STT Router] 💰 Cost tracked: {duration_sec:.1f}s audio")
                         
                     except Exception as e:
                         print(f"[STT Router] ✗ OpenAI error: {e}")

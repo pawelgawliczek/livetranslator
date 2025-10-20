@@ -202,3 +202,21 @@ services:
     depends_on:
       redis: { condition: service_healthy }
     networks: [stack_appnet]
+
+  cost_tracker:
+    build:
+      context: ./api/services
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      PYTHONUNBUFFERED: "1"
+      REDIS_URL: redis://redis:6379/5
+      POSTGRES_DSN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      COST_TRACKING_CHANNEL: cost_events
+      OPENAI_PRICE_WHISPER_PER_MIN: ${OPENAI_PRICE_WHISPER_PER_MIN:-0.006}
+      OPENAI_PRICE_GPT4OMINI_INPUT_PER_1K: ${OPENAI_PRICE_GPT4OMINI_INPUT_PER_1K:-0.00015}
+      OPENAI_PRICE_GPT4OMINI_OUTPUT_PER_1K: ${OPENAI_PRICE_GPT4OMINI_OUTPUT_PER_1K:-0.0006}
+    depends_on:
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    networks: [stack_appnet]
