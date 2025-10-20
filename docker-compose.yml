@@ -220,3 +220,20 @@ services:
       redis: { condition: service_healthy }
       postgres: { condition: service_healthy }
     networks: [stack_appnet]
+
+  persistence:
+    build:
+      context: ./api/services
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      PYTHONUNBUFFERED: "1"
+      REDIS_URL: redis://redis:6379/5
+      POSTGRES_DSN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+    depends_on:
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    networks: [stack_appnet]
+    volumes:
+      - ./api/services/persistence_service.py:/app/persistence_service.py:ro
+    command: ["python", "persistence_service.py"]
