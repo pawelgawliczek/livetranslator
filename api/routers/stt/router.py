@@ -27,7 +27,7 @@ print(f"  Input:  {INPUT_CHANNEL}")
 print(f"  Output: {OUTPUT_CHANNEL if STT_MODE == 'local' else STT_OUTPUT_EVENTS}")
 
 # Track current partial accumulation per room
-partial_sessions = {}  # room -> {segment_id, accumulated_text, speaker}
+partial_sessions = {}  # room -> {segment_id, accumulated_text, speaker, target_lang}
 
 async def get_next_segment_id(r: redis.Redis, room: str) -> int:
     """Get and increment segment counter for a room, stored in Redis"""
@@ -51,6 +51,7 @@ async def router_loop():
             msg_type = data.get("type", "")
             room = data.get("room_id", "unknown")
             speaker = data.get("speaker", "system")
+            target_lang = data.get("target_lang", "en")
             
             if msg_type == "audio_chunk_partial" and STT_MODE == "openai_chunked":
                 # Handle partial transcription - accumulate in same segment
@@ -68,13 +69,15 @@ async def router_loop():
                         "segment_id": segment_id,
                         "accumulated_text": "",
                         "chunk_count": 0,
-                        "speaker": speaker
+                        "speaker": speaker,
+                        "target_lang": target_lang
                     }
                 
                 session = partial_sessions[room]
                 session["chunk_count"] += 1
+                session["target_lang"] = target_lang  # Update if changed
                 
-                print(f"[STT Router] Processing PARTIAL: room={room} speaker={speaker} segment={session['segment_id']} chunk={session['chunk_count']} bytes={len(audio_bytes)} ({duration_sec:.1f}s)")
+                print(f"[STT Router] Processing PARTIAL: room={room} speaker={speaker} segment={session['segment_id']} chunk={session['chunk_count']} target={target_lang}")
                 
                 try:
                     result = await transcribe_audio_chunk(audio_b64)
@@ -96,7 +99,8 @@ async def router_loop():
                         "final": False,
                         "ts_iso": None,
                         "device": device,
-                        "speaker": speaker
+                        "speaker": speaker,
+                        "target_lang": target_lang
                     }
                     
                     await r.publish(STT_OUTPUT_EVENTS, jdumps(stt_event))
@@ -128,11 +132,13 @@ async def router_loop():
                 if room in partial_sessions:
                     segment_id = partial_sessions[room]["segment_id"]
                     stored_speaker = partial_sessions[room]["speaker"]
-                    print(f"[STT Router] Processing FINAL (finalizing partial): room={room} speaker={stored_speaker} segment={segment_id} bytes={len(audio_bytes)} ({duration_sec:.1f}s)")
+                    stored_target_lang = partial_sessions[room]["target_lang"]
+                    print(f"[STT Router] Processing FINAL (finalizing partial): room={room} speaker={stored_speaker} segment={segment_id} target={stored_target_lang}")
                 else:
                     segment_id = await get_next_segment_id(r, room)
                     stored_speaker = speaker
-                    print(f"[STT Router] Processing FINAL (no partials): room={room} speaker={speaker} segment={segment_id} bytes={len(audio_bytes)} ({duration_sec:.1f}s)")
+                    stored_target_lang = target_lang
+                    print(f"[STT Router] Processing FINAL (no partials): room={room} speaker={speaker} segment={segment_id} target={target_lang}")
                 
                 try:
                     result = await transcribe_audio_chunk(audio_b64)
@@ -147,7 +153,8 @@ async def router_loop():
                         "final": True,
                         "ts_iso": None,
                         "device": device,
-                        "speaker": stored_speaker
+                        "speaker": stored_speaker,
+                        "target_lang": stored_target_lang
                     }
                     
                     await r.publish(STT_OUTPUT_EVENTS, jdumps(stt_event))

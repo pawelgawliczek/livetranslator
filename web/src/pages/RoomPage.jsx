@@ -12,11 +12,13 @@ export default function RoomPage({ token, onLogout }) {
   const [lines, setLines] = useState([]);
   const [costs, setCosts] = useState(null);
   const [showCosts, setShowCosts] = useState(false);
-  const [history, setHistory] = useState(null);
-  const [showHistory, setShowHistory] = useState(false);
+  const [showLangPicker, setShowLangPicker] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [sourceLang, setSourceLang] = useState("auto");
   const [targetLang, setTargetLang] = useState("en");
+  const [pushToTalk, setPushToTalk] = useState(false);
+  const [isPressing, setIsPressing] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   
   const wsRef = useRef(null);
   const seqRef = useRef(1);
@@ -28,15 +30,16 @@ export default function RoomPage({ token, onLogout }) {
   const isSpeakingRef = useRef(false);
   const lastPartialSentRef = useRef(0);
   const currentSegmentHintRef = useRef(null);
+  const chatEndRef = useRef(null);
   
   const segsRef = useRef(new Map());
   const dirtyRef = useRef(false);
   
   const languages = [
-    { code: "auto", name: "Auto Detect" },
-    { code: "en", name: "English" },
-    { code: "pl", name: "Polish" },
-    { code: "ar", name: "Arabic (Egyptian)" }
+    { code: "auto", name: "Auto", flag: "🌐" },
+    { code: "en", name: "English", flag: "🇬🇧" },
+    { code: "pl", name: "Polish", flag: "🇵🇱" },
+    { code: "ar", name: "Arabic", flag: "🇪🇬" }
   ];
   
   useEffect(() => {
@@ -47,6 +50,16 @@ export default function RoomPage({ token, onLogout }) {
       console.error("Failed to decode token:", e);
     }
   }, [token]);
+  
+  // Load history on mount and when target language changes
+  useEffect(() => {
+    fetchHistory();
+  }, [roomId, targetLang]);
+  
+  // Auto-scroll to bottom
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [lines]);
   
   function scheduleRender() {
     if (dirtyRef.current) return;
@@ -73,8 +86,12 @@ export default function RoomPage({ token, onLogout }) {
       }
       
       const arr = Array.from(segments.entries())
-        .sort((a, b) => a[0] - b[0])
-        .slice(-40);
+        .sort((a, b) => {
+          const tsA = a[1].source?.ts_iso || a[1].translation?.ts_iso || "";
+          const tsB = b[1].source?.ts_iso || b[1].translation?.ts_iso || "";
+          return tsA.localeCompare(tsB) || (a[0] - b[0]);
+        })
+        .slice(-100);
       
       setLines(arr);
       dirtyRef.current = false;
@@ -86,6 +103,7 @@ export default function RoomPage({ token, onLogout }) {
       const m = JSON.parse(ev.data);
       if (!m.text) return;
       m.segment_id = m.segment_id || Date.now();
+      m.ts_iso = m.ts_iso || new Date().toISOString();
       const id = m.segment_id | 0;
       
       if (m.type === "translation_partial" || m.type === "translation_final") {
@@ -176,8 +194,6 @@ export default function RoomPage({ token, onLogout }) {
     wsRef.current = ws;
     
     seqRef.current = 1;
-    segsRef.current.clear();
-    scheduleRender();
     
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 48000 } });
     const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
@@ -215,6 +231,7 @@ export default function RoomPage({ token, onLogout }) {
         redemptionFrames: 10,
         preSpeechPadFrames: 1,
         onSpeechStart: () => {
+          if (pushToTalk && !isPressing) return;
           setVadStatus("🎤 Speaking...");
           isSpeakingRef.current = true;
           partialBufferRef.current = new Float32Array(0);
@@ -222,6 +239,7 @@ export default function RoomPage({ token, onLogout }) {
           currentSegmentHintRef.current = Date.now();
         },
         onSpeechEnd: (audio) => {
+          if (pushToTalk && !isPressing) return;
           setVadStatus("✅ Processing...");
           isSpeakingRef.current = false;
           
@@ -307,235 +325,314 @@ export default function RoomPage({ token, onLogout }) {
   }
   
   async function fetchHistory() {
+    // Show loading when changing language with existing messages
+    if (segsRef.current.size > 0) {
+      setLines([]);
+    }
+    setLoadingHistory(true);
     try {
-      const r = await fetch(`/history/room/${encodeURIComponent(roomId)}`);
-      if (r.ok) setHistory(await r.json());
+      const r = await fetch(`/history/room/${encodeURIComponent(roomId)}?target_lang=${encodeURIComponent(targetLang)}`);
+      if (r.ok) {
+        const data = await r.json();
+        
+        // Clear old history segments (keep live segments from current session)
+        const now = Date.now();
+        const recentThreshold = now - 30000; // Keep segments from last 30 seconds
+        const keysToDelete = [];
+        
+        for (const [key, msg] of segsRef.current.entries()) {
+          const msgTime = msg.ts_iso ? new Date(msg.ts_iso).getTime() : now;
+          if (msgTime < recentThreshold) {
+            keysToDelete.push(key);
+          }
+        }
+        
+        keysToDelete.forEach(key => segsRef.current.delete(key));
+        
+        // Load history into chat
+        if (data.segments && data.segments.length > 0) {
+          data.segments.forEach(seg => {
+            const id = parseInt(seg.segment_id) || Date.now();
+            
+            // Add original text
+            segsRef.current.set(`s-${id}`, {
+              type: "stt_final",
+              segment_id: id,
+              text: seg.original_text,
+              lang: seg.source_lang,
+              final: true,
+              speaker: seg.speaker,
+              ts_iso: seg.timestamp
+            });
+            
+            // Add translation
+            if (seg.translated_text && seg.translated_text !== seg.original_text) {
+              segsRef.current.set(`t-${id}`, {
+                type: "translation_final",
+                segment_id: id,
+                text: seg.translated_text,
+                src: seg.source_lang,
+                tgt: seg.target_lang,
+                final: true,
+                ts_iso: seg.timestamp
+              });
+            }
+          });
+          scheduleRender();
+        }
+      }
     } catch (e) {
       console.error("Failed to fetch history:", e);
+    } finally {
+      setLoadingHistory(false);
     }
   }
   
-  useEffect(() => {
-    if (showCosts && roomId) {
-      fetchCosts();
-      const interval = setInterval(fetchCosts, 5000);
-      return () => clearInterval(interval);
+  function formatTime(isoString) {
+    if (!isoString) return "";
+    try {
+      const date = new Date(isoString);
+      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return "";
     }
-  }, [showCosts, roomId]);
+  }
   
-  useEffect(() => {
-    if (showHistory && roomId) {
-      fetchHistory();
-    }
-  }, [showHistory, roomId]);
+  const srcLang = languages.find(l => l.code === sourceLang);
+  const tgtLang = languages.find(l => l.code === targetLang);
   
   return (
     <div style={{
-      minHeight: "100vh",
+      height: "100vh",
+      display: "flex",
+      flexDirection: "column",
       background: "#0a0a0a",
       color: "white",
-      fontFamily: "system-ui, -apple-system, sans-serif",
-      paddingBottom: "5rem"
+      fontFamily: "system-ui, -apple-system, sans-serif"
     }}>
-      {/* Mobile Header - Sticky */}
+      {/* Compact Header */}
       <div style={{
         background: "#1a1a1a",
         borderBottom: "1px solid #333",
-        padding: "1rem",
-        position: "sticky",
-        top: 0,
-        zIndex: 10
+        padding: "0.75rem",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexShrink: 0
       }}>
-        <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem"}}>
+        <button
+          onClick={() => navigate("/rooms")}
+          style={{
+            padding: "0.5rem",
+            background: "transparent",
+            border: "none",
+            color: "white",
+            cursor: "pointer",
+            fontSize: "1.25rem"
+          }}
+        >
+          ←
+        </button>
+        
+        <div style={{flex: 1, textAlign: "center"}}>
+          <div style={{fontSize: "0.95rem", fontWeight: "600"}}>{roomId}</div>
+          {vadStatus !== "idle" && (
+            <div style={{fontSize: "0.7rem", color: vadReady ? "#16a34a" : "#999"}}>
+              {vadStatus}
+            </div>
+          )}
+        </div>
+        
+        <div style={{display: "flex", gap: "0.5rem", alignItems: "center"}}>
           <button
-            onClick={() => navigate("/rooms")}
+            onClick={() => setShowCosts(!showCosts)}
             style={{
               padding: "0.5rem",
               background: "transparent",
-              border: "1px solid #666",
-              borderRadius: "8px",
-              color: "white",
+              border: "none",
+              color: "#999",
               cursor: "pointer",
-              fontSize: "1.25rem",
-              lineHeight: 1
+              fontSize: "1rem"
             }}
           >
-            ←
+            💰
           </button>
-          <h1 style={{fontSize: "1.1rem", margin: 0, flex: 1, textAlign: "center"}}>
-            {roomId}
-          </h1>
           <button
             onClick={onLogout}
             style={{
-              padding: "0.5rem 0.75rem",
+              padding: "0.5rem",
               background: "transparent",
-              border: "1px solid #666",
-              borderRadius: "8px",
-              color: "white",
+              border: "none",
+              color: "#999",
               cursor: "pointer",
-              fontSize: "0.85rem"
+              fontSize: "0.9rem"
             }}
           >
             ↪
           </button>
         </div>
-        
-        {vadStatus !== "idle" && (
-          <div style={{
-            textAlign: "center",
-            fontSize: "0.9rem",
-            fontWeight: "bold",
-            color: vadReady ? "#16a34a" : "#ea580c"
-          }}>
-            {vadStatus}
-          </div>
-        )}
       </div>
       
-      <div style={{padding: "1rem"}}>
-        {/* Language Selection */}
+      {/* Language Bar */}
+      <div style={{
+        background: "#161616",
+        padding: "0.5rem",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.5rem",
+        fontSize: "0.85rem",
+        borderBottom: "1px solid #333",
+        flexShrink: 0
+      }}>
+        <button
+          onClick={() => setShowLangPicker(!showLangPicker)}
+          style={{
+            background: "#2a2a2a",
+            border: "1px solid #444",
+            borderRadius: "6px",
+            padding: "0.4rem 0.75rem",
+            color: "white",
+            cursor: status === "idle" ? "pointer" : "not-allowed",
+            fontSize: "0.85rem",
+            opacity: status === "idle" ? 1 : 0.6
+          }}
+        >
+          {srcLang?.flag} {srcLang?.name} → {tgtLang?.flag} {tgtLang?.name}
+        </button>
+      </div>
+      
+      {/* Language Picker Modal */}
+      {showLangPicker && (
         <div style={{
-          background: "#1a1a1a",
-          border: "1px solid #333",
-          borderRadius: "12px",
-          padding: "1rem",
-          marginBottom: "1rem"
-        }}>
-          <div style={{marginBottom: "1rem"}}>
-            <label style={{
-              display: "block",
-              fontSize: "0.9rem",
-              color: "#999",
-              marginBottom: "0.5rem"
-            }}>
-              Source Language
-            </label>
-            <select
-              value={sourceLang}
-              onChange={(e) => setSourceLang(e.target.value)}
-              disabled={status !== "idle"}
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                background: "#2a2a2a",
-                border: "1px solid #444",
-                borderRadius: "8px",
-                color: "white",
-                fontSize: "1rem",
-                cursor: status === "idle" ? "pointer" : "not-allowed",
-                opacity: status === "idle" ? 1 : 0.6
-              }}
-            >
-              {languages.map(lang => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label style={{
-              display: "block",
-              fontSize: "0.9rem",
-              color: "#999",
-              marginBottom: "0.5rem"
-            }}>
-              Target Language
-            </label>
-            <select
-              value={targetLang}
-              onChange={(e) => setTargetLang(e.target.value)}
-              disabled={status !== "idle"}
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                background: "#2a2a2a",
-                border: "1px solid #444",
-                borderRadius: "8px",
-                color: "white",
-                fontSize: "1rem",
-                cursor: status === "idle" ? "pointer" : "not-allowed",
-                opacity: status === "idle" ? 1 : 0.6
-              }}
-            >
-              {languages.filter(l => l.code !== "auto").map(lang => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        
-        {/* Action Buttons */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
-          gap: "0.5rem",
-          marginBottom: "1rem"
-        }}>
-          <button
-            onClick={() => setShowCosts(!showCosts)}
-            style={{
-              padding: "0.75rem",
-              background: showCosts ? "#3b82f6" : "#2a2a2a",
-              border: "1px solid #444",
-              borderRadius: "8px",
-              color: "white",
-              cursor: "pointer",
-              fontSize: "0.85rem"
-            }}
-          >
-            💰 Costs
-          </button>
-          <button
-            onClick={() => setShowHistory(!showHistory)}
-            style={{
-              padding: "0.75rem",
-              background: showHistory ? "#3b82f6" : "#2a2a2a",
-              border: "1px solid #444",
-              borderRadius: "8px",
-              color: "white",
-              cursor: "pointer",
-              fontSize: "0.85rem"
-            }}
-          >
-            📜 History
-          </button>
-          <button
-            onClick={status === "idle" ? start : stop}
-            style={{
-              padding: "0.75rem",
-              background: status === "idle" ? "#16a34a" : "#dc2626",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              fontSize: "0.9rem",
-              fontWeight: "600",
-              cursor: "pointer"
-            }}
-          >
-            {status === "idle" ? "▶ Start" : "⏹ Stop"}
-          </button>
-        </div>
-        
-        {/* Costs Panel */}
-        {showCosts && costs && (
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0,0,0,0.8)",
+          zIndex: 100,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1rem"
+        }}
+        onClick={() => setShowLangPicker(false)}
+        >
           <div style={{
             background: "#1a1a1a",
-            border: "1px solid #333",
             borderRadius: "12px",
-            padding: "1rem",
-            marginBottom: "1rem"
-          }}>
-            <h3 style={{margin: "0 0 0.5rem 0", fontSize: "1.1rem"}}>💰 Costs</h3>
-            <div style={{fontSize: "1.25rem", fontWeight: "bold", color: "#3b82f6", marginBottom: "1rem"}}>
+            padding: "1.5rem",
+            maxWidth: "400px",
+            width: "100%",
+            border: "1px solid #333"
+          }}
+          onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{margin: "0 0 1rem 0"}}>Select Languages</h3>
+            
+            <div style={{marginBottom: "1rem"}}>
+              <label style={{display: "block", fontSize: "0.9rem", color: "#999", marginBottom: "0.5rem"}}>
+                Source Language
+              </label>
+              <select
+                value={sourceLang}
+                onChange={(e) => setSourceLang(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  background: "#2a2a2a",
+                  border: "1px solid #444",
+                  borderRadius: "8px",
+                  color: "white",
+                  fontSize: "1rem"
+                }}
+              >
+                {languages.map(lang => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.flag} {lang.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div style={{marginBottom: "1.5rem"}}>
+              <label style={{display: "block", fontSize: "0.9rem", color: "#999", marginBottom: "0.5rem"}}>
+                Target Language
+              </label>
+              <select
+                value={targetLang}
+                onChange={(e) => setTargetLang(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  background: "#2a2a2a",
+                  border: "1px solid #444",
+                  borderRadius: "8px",
+                  color: "white",
+                  fontSize: "1rem"
+                }}
+              >
+                {languages.filter(l => l.code !== "auto").map(lang => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.flag} {lang.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <button
+              onClick={() => setShowLangPicker(false)}
+              style={{
+                width: "100%",
+                padding: "0.75rem",
+                background: "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600"
+              }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Costs Modal */}
+      {showCosts && costs && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0,0,0,0.8)",
+          zIndex: 100,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1rem"
+        }}
+        onClick={() => setShowCosts(false)}
+        >
+          <div style={{
+            background: "#1a1a1a",
+            borderRadius: "12px",
+            padding: "1.5rem",
+            maxWidth: "400px",
+            width: "100%",
+            border: "1px solid #333"
+          }}
+          onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{margin: "0 0 0.5rem 0"}}>💰 Costs</h3>
+            <div style={{fontSize: "1.5rem", fontWeight: "bold", color: "#3b82f6", marginBottom: "1rem"}}>
               ${costs.total_cost_usd.toFixed(6)}
             </div>
             
-            <div style={{display: "flex", flexDirection: "column", gap: "0.75rem"}}>
+            <div style={{display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem"}}>
               {Object.entries(costs.breakdown || {}).map(([pipeline, data]) => (
                 <div key={pipeline} style={{background: "#2a2a2a", padding: "0.75rem", borderRadius: "8px"}}>
                   <div style={{fontWeight: "bold", fontSize: "0.9rem", marginBottom: "0.25rem"}}>
@@ -548,136 +645,187 @@ export default function RoomPage({ token, onLogout }) {
               ))}
             </div>
             
-            <button onClick={fetchCosts} style={{
-              marginTop: "0.75rem",
-              padding: "0.5rem",
-              background: "#3b82f6",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              width: "100%",
-              fontSize: "0.85rem"
-            }}>
-              🔄 Refresh
+            <button
+              onClick={() => setShowCosts(false)}
+              style={{
+                width: "100%",
+                padding: "0.75rem",
+                background: "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600"
+              }}
+            >
+              Close
             </button>
-          </div>
-        )}
-        
-        {/* History Panel */}
-        {showHistory && history && (
-          <div style={{
-            background: "#1a1a1a",
-            border: "1px solid #333",
-            borderRadius: "12px",
-            padding: "1rem",
-            marginBottom: "1rem",
-            maxHeight: "300px",
-            overflowY: "auto"
-          }}>
-            <h3 style={{margin: "0 0 0.5rem 0", fontSize: "1.1rem"}}>📜 History</h3>
-            <div style={{fontSize: "0.8rem", color: "#666", marginBottom: "0.75rem"}}>
-              {history.segments?.length || 0} segments
-            </div>
-            
-            <div>
-              {history.segments?.map((seg, idx) => (
-                <div key={idx} style={{
-                  marginBottom: "0.75rem",
-                  paddingBottom: "0.75rem",
-                  borderBottom: "1px solid #333"
-                }}>
-                  {seg.speaker && seg.speaker !== "system" && (
-                    <div style={{fontSize: "0.75rem", color: "#3b82f6", fontWeight: "600", marginBottom: "0.25rem"}}>
-                      👤 {seg.speaker}
-                    </div>
-                  )}
-                  <div style={{fontSize: "0.85rem", marginBottom: "0.25rem"}}>
-                    <strong>[{seg.lang}]</strong> {seg.text}
-                  </div>
-                  <div style={{fontSize: "0.7rem", color: "#666"}}>
-                    {new Date(seg.timestamp).toLocaleString()}
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <button onClick={fetchHistory} style={{
-              marginTop: "0.75rem",
-              padding: "0.5rem",
-              background: "#3b82f6",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              width: "100%",
-              fontSize: "0.85rem"
-            }}>
-              🔄 Refresh
-            </button>
-          </div>
-        )}
-        
-        {/* Live Transcripts */}
-        <div style={{
-          background: "#1a1a1a",
-          border: "1px solid #333",
-          borderRadius: "12px",
-          padding: "1rem"
-        }}>
-          <h3 style={{margin: "0 0 1rem 0", fontSize: "1.1rem"}}>Live Transcript</h3>
-          
-          <div>
-            {lines.length === 0 && (
-              <div style={{textAlign: "center", color: "#666", padding: "2rem 0"}}>
-                Press Start to begin translation
-              </div>
-            )}
-            
-            {lines.map(([segId, seg]) => (
-              <div key={segId} style={{
-                marginBottom: "1rem",
-                paddingBottom: "1rem",
-                borderBottom: "1px solid #333"
-              }}>
-                {seg.source && (
-                  <>
-                    {seg.source.speaker && seg.source.speaker !== "system" && (
-                      <div style={{
-                        fontSize: "0.8rem",
-                        color: "#3b82f6",
-                        fontWeight: "600",
-                        marginBottom: "0.25rem"
-                      }}>
-                        👤 {seg.source.speaker}
-                      </div>
-                    )}
-                    <div style={{
-                      color: seg.source.final ? "#fff" : "#999",
-                      marginBottom: "0.5rem",
-                      fontStyle: seg.source.final ? "normal" : "italic",
-                      fontSize: "0.95rem"
-                    }}>
-                      <strong>[{seg.source.lang || ""}]</strong> {seg.source.text}
-                      {!seg.source.final && <span style={{marginLeft: "0.5rem"}}>⋯</span>}
-                    </div>
-                  </>
-                )}
-                {seg.translation && (
-                  <div style={{
-                    color: seg.translation.final ? "#999" : "#666",
-                    fontStyle: "italic",
-                    marginLeft: "1rem",
-                    fontSize: "0.9rem"
-                  }}>
-                    → {seg.translation.text}
-                    {!seg.translation.final && <span style={{marginLeft: "0.5rem"}}>⋯</span>}
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
         </div>
+      )}
+      
+      {/* Chat Messages - Scrollable */}
+      <div style={{
+        flex: 1,
+        overflowY: "auto",
+        padding: "1rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.75rem"
+      }}>
+        {loadingHistory && lines.length === 0 && (
+          <div style={{
+            textAlign: "center",
+            color: "#666",
+            padding: "2rem 0",
+            margin: "auto"
+          }}>
+            📜 Loading history...
+          </div>
+        )}
+        
+        {!loadingHistory && lines.length === 0 && (
+          <div style={{
+            textAlign: "center",
+            color: "#666",
+            padding: "2rem 0",
+            margin: "auto"
+          }}>
+            Press the microphone to start
+          </div>
+        )}
+        
+        {lines.map(([segId, seg]) => {
+          const timestamp = seg.source?.ts_iso || seg.translation?.ts_iso;
+          return (
+            <div key={segId} style={{
+              background: "#1a1a1a",
+              borderRadius: "12px",
+              padding: "0.75rem",
+              border: "1px solid #333"
+            }}>
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "0.5rem"
+              }}>
+                {seg.source && seg.source.speaker && seg.source.speaker !== "system" && (
+                  <div style={{
+                    fontSize: "0.7rem",
+                    color: "#3b82f6",
+                    fontWeight: "600"
+                  }}>
+                    👤 {seg.source.speaker.split('@')[0]}
+                  </div>
+                )}
+                {timestamp && (
+                  <div style={{
+                    fontSize: "0.65rem",
+                    color: "#666",
+                    marginLeft: "auto"
+                  }}>
+                    {formatTime(timestamp)}
+                  </div>
+                )}
+              </div>
+              
+              {seg.translation && (
+                <div style={{
+                  color: seg.translation.final ? "#fff" : "#bbb",
+                  fontSize: "1rem",
+                  fontWeight: "500",
+                  marginBottom: "0.35rem",
+                  lineHeight: "1.4"
+                }}>
+                  {seg.translation.text}
+                  {!seg.translation.final && <span style={{marginLeft: "0.5rem", color: "#666"}}>⋯</span>}
+                </div>
+              )}
+              
+              {seg.source && (
+                <div style={{
+                  color: "#666",
+                  fontSize: "0.75rem",
+                  fontStyle: "italic",
+                  lineHeight: "1.3"
+                }}>
+                  {seg.source.text}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <div ref={chatEndRef} />
+      </div>
+      
+      {/* Bottom Controls */}
+      <div style={{
+        background: "#1a1a1a",
+        borderTop: "1px solid #333",
+        padding: "1rem",
+        flexShrink: 0
+      }}>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          marginBottom: "0.75rem"
+        }}>
+          <label style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            fontSize: "0.85rem",
+            color: "#999",
+            cursor: "pointer"
+          }}>
+            <input
+              type="checkbox"
+              checked={pushToTalk}
+              onChange={(e) => setPushToTalk(e.target.checked)}
+              disabled={status !== "idle"}
+              style={{cursor: status === "idle" ? "pointer" : "not-allowed"}}
+            />
+            Push to talk
+          </label>
+        </div>
+        
+        <button
+          onClick={status === "idle" ? start : stop}
+          onTouchStart={pushToTalk && status === "streaming" ? () => setIsPressing(true) : undefined}
+          onTouchEnd={pushToTalk && status === "streaming" ? () => setIsPressing(false) : undefined}
+          onMouseDown={pushToTalk && status === "streaming" ? () => setIsPressing(true) : undefined}
+          onMouseUp={pushToTalk && status === "streaming" ? () => setIsPressing(false) : undefined}
+          style={{
+            width: "100%",
+            height: "60px",
+            borderRadius: "30px",
+            background: status === "idle" 
+              ? "#16a34a" 
+              : (pushToTalk && isPressing) 
+                ? "#dc2626"
+                : "#dc2626",
+            color: "white",
+            border: "none",
+            fontSize: "1.1rem",
+            fontWeight: "600",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.5rem",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+          }}
+        >
+          {status === "idle" ? (
+            <>🎤 Start</>
+          ) : pushToTalk ? (
+            isPressing ? <>🔴 Recording</> : <>👆 Hold to Speak</>
+          ) : (
+            <>⏹ Stop</>
+          )}
+        </button>
       </div>
     </div>
   );

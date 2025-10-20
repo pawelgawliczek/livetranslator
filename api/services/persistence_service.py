@@ -81,7 +81,7 @@ async def persist_loop():
                         )
                         print(f"[Persistence] ✓ STT saved: room={room_code} seg={segment_id} speaker={speaker}")
                 
-                # Persist translation final
+                # Persist translation final - allow multiple per segment (one per target lang)
                 elif msg_type == "translation_final":
                     segment_id = int(data.get("segment_id", 0))
                     src_lang = data.get("src", "auto")
@@ -89,13 +89,13 @@ async def persist_loop():
                     text = data.get("text", "").strip()
                     
                     if text:
-                        # Check if translation already exists
+                        # Check if this specific translation (segment + target_lang) exists
                         exists = await conn.fetchval(
                             """
                             SELECT id FROM translations 
-                            WHERE room_id = $1 AND segment_id = $2
+                            WHERE room_id = $1 AND segment_id = $2 AND tgt_lang = $3
                             """,
-                            room_code, segment_id
+                            room_code, segment_id, tgt_lang
                         )
                         
                         if not exists:
@@ -107,9 +107,18 @@ async def persist_loop():
                                 room_code, segment_id, src_lang, tgt_lang, text, True,
                                 datetime.utcnow()
                             )
-                            print(f"[Persistence] ✓ Translation saved: room={room_code} seg={segment_id}")
+                            print(f"[Persistence] ✓ Translation saved: room={room_code} seg={segment_id} {src_lang}→{tgt_lang}")
                         else:
-                            print(f"[Persistence] → Translation exists: room={room_code} seg={segment_id}")
+                            # Update existing translation
+                            await conn.execute(
+                                """
+                                UPDATE translations 
+                                SET text = $1, ts_iso = $2
+                                WHERE room_id = $3 AND segment_id = $4 AND tgt_lang = $5
+                                """,
+                                text, datetime.utcnow(), room_code, segment_id, tgt_lang
+                            )
+                            print(f"[Persistence] ↻ Translation updated: room={room_code} seg={segment_id} {src_lang}→{tgt_lang}")
                 
         except Exception as e:
             print(f"[Persistence] Error: {e}")
