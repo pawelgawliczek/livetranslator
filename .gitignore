@@ -36,3 +36,5 @@ data/logs/
 /opt/caddy/caddy_config/
 /.env
 /run/secrets/*
+*.sh
+minimal-pg-fix.sql
