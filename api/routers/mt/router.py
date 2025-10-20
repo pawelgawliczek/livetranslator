@@ -154,7 +154,7 @@ async def router_loop():
                             "type": "cost_event",
                             "room_id": room,
                             "pipeline": "mt",
-                            "mode": f"openai_{kind}",
+                            "mode": backend_name,
                             "units": total_tokens,
                             "unit_type": "tokens"
                         }

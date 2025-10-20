@@ -445,7 +445,7 @@ export default function RoomPage({ token, onLogout }) {
         
         <div style={{display: "flex", gap: "0.5rem", alignItems: "center"}}>
           <button
-            onClick={() => setShowCosts(!showCosts)}
+            onClick={() => { setShowCosts(!showCosts); if (!showCosts) fetchCosts(); }}
             style={{
               padding: "0.5rem",
               background: "transparent",
@@ -600,8 +600,9 @@ export default function RoomPage({ token, onLogout }) {
         </div>
       )}
       
+      
       {/* Costs Modal */}
-      {showCosts && costs && (
+      {showCosts && (
         <div style={{
           position: "fixed",
           top: 0,
@@ -628,22 +629,30 @@ export default function RoomPage({ token, onLogout }) {
           onClick={(e) => e.stopPropagation()}
           >
             <h3 style={{margin: "0 0 0.5rem 0"}}>💰 Costs</h3>
-            <div style={{fontSize: "1.5rem", fontWeight: "bold", color: "#3b82f6", marginBottom: "1rem"}}>
-              ${costs.total_cost_usd.toFixed(6)}
-            </div>
-            
-            <div style={{display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem"}}>
-              {Object.entries(costs.breakdown || {}).map(([pipeline, data]) => (
-                <div key={pipeline} style={{background: "#2a2a2a", padding: "0.75rem", borderRadius: "8px"}}>
-                  <div style={{fontWeight: "bold", fontSize: "0.9rem", marginBottom: "0.25rem"}}>
-                    {pipeline === "mt" ? "🔤 Translation" : "🎤 STT"}
-                  </div>
-                  <div style={{fontSize: "0.8rem", color: "#999"}}>
-                    {data.events} events • ${data.cost_usd.toFixed(6)}
-                  </div>
+            {!costs ? (
+              <div style={{textAlign: "center", color: "#999", padding: "2rem"}}>
+                Loading costs...
+              </div>
+            ) : (
+              <>
+                <div style={{fontSize: "1.5rem", fontWeight: "bold", color: "#3b82f6", marginBottom: "1rem"}}>
+                  ${costs.total_cost_usd.toFixed(6)}
                 </div>
-              ))}
-            </div>
+                
+                <div style={{display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem"}}>
+                  {Object.entries(costs.breakdown || {}).map(([pipeline, data]) => (
+                    <div key={pipeline} style={{background: "#2a2a2a", padding: "0.75rem", borderRadius: "8px"}}>
+                      <div style={{fontWeight: "bold", fontSize: "0.9rem", marginBottom: "0.25rem"}}>
+                        {pipeline === "mt" ? "🔤 Translation" : "🎤 STT"}
+                      </div>
+                      <div style={{fontSize: "0.8rem", color: "#999"}}>
+                        {data.events} events • ${data.cost_usd.toFixed(6)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
             
             <button
               onClick={() => setShowCosts(false)}
@@ -663,7 +672,6 @@ export default function RoomPage({ token, onLogout }) {
           </div>
         </div>
       )}
-      
       {/* Chat Messages - Scrollable */}
       <div style={{
         flex: 1,

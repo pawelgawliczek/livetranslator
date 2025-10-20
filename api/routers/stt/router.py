@@ -110,7 +110,7 @@ async def router_loop():
                     cost_event = {
                         "room_id": room,
                         "pipeline": "stt",
-                        "mode": "openai_whisper_partial",
+                        "mode": "openai",
                         "units": duration_sec,
                         "unit_type": "seconds"
                     }
@@ -164,7 +164,7 @@ async def router_loop():
                     cost_event = {
                         "room_id": room,
                         "pipeline": "stt",
-                        "mode": "openai_whisper",
+                        "mode": "openai",
                         "units": duration_sec,
                         "unit_type": "seconds"
                     }
