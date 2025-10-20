@@ -26,9 +26,9 @@ print(f"  Listening: {COST_CHANNEL}")
 print(f"  Whisper: ${WHISPER_PER_MIN}/min")
 print(f"  GPT-4o-mini: ${GPT4O_MINI_INPUT}/${GPT4O_MINI_OUTPUT} per 1K tokens")
 
-def calculate_cost(pipeline: str, units: int, unit_type: str) -> Decimal:
+def calculate_cost(pipeline: str, units: float, unit_type: str) -> Decimal:
     """Calculate cost based on pipeline and units"""
-    if pipeline == "stt_final" and unit_type == "audio_sec":
+    if pipeline == "stt" and unit_type == "seconds":
         minutes = Decimal(units) / Decimal(60)
         return minutes * WHISPER_PER_MIN
     elif pipeline == "mt" and unit_type == "tokens":
@@ -55,8 +55,7 @@ async def track_loop():
         try:
             data = jloads(msg["data"])
             
-            if data.get("type") != "cost_event":
-                continue
+            # Removed type filter - all messages on cost_events channel are cost events
             
             room_id = data.get("room_id")
             pipeline = data.get("pipeline")
@@ -64,8 +63,11 @@ async def track_loop():
             units = data.get("units", 0)
             unit_type = data.get("unit_type")
             
+            if not room_id or not pipeline:
+                continue
+            
             # Calculate cost
-            cost = calculate_cost(pipeline, units, unit_type)
+            cost = calculate_cost(pipeline, float(units), unit_type)
             
             # Store in database
             async with db_pool.acquire() as conn:
