@@ -114,10 +114,13 @@ class WSManager:
 
     async def broadcast(self, room_id: str, payload: dict):
         ok = 0
+        total = len(self.rooms.get(room_id, []))
         for ws in list(self.rooms.get(room_id, [])):
             try:
                 await ws.send_json(payload)
                 ok += 1
-            except Exception:
+            except Exception as e:
+                self.log.error("broadcast_failed", room=room_id, err=str(e))
                 self.disconnect(room_id, ws)
+        self.log.info("broadcast", room=room_id, type=payload.get("type"), segment=payload.get("segment_id"), sent=ok, total=total)
         return ok

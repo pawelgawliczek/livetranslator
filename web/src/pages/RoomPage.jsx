@@ -120,20 +120,29 @@ export default function RoomPage({ token, onLogout }) {
   function onMsg(ev) {
     try {
       const m = JSON.parse(ev.data);
-      if (!m.text) return;
+      console.log('[WS] Received:', m);
+      if (!m.text) {
+        console.log('[WS] Rejected: no text field');
+        return;
+      }
       m.segment_id = m.segment_id || Date.now();
       m.ts_iso = m.ts_iso || new Date().toISOString();
       const id = m.segment_id | 0;
+      
+      console.log('[WS] Processing:', m.type, 'segment:', id, 'speaker:', m.speaker);
       
       if (m.type === "translation_partial" || m.type === "translation_final") {
         segsRef.current.set(`t-${id}`, m);
       } else if (m.type === "partial" || m.type === "stt_partial" || m.type === "final" || m.type === "stt_final") {
         segsRef.current.set(`s-${id}`, m);
       } else {
+        console.log('[WS] Unknown type:', m.type);
         return;
       }
       scheduleRender();
-    } catch {}
+    } catch (e) {
+      console.error('[WS] Error:', e);
+    }
   }
   
   function floatTo16(f) {

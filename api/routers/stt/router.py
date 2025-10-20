@@ -180,8 +180,26 @@ async def router_loop():
                     
             elif msg_type == "audio_end":
                 print(f"[STT Router] Audio session ended for room={room}")
-                # Clear partial session
+                # Finalize any pending partial before clearing
                 if room in partial_sessions:
+                    session = partial_sessions[room]
+                    if session["accumulated_text"]:
+                        # Send final event with accumulated text
+                        stt_event = {
+                            "type": "stt_final",
+                            "room_id": room,
+                            "segment_id": session["segment_id"],
+                            "revision": session["chunk_count"] + 1,
+                            "text": session["accumulated_text"],
+                            "lang": "auto",
+                            "final": True,
+                            "ts_iso": None,
+                            "device": "web",
+                            "speaker": session["speaker"],
+                            "target_lang": session["target_lang"]
+                        }
+                        await r.publish(STT_OUTPUT_EVENTS, jdumps(stt_event))
+                        print(f"[STT Router] ✓ Auto-finalized segment {session['segment_id']} on session end: {session['accumulated_text'][:60]}...")
                     del partial_sessions[room]
                 
         except Exception as e:
