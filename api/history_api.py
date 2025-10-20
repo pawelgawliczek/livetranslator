@@ -13,6 +13,26 @@ def get_db():
     finally: 
         db.close()
 
+@router.get("/rooms")
+def get_rooms_list(db: Session = Depends(get_db)):
+    """Get list of all available rooms"""
+    
+    rooms = db.execute(
+        select(Room).order_by(Room.created_at.desc())
+    ).scalars().all()
+    
+    return {
+        "count": len(rooms),
+        "rooms": [
+            {
+                "id": room.id,
+                "code": room.code,
+                "created_at": room.created_at.isoformat() if room.created_at else None
+            }
+            for room in rooms
+        ]
+    }
+
 @router.get("/room/{room_code}")
 def get_room_history(room_code: str, limit: int = 100, db: Session = Depends(get_db)):
     """Get chat history for a room"""

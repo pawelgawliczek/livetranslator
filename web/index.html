@@ -1,22 +1,34 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <link rel="manifest" href="/public/manifest.webmanifest"/>
-    <title>LiveTranslator</title>
-    <style>
-      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif;max-width:960px;margin:24px auto;padding:0 16px}
-      input,button{font:inherit;padding:8px 10px;margin:4px 0}
-      .row{display:flex;gap:8px;flex-wrap:wrap}
-      .partial{color:#777}
-      .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eee;margin-left:8px}
-      .log{height:180px;overflow:auto;background:#111;color:#0f0;padding:8px;border-radius:6px}
-    </style>
-  </head>
-  <body>
-    <h1>LiveTranslator <span id="status" class="pill">idle</span></h1>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#667eea">
+  <title>LiveTranslator</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overscroll-behavior: none;
+    }
+    #root {
+      width: 100%;
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
 </html>
