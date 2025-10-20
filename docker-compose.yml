@@ -81,6 +81,7 @@ services:
       LT_JWT_SECRET_FILE: /run/secrets/jwt_secret
       LT_GOOGLE_CLIENT_ID_FILE: /run/secrets/google_oauth_client_id.txt
       LT_GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_oauth_client_secret.txt
+      GOOGLE_REDIRECT_URI: https://livetranslator.pawelgawliczek.cloud/auth/google/callback
       LT_AUDIO_DIR: /data/audio
       LT_MODELS_DIR: /models
       LT_MT_BASE_URL: http://mt_worker:8081

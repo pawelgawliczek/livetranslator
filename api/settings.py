@@ -1,3 +1,4 @@
+import os
 from pydantic_settings import BaseSettings
 from pydantic import AnyUrl
 from pathlib import Path
@@ -24,6 +25,8 @@ def read_secret(path: str) -> str:
     return p.read_text().strip() if p.exists() else ""
 
 settings = Settings()
-JWT_SECRET = read_secret(settings.LT_JWT_SECRET_FILE) or "CHANGE_ME_BEFORE_DEPLOY"
-GOOGLE_CLIENT_ID = read_secret(settings.LT_GOOGLE_CLIENT_ID_FILE)
-GOOGLE_CLIENT_SECRET = read_secret(settings.LT_GOOGLE_CLIENT_SECRET_FILE)
+JWT_SECRET = read_secret(settings.LT_JWT_SECRET_FILE) or os.getenv("JWT_SECRET") or "CHANGE_ME_BEFORE_DEPLOY"
+GOOGLE_CLIENT_ID = read_secret(settings.LT_GOOGLE_CLIENT_ID_FILE) or os.getenv("GOOGLE_CLIENT_ID") or ""
+GOOGLE_CLIENT_SECRET = read_secret(settings.LT_GOOGLE_CLIENT_SECRET_FILE) or os.getenv("GOOGLE_CLIENT_SECRET") or ""
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "")
+

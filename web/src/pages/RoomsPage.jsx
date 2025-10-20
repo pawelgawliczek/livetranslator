@@ -1,12 +1,23 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export default function RoomsPage({ token, onLogout }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [newRoomName, setNewRoomName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Check for token in URL (from Google OAuth redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const urlToken = params.get('token');
+    if (urlToken && !token) {
+      // If there's a token in URL and we don't have one yet
+      window.location.href = `/?token=${urlToken}`;
+    }
+  }, [location, token]);
   
   useEffect(() => {
     try {
@@ -40,17 +51,26 @@ export default function RoomsPage({ token, onLogout }) {
     }
   }
   
-  function createRoom() {
-    if (!newRoomName.trim()) {
-      alert("Please enter a room name");
-      return;
+  async function createRoom() {
+    if (!newRoomName.trim()) return;
+    
+    try {
+      const response = await fetch("/rooms", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ code: newRoomName })
+      });
+      
+      if (response.ok) {
+        setNewRoomName("");
+        fetchRooms();
+      }
+    } catch (e) {
+      console.error("Failed to create room:", e);
     }
-    const roomId = newRoomName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    navigate(`/room/${roomId}`);
-  }
-  
-  function joinRoom(roomId) {
-    navigate(`/room/${roomId}`);
   }
   
   return (
@@ -59,165 +79,124 @@ export default function RoomsPage({ token, onLogout }) {
       background: "#0a0a0a",
       color: "white",
       fontFamily: "system-ui, -apple-system, sans-serif",
-      paddingBottom: "2rem"
+      padding: "2rem"
     }}>
-      {/* Mobile Header */}
       <div style={{
-        background: "#1a1a1a",
-        borderBottom: "1px solid #333",
-        padding: "1rem",
-        position: "sticky",
-        top: 0,
-        zIndex: 10
+        maxWidth: "800px",
+        margin: "0 auto"
       }}>
         <div style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "0.5rem"
+          marginBottom: "2rem"
         }}>
-          <h1 style={{fontSize: "1.5rem", margin: 0}}>LiveTranslator</h1>
+          <div>
+            <h1 style={{fontSize: "2rem", marginBottom: "0.5rem"}}>Rooms</h1>
+            <p style={{color: "#999", fontSize: "0.9rem"}}>Logged in as {userEmail}</p>
+          </div>
           <button
             onClick={onLogout}
             style={{
-              padding: "0.5rem 1rem",
-              background: "transparent",
-              border: "1px solid #666",
-              borderRadius: "8px",
+              padding: "0.75rem 1.5rem",
+              background: "#dc2626",
               color: "white",
+              border: "none",
+              borderRadius: "8px",
               cursor: "pointer",
-              fontSize: "0.9rem"
+              fontWeight: "600"
             }}
           >
             Logout
           </button>
         </div>
-        <p style={{color: "#999", fontSize: "0.85rem", margin: 0}}>
-          {userEmail}
-        </p>
-      </div>
-      
-      <div style={{padding: "1rem"}}>
-        {/* Create New Room */}
+        
         <div style={{
           background: "#1a1a1a",
-          border: "1px solid #333",
           borderRadius: "12px",
           padding: "1.5rem",
-          marginBottom: "1.5rem"
+          marginBottom: "2rem",
+          border: "1px solid #333"
         }}>
-          <h2 style={{fontSize: "1.25rem", marginBottom: "0.5rem"}}>
-            ➕ Create New Room
-          </h2>
-          <p style={{color: "#999", marginBottom: "1rem", fontSize: "0.9rem"}}>
-            Start a new translation session
-          </p>
-          
-          <div style={{display: "flex", flexDirection: "column", gap: "0.75rem"}}>
+          <h2 style={{fontSize: "1.25rem", marginBottom: "1rem"}}>Create New Room</h2>
+          <div style={{display: "flex", gap: "1rem"}}>
             <input
               type="text"
-              placeholder="Enter room name..."
+              placeholder="Room name..."
               value={newRoomName}
               onChange={e => setNewRoomName(e.target.value)}
-              onKeyPress={e => e.key === 'Enter' && createRoom()}
+              onKeyDown={e => e.key === "Enter" && createRoom()}
               style={{
-                width: "100%",
-                padding: "1rem",
+                flex: 1,
+                padding: "0.75rem",
                 background: "#2a2a2a",
                 border: "1px solid #444",
-                borderRadius: "12px",
+                borderRadius: "8px",
                 color: "white",
-                fontSize: "1rem",
-                WebkitAppearance: "none"
+                fontSize: "1rem"
               }}
             />
             <button
               onClick={createRoom}
               style={{
-                padding: "1rem",
+                padding: "0.75rem 1.5rem",
                 background: "#3b82f6",
                 color: "white",
                 border: "none",
-                borderRadius: "12px",
-                fontSize: "1rem",
-                fontWeight: "600",
+                borderRadius: "8px",
                 cursor: "pointer",
-                width: "100%",
-                WebkitAppearance: "none"
+                fontWeight: "600"
               }}
             >
-              Create Room
+              Create
             </button>
           </div>
         </div>
         
-        {/* Available Rooms */}
-        <h2 style={{fontSize: "1.25rem", marginBottom: "1rem"}}>Available Rooms</h2>
-        
-        {loading ? (
-          <div style={{textAlign: "center", color: "#666", padding: "2rem"}}>
-            Loading rooms...
-          </div>
-        ) : rooms.length === 0 ? (
-          <div style={{
-            background: "#1a1a1a",
-            border: "1px solid #333",
-            borderRadius: "12px",
-            padding: "2rem",
-            textAlign: "center",
-            color: "#666"
-          }}>
-            No rooms available. Create one to get started!
-          </div>
-        ) : (
-          <div style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "1rem"
-          }}>
-            {rooms.map(room => (
-              <div
-                key={room.code}
-                onClick={() => joinRoom(room.code)}
-                style={{
-                  background: "#1a1a1a",
-                  border: "1px solid #333",
-                  borderRadius: "12px",
-                  padding: "1.25rem",
-                  cursor: "pointer"
-                }}
-              >
-                <h3 style={{fontSize: "1.1rem", marginBottom: "0.5rem"}}>{room.code}</h3>
-                <p style={{color: "#999", fontSize: "0.85rem", marginBottom: "1rem"}}>
-                  Translation room
-                </p>
-                <div style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center"
-                }}>
-                  <span style={{color: "#666", fontSize: "0.8rem"}}>
+        <div>
+          <h2 style={{fontSize: "1.25rem", marginBottom: "1rem"}}>Available Rooms</h2>
+          {loading ? (
+            <div style={{textAlign: "center", color: "#666", padding: "2rem"}}>
+              Loading rooms...
+            </div>
+          ) : rooms.length === 0 ? (
+            <div style={{textAlign: "center", color: "#666", padding: "2rem"}}>
+              No rooms yet. Create one above!
+            </div>
+          ) : (
+            <div style={{display: "flex", flexDirection: "column", gap: "1rem"}}>
+              {rooms.map(room => (
+                <div
+                  key={room.id}
+                  onClick={() => navigate(`/room/${room.code}`)}
+                  style={{
+                    background: "#1a1a1a",
+                    border: "1px solid #333",
+                    borderRadius: "12px",
+                    padding: "1.5rem",
+                    cursor: "pointer",
+                    transition: "all 0.2s"
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = "#2a2a2a";
+                    e.currentTarget.style.borderColor = "#3b82f6";
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = "#1a1a1a";
+                    e.currentTarget.style.borderColor = "#333";
+                  }}
+                >
+                  <div style={{fontSize: "1.1rem", fontWeight: "600", marginBottom: "0.5rem"}}>
+                    {room.code}
+                  </div>
+                  <div style={{color: "#999", fontSize: "0.85rem"}}>
                     Created {new Date(room.created_at).toLocaleDateString()}
-                  </span>
-                  <button
-                    style={{
-                      padding: "0.5rem 1rem",
-                      background: "#3b82f6",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      fontSize: "0.85rem",
-                      fontWeight: "600",
-                      cursor: "pointer"
-                    }}
-                  >
-                    Join
-                  </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

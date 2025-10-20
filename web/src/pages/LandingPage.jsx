@@ -1,8 +1,19 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Check for token in URL (from Google OAuth redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const token = params.get('token');
+    if (token) {
+      // Redirect to login page with token
+      navigate(`/login?token=${token}`);
+    }
+  }, [location, navigate]);
   
   return (
     <div style={{
@@ -33,8 +44,7 @@ export default function LandingPage() {
       </h1>
       
       <p style={{
-        fontSize: "clamp(1rem, 3vw, 1.5rem)",
-        color: "rgba(255,255,255,0.9)",
+        fontSize: "clamp(1.1rem, 3vw, 1.5rem)",
         marginBottom: "3rem",
         textAlign: "center",
         maxWidth: "600px"
@@ -42,26 +52,19 @@ export default function LandingPage() {
         Real-time multilingual speech collaboration platform
       </p>
       
-      <div style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "1rem",
-        width: "100%",
-        maxWidth: "400px",
-        marginBottom: "3rem"
-      }}>
+      <div style={{display: "flex", gap: "1rem", flexWrap: "wrap", justifyContent: "center"}}>
         <button
           onClick={() => navigate("/login")}
           style={{
             padding: "1rem 2rem",
-            fontSize: "1.1rem",
-            background: "#3b82f6",
-            color: "white",
+            background: "white",
+            color: "#667eea",
             border: "none",
             borderRadius: "12px",
-            cursor: "pointer",
+            fontSize: "1.1rem",
             fontWeight: "600",
-            width: "100%"
+            cursor: "pointer",
+            minWidth: "150px"
           }}
         >
           Sign In
@@ -71,47 +74,18 @@ export default function LandingPage() {
           onClick={() => navigate("/signup")}
           style={{
             padding: "1rem 2rem",
-            fontSize: "1.1rem",
             background: "rgba(255,255,255,0.2)",
             color: "white",
             border: "2px solid white",
             borderRadius: "12px",
-            cursor: "pointer",
+            fontSize: "1.1rem",
             fontWeight: "600",
-            width: "100%"
+            cursor: "pointer",
+            minWidth: "150px"
           }}
         >
           Create Account
         </button>
-      </div>
-      
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "1fr",
-        gap: "1.5rem",
-        maxWidth: "600px",
-        marginTop: "2rem"
-      }}>
-        <div style={{textAlign: "center"}}>
-          <h3 style={{fontSize: "1.25rem", marginBottom: "0.5rem"}}>🎤 Real-time Translation</h3>
-          <p style={{color: "rgba(255,255,255,0.8)", fontSize: "0.95rem"}}>
-            Instant speech-to-text and machine translation
-          </p>
-        </div>
-        
-        <div style={{textAlign: "center"}}>
-          <h3 style={{fontSize: "1.25rem", marginBottom: "0.5rem"}}>🌍 Multi-language Support</h3>
-          <p style={{color: "rgba(255,255,255,0.8)", fontSize: "0.95rem"}}>
-            Collaborate across language barriers
-          </p>
-        </div>
-        
-        <div style={{textAlign: "center"}}>
-          <h3 style={{fontSize: "1.25rem", marginBottom: "0.5rem"}}>📱 Cross-platform</h3>
-          <p style={{color: "rgba(255,255,255,0.8)", fontSize: "0.95rem"}}>
-            Works on desktop, tablet, and mobile
-          </p>
-        </div>
       </div>
     </div>
   );
