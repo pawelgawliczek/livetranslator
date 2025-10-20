@@ -1,5 +1,6 @@
 import os
 import asyncio
+import base64
 import redis.asyncio as redis
 try:
     import orjson
@@ -10,14 +11,22 @@ except:
     def jdumps(x): return json.dumps(x)
     def jloads(b): return json.loads(b if isinstance(b, str) else b.decode())
 
+from openai_backend import transcribe_audio_chunk
+
 # Config
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/5")
 INPUT_CHANNEL = os.getenv("STT_INPUT_CHANNEL", "stt_input")
 OUTPUT_CHANNEL = os.getenv("STT_OUTPUT_CHANNEL", "stt_local_in")
+STT_MODE = os.getenv("LT_STT_PARTIAL_MODE", "local")
+STT_OUTPUT_EVENTS = os.getenv("STT_OUTPUT_EVENTS", "stt_events")
 
 print(f"[STT Router] Starting...")
+print(f"  Mode:   {STT_MODE}")
 print(f"  Input:  {INPUT_CHANNEL}")
-print(f"  Output: {OUTPUT_CHANNEL}")
+print(f"  Output: {OUTPUT_CHANNEL if STT_MODE == 'local' else STT_OUTPUT_EVENTS}")
+
+# Track audio buffers per room (store decoded bytes, not base64)
+audio_buffers = {}
 
 async def router_loop():
     r = redis.from_url(REDIS_URL, decode_responses=True)
@@ -33,19 +42,60 @@ async def router_loop():
         try:
             data = jloads(msg["data"])
             msg_type = data.get("type", "")
+            room = data.get("room_id", "unknown")
             
-            # For now, just pass through all messages
-            await r.publish(OUTPUT_CHANNEL, jdumps(data))
-            
-            if msg_type == "audio_chunk":
-                room = data.get("room_id", "unknown")
+            if msg_type == "audio_chunk" and STT_MODE == "openai_chunked":
                 seq = data.get("seq", 0)
-                print(f"[STT Router] Routed audio chunk: room={room} seq={seq}")
-            else:
-                print(f"[STT Router] Routed message: type={msg_type}")
+                audio_b64 = data.get("pcm16_base64", "")
+                
+                # Decode and store raw PCM bytes
+                if room not in audio_buffers:
+                    audio_buffers[room] = b''
+                
+                audio_buffers[room] += base64.b64decode(audio_b64)
+                print(f"[STT Router] Buffered chunk: room={room} seq={seq} total_bytes={len(audio_buffers[room])}")
+                
+            elif msg_type == "audio_end" and STT_MODE == "openai_chunked":
+                audio_bytes = audio_buffers.get(room, b'')
+                if audio_bytes:
+                    print(f"[STT Router] Sending {len(audio_bytes)} bytes to OpenAI for room={room}")
+                    
+                    # Re-encode combined bytes to base64
+                    combined_b64 = base64.b64encode(audio_bytes).decode()
+                    
+                    try:
+                        result = await transcribe_audio_chunk(combined_b64)
+                        
+                        stt_event = {
+                            "type": "stt_final",
+                            "room_id": room,
+                            "segment_id": data.get("seq", 1),
+                            "revision": 1,
+                            "lang": result["language"],
+                            "text": result["text"],
+                            "final": True,
+                            "ts_iso": None,
+                            "backend": "openai_chunked"
+                        }
+                        
+                        await r.publish(STT_OUTPUT_EVENTS, jdumps(stt_event))
+                        print(f"[STT Router] ✓ Transcribed: {result['text'][:80]}...")
+                        
+                    except Exception as e:
+                        print(f"[STT Router] ✗ OpenAI error: {e}")
+                    
+                    audio_buffers[room] = b''
+                    
+            elif STT_MODE == "local":
+                await r.publish(OUTPUT_CHANNEL, jdumps(data))
+                if msg_type == "audio_chunk":
+                    seq = data.get("seq", 0)
+                    print(f"[STT Router] Routed to local: room={room} seq={seq}")
                 
         except Exception as e:
             print(f"[STT Router] Error: {e}")
+            import traceback
+            traceback.print_exc()
             continue
 
 if __name__ == "__main__":

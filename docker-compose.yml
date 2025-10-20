@@ -177,6 +177,9 @@ services:
       REDIS_URL: redis://redis:6379/5
       STT_INPUT_CHANNEL: stt_input
       STT_OUTPUT_CHANNEL: stt_local_in
+      LT_STT_PARTIAL_MODE: ${LT_STT_PARTIAL_MODE}
+      STT_OUTPUT_EVENTS: stt_events
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     depends_on:
       redis: { condition: service_healthy }
     networks: [stack_appnet]
@@ -191,6 +194,11 @@ services:
       REDIS_URL: redis://redis:6379/5
       MT_INPUT_CHANNEL: mt_requests
       MT_OUTPUT_CHANNEL: mt_events
+      LT_MT_MODE: ${LT_MT_MODE}
+      LT_DEFAULT_TGT: ${LT_DEFAULT_TGT:-en}
+      STT_EVENTS_CHANNEL: stt_events
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MT_MODEL: ${OPENAI_MT_MODEL}
     depends_on:
       redis: { condition: service_healthy }
     networks: [stack_appnet]

@@ -29,8 +29,8 @@ class WSManager:
 
     async def run_pubsub(self):
         pubsub = self.redis.pubsub()
-        await pubsub.subscribe("stt_events")
-        self.log.info("subscribed", channel="stt_events")
+        await pubsub.subscribe("stt_events", "mt_events")
+        self.log.info("subscribed", channel="stt_events,mt_events")
 
         timeout = httpx.Timeout(10.0, read=10.0)
         limits = httpx.Limits(max_keepalive_connections=8, max_connections=16)
