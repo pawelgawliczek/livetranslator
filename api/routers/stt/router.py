@@ -27,7 +27,7 @@ print(f"  Input:  {INPUT_CHANNEL}")
 print(f"  Output: {OUTPUT_CHANNEL if STT_MODE == 'local' else STT_OUTPUT_EVENTS}")
 
 # Track current partial accumulation per room
-partial_sessions = {}  # room -> {segment_id, accumulated_text, audio_chunks}
+partial_sessions = {}  # room -> {segment_id, accumulated_text, speaker}
 
 async def get_next_segment_id(r: redis.Redis, room: str) -> int:
     """Get and increment segment counter for a room, stored in Redis"""
@@ -50,13 +50,13 @@ async def router_loop():
             data = jloads(msg["data"])
             msg_type = data.get("type", "")
             room = data.get("room_id", "unknown")
+            speaker = data.get("speaker", "system")
             
             if msg_type == "audio_chunk_partial" and STT_MODE == "openai_chunked":
                 # Handle partial transcription - accumulate in same segment
                 seq = data.get("seq", 0)
                 audio_b64 = data.get("pcm16_base64", "")
                 device = data.get("device", "web")
-                segment_hint = data.get("segment_hint")
                 
                 audio_bytes = base64.b64decode(audio_b64)
                 duration_sec = len(audio_bytes) / (16000 * 2)
@@ -67,13 +67,14 @@ async def router_loop():
                     partial_sessions[room] = {
                         "segment_id": segment_id,
                         "accumulated_text": "",
-                        "chunk_count": 0
+                        "chunk_count": 0,
+                        "speaker": speaker
                     }
                 
                 session = partial_sessions[room]
                 session["chunk_count"] += 1
                 
-                print(f"[STT Router] Processing PARTIAL: room={room} segment={session['segment_id']} chunk={session['chunk_count']} bytes={len(audio_bytes)} ({duration_sec:.1f}s)")
+                print(f"[STT Router] Processing PARTIAL: room={room} speaker={speaker} segment={session['segment_id']} chunk={session['chunk_count']} bytes={len(audio_bytes)} ({duration_sec:.1f}s)")
                 
                 try:
                     result = await transcribe_audio_chunk(audio_b64)
@@ -94,7 +95,8 @@ async def router_loop():
                         "lang": result.get("language", "auto"),
                         "final": False,
                         "ts_iso": None,
-                        "device": device
+                        "device": device,
+                        "speaker": speaker
                     }
                     
                     await r.publish(STT_OUTPUT_EVENTS, jdumps(stt_event))
@@ -125,10 +127,12 @@ async def router_loop():
                 # Use existing segment if we have partials, otherwise create new
                 if room in partial_sessions:
                     segment_id = partial_sessions[room]["segment_id"]
-                    print(f"[STT Router] Processing FINAL (finalizing partial): room={room} segment={segment_id} bytes={len(audio_bytes)} ({duration_sec:.1f}s)")
+                    stored_speaker = partial_sessions[room]["speaker"]
+                    print(f"[STT Router] Processing FINAL (finalizing partial): room={room} speaker={stored_speaker} segment={segment_id} bytes={len(audio_bytes)} ({duration_sec:.1f}s)")
                 else:
                     segment_id = await get_next_segment_id(r, room)
-                    print(f"[STT Router] Processing FINAL (no partials): room={room} segment={segment_id} bytes={len(audio_bytes)} ({duration_sec:.1f}s)")
+                    stored_speaker = speaker
+                    print(f"[STT Router] Processing FINAL (no partials): room={room} speaker={speaker} segment={segment_id} bytes={len(audio_bytes)} ({duration_sec:.1f}s)")
                 
                 try:
                     result = await transcribe_audio_chunk(audio_b64)
@@ -142,7 +146,8 @@ async def router_loop():
                         "lang": result.get("language", "auto"),
                         "final": True,
                         "ts_iso": None,
-                        "device": device
+                        "device": device,
+                        "speaker": stored_speaker
                     }
                     
                     await r.publish(STT_OUTPUT_EVENTS, jdumps(stt_event))

@@ -68,6 +68,7 @@ async def persist_loop():
                     segment_id = int(data.get("segment_id", 0))
                     text = data.get("text", "").strip()
                     lang = data.get("lang", "auto")
+                    speaker = data.get("speaker", "system")
                     
                     if text:
                         await conn.execute(
@@ -75,10 +76,10 @@ async def persist_loop():
                             INSERT INTO segments (room_id, speaker_id, segment_id, revision, ts_iso, text, lang, final)
                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                             """,
-                            room_id, "system", str(segment_id), 1, 
+                            room_id, speaker, str(segment_id), 1, 
                             datetime.utcnow().isoformat(), text, lang, True
                         )
-                        print(f"[Persistence] ✓ STT saved: room={room_code} seg={segment_id}")
+                        print(f"[Persistence] ✓ STT saved: room={room_code} seg={segment_id} speaker={speaker}")
                 
                 # Persist translation final
                 elif msg_type == "translation_final":

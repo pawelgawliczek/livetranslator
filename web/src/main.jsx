@@ -379,19 +379,26 @@ function App(){
         </div>
       )}
 
-      <h3>Transcripts</h3>
+     <h3>Transcripts</h3>
       <div>
         {lines.map(([segId, seg]) => (
           <div key={segId} style={{marginBottom:"1rem",paddingBottom:"0.5rem",borderBottom:"1px solid #eee"}}>
             {seg.source && (
-              <div style={{
-                color: seg.source.final ? "#333" : "#999",
-                marginBottom:"0.25rem",
-                fontStyle: seg.source.final ? "normal" : "italic"
-              }}>
-                <strong>[{seg.source.lang||""}]</strong> {seg.source.text}
-                {!seg.source.final && <span style={{marginLeft:"0.5rem",fontSize:"0.8em"}}>⋯</span>}
-              </div>
+              <>
+                {seg.source.speaker && seg.source.speaker !== "system" && (
+                  <div style={{fontSize:"0.85em",color:"#2563eb",fontWeight:"600",marginBottom:"0.25rem"}}>
+                    👤 {seg.source.speaker}
+                  </div>
+                )}
+                <div style={{
+                  color: seg.source.final ? "#333" : "#999",
+                  marginBottom:"0.25rem",
+                  fontStyle: seg.source.final ? "normal" : "italic"
+                }}>
+                  <strong>[{seg.source.lang||""}]</strong> {seg.source.text}
+                  {!seg.source.final && <span style={{marginLeft:"0.5rem",fontSize:"0.8em"}}>⋯</span>}
+                </div>
+              </>
             )}
             {seg.translation && (
               <div style={{
@@ -406,6 +413,7 @@ function App(){
           </div>
         ))}
       </div>
+
     </div>
   );
 }
