@@ -58,44 +58,58 @@ async def router_loop():
                 seq = data.get("seq", 0)
                 audio_b64 = data.get("pcm16_base64", "")
                 device = data.get("device", "web")
-                
+                language_hint = data.get("language", "auto")  # Get language preference from frontend
+
                 audio_bytes = base64.b64decode(audio_b64)
                 duration_sec = len(audio_bytes) / (16000 * 2)
-                
+
                 # Initialize or get existing partial session
                 if room not in partial_sessions:
                     segment_id = await get_next_segment_id(r, room)
                     partial_sessions[room] = {
                         "segment_id": segment_id,
+                        "last_transcribed_length": 0,  # Track how much audio we've already transcribed
+                        "accumulated_audio": b"",  # Accumulate audio bytes
                         "accumulated_text": "",
                         "chunk_count": 0,
                         "speaker": speaker,
-                        "target_lang": target_lang
+                        "target_lang": target_lang,
+                        "language_hint": language_hint
                     }
-                
+
                 session = partial_sessions[room]
                 session["chunk_count"] += 1
                 session["target_lang"] = target_lang  # Update if changed
-                
-                print(f"[STT Router] Processing PARTIAL: room={room} speaker={speaker} segment={session['segment_id']} chunk={session['chunk_count']} target={target_lang}")
-                
+                session["language_hint"] = language_hint  # Update if changed
+
+                # Accumulate audio bytes
+                old_audio_len = len(session["accumulated_audio"])
+                session["accumulated_audio"] += audio_bytes
+                new_audio_len = len(session["accumulated_audio"])
+
+                print(f"[STT Router] Processing PARTIAL: room={room} speaker={speaker} segment={session['segment_id']} chunk={session['chunk_count']} lang_hint={language_hint} total_audio={new_audio_len/32000:.1f}s target={target_lang}")
+
                 try:
-                    result = await transcribe_audio_chunk(audio_b64)
-                    new_text = result["text"].strip()
-                    
-                    # Accumulate text
-                    if session["accumulated_text"]:
-                        session["accumulated_text"] += " " + new_text
-                    else:
-                        session["accumulated_text"] = new_text
-                    
+                    # Transcribe the full accumulated audio buffer with context
+                    accumulated_b64 = base64.b64encode(session["accumulated_audio"]).decode('utf-8')
+                    prompt = session["accumulated_text"] if session["accumulated_text"] else None
+                    result = await transcribe_audio_chunk(accumulated_b64, language=language_hint, prompt=prompt)
+                    full_text = result["text"].strip()
+
+                    # Store detected language in session
+                    detected_lang = result.get("language", "auto")
+                    session["detected_lang"] = detected_lang
+
+                    # Update accumulated text
+                    session["accumulated_text"] = full_text
+
                     stt_event = {
                         "type": "stt_partial",
                         "room_id": room,
                         "segment_id": session["segment_id"],
                         "revision": session["chunk_count"],
                         "text": session["accumulated_text"],
-                        "lang": result.get("language", "auto"),
+                        "lang": detected_lang,
                         "final": False,
                         "ts_iso": None,
                         "device": device,
@@ -124,24 +138,27 @@ async def router_loop():
                 seq = data.get("seq", 0)
                 audio_b64 = data.get("pcm16_base64", "")
                 device = data.get("device", "web")
-                
+                language_hint = data.get("language", "auto")  # Get language preference from frontend
+
                 audio_bytes = base64.b64decode(audio_b64)
                 duration_sec = len(audio_bytes) / (16000 * 2)
-                
+
                 # Use existing segment if we have partials, otherwise create new
                 if room in partial_sessions:
                     segment_id = partial_sessions[room]["segment_id"]
                     stored_speaker = partial_sessions[room]["speaker"]
                     stored_target_lang = partial_sessions[room]["target_lang"]
-                    print(f"[STT Router] Processing FINAL (finalizing partial): room={room} speaker={stored_speaker} segment={segment_id} target={stored_target_lang}")
+                    stored_language_hint = partial_sessions[room].get("language_hint", language_hint)
+                    print(f"[STT Router] Processing FINAL (finalizing partial): room={room} speaker={stored_speaker} segment={segment_id} lang_hint={stored_language_hint} target={stored_target_lang}")
                 else:
                     segment_id = await get_next_segment_id(r, room)
                     stored_speaker = speaker
                     stored_target_lang = target_lang
-                    print(f"[STT Router] Processing FINAL (no partials): room={room} speaker={speaker} segment={segment_id} target={target_lang}")
-                
+                    stored_language_hint = language_hint
+                    print(f"[STT Router] Processing FINAL (no partials): room={room} speaker={speaker} segment={segment_id} lang_hint={language_hint} target={target_lang}")
+
                 try:
-                    result = await transcribe_audio_chunk(audio_b64)
+                    result = await transcribe_audio_chunk(audio_b64, language=stored_language_hint)
                     
                     stt_event = {
                         "type": "stt_final",
@@ -184,14 +201,15 @@ async def router_loop():
                 if room in partial_sessions:
                     session = partial_sessions[room]
                     if session["accumulated_text"]:
-                        # Send final event with accumulated text
+                        # Send final event with accumulated text using detected language from partials
+                        detected_lang = session.get("detected_lang", "auto")
                         stt_event = {
                             "type": "stt_final",
                             "room_id": room,
                             "segment_id": session["segment_id"],
                             "revision": session["chunk_count"] + 1,
                             "text": session["accumulated_text"],
-                            "lang": "auto",
+                            "lang": detected_lang,
                             "final": True,
                             "ts_iso": None,
                             "device": "web",

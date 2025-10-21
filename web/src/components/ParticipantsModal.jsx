@@ -71,8 +71,7 @@ export default function ParticipantsModal({ roomCode, token, isOpen, onClose }) 
                     </div>
                     <div style={styles.participantMeta}>
                       <span style={styles.languageInfo}>
-                        🗣️ {getLanguageName(participant.source_lang || "auto")} →
-                        📖 {getLanguageName(participant.target_lang || "en")}
+                        🗣️ {getLanguageName(participant.preferred_lang || "en")}
                       </span>
                     </div>
                   </div>

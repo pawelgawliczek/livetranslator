@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { MicVAD } from "@ricky0123/vad-web";
 import InviteModal from "../components/InviteModal";
 import ParticipantsModal from "../components/ParticipantsModal";
 
@@ -31,11 +30,8 @@ export default function RoomPage({ token, onLogout }) {
   const [showInvite, setShowInvite] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [userEmail, setUserEmail] = useState("");
-  const [sourceLang, setSourceLang] = useState(() => {
-    return isGuest ? "auto" : (localStorage.getItem('lt_source_lang') || "auto");
-  });
-  const [targetLang, setTargetLang] = useState(() => {
-    return isGuest ? guestLang : (localStorage.getItem('lt_target_lang') || "en");
+  const [myLanguage, setMyLanguage] = useState(() => {
+    return isGuest ? guestLang : (localStorage.getItem('lt_my_language') || "en");
   });
   const [pushToTalk, setPushToTalk] = useState(() => {
     return localStorage.getItem('lt_push_to_talk') === 'true';
@@ -47,7 +43,6 @@ export default function RoomPage({ token, onLogout }) {
   const presenceWsRef = useRef(null); // Persistent presence WebSocket
   const seqRef = useRef(1);
   const isRecordingRef = useRef(false);
-  const vadRef = useRef(null);
   const audioContextRef = useRef(null);
   const scriptProcessorRef = useRef(null);
   const partialBufferRef = useRef(new Float32Array(0));
@@ -58,7 +53,12 @@ export default function RoomPage({ token, onLogout }) {
 
   const segsRef = useRef(new Map());
   const dirtyRef = useRef(false);
-  
+
+  // VAD state
+  const vadSpeechFramesRef = useRef(0);
+  const vadSilenceFramesRef = useRef(0);
+  const vadIsDetectedRef = useRef(false);
+
   const languages = [
     { code: "auto", name: "Auto", flag: "🌐" },
     { code: "en", name: "English", flag: "🇬🇧" },
@@ -79,23 +79,32 @@ export default function RoomPage({ token, onLogout }) {
     }
   }, [token, isGuest, guestName]);
   
-  // Save language preferences to localStorage
+  // Save language preference to localStorage
   useEffect(() => {
-    localStorage.setItem('lt_source_lang', sourceLang);
-  }, [sourceLang]);
-  
-  useEffect(() => {
-    localStorage.setItem('lt_target_lang', targetLang);
-  }, [targetLang]);
-  
+    if (!isGuest) {
+      localStorage.setItem('lt_my_language', myLanguage);
+    }
+  }, [myLanguage, isGuest]);
+
   useEffect(() => {
     localStorage.setItem('lt_push_to_talk', pushToTalk.toString());
   }, [pushToTalk]);
-  
-  // Load history on mount and when target language changes
+
+  // Load history on mount and when my language changes
   useEffect(() => {
     fetchHistory();
-  }, [roomId, targetLang]);
+  }, [roomId, myLanguage]);
+
+  // Send language update to server when it changes
+  useEffect(() => {
+    if (presenceWsRef.current && presenceWsRef.current.readyState === 1) {
+      presenceWsRef.current.send(JSON.stringify({
+        type: "set_language",
+        language: myLanguage
+      }));
+      console.log('[RoomPage] Sent language update:', myLanguage);
+    }
+  }, [myLanguage]);
 
   // Establish persistent presence WebSocket when room page loads
   useEffect(() => {
@@ -119,12 +128,27 @@ export default function RoomPage({ token, onLogout }) {
 
       presenceWs.onopen = () => {
         console.log('[RoomPage] Presence WebSocket connected! User is now visible in participants list.');
+        // Send initial language preference
+        presenceWs.send(JSON.stringify({
+          type: "set_language",
+          language: myLanguage
+        }));
+        console.log('[RoomPage] Sent initial language to server:', myLanguage);
       };
 
       presenceWs.onmessage = (event) => {
-        // Receive messages on this WebSocket but don't process them
-        // This is just for presence tracking
-        console.log('[RoomPage] Presence WS received:', event.data);
+        // Process STT and translation messages on presence WebSocket too
+        try {
+          const data = JSON.parse(event.data);
+          // Only process translation and STT messages, ignore other types
+          if (data.type && (data.type.includes('translation') || data.type.includes('stt') || data.type.includes('partial') || data.type.includes('final'))) {
+            onMsg(event);
+          } else {
+            console.log('[RoomPage] Presence WS received (ignored):', data.type);
+          }
+        } catch (e) {
+          console.log('[RoomPage] Presence WS received non-JSON:', event.data);
+        }
       };
 
       presenceWs.onerror = (err) => {
@@ -165,10 +189,17 @@ export default function RoomPage({ token, onLogout }) {
           segments.set(segId, { source: null, translation: null });
         }
         const seg = segments.get(segId);
-        
+
         if (msg.type && msg.type.startsWith("translation")) {
-          if (!seg.translation || msg.final || (!msg.final && !seg.translation.final)) {
-            seg.translation = msg;
+          // Only store translation if it matches my language
+          console.log(`[Translation Filter] myLanguage=${myLanguage}, msg.tgt=${msg.tgt}, match=${msg.tgt === myLanguage}`);
+          if (msg.tgt === myLanguage) {
+            if (!seg.translation || msg.final || (!msg.final && !seg.translation.final)) {
+              seg.translation = msg;
+              console.log(`[Translation] Stored translation for segment ${segId}`);
+            }
+          } else {
+            console.log(`[Translation] Skipped translation (tgt=${msg.tgt} !== myLang=${myLanguage})`);
           }
         } else {
           if (!seg.source || msg.final || (!msg.final && !seg.source.final)) {
@@ -244,13 +275,13 @@ export default function RoomPage({ token, onLogout }) {
   function sendPartialIfReady() {
     const now = Date.now();
     if (!isSpeakingRef.current) return;
-    if (now - lastPartialSentRef.current < 2000) return;
-    if (partialBufferRef.current.length < 16000) return;
-    
+    if (now - lastPartialSentRef.current < 800) return;  // Send every 800ms for faster updates
+    if (partialBufferRef.current.length < 8000) return;  // Minimum 0.5s of audio
+
     try {
       const pcm16 = floatTo16(partialBufferRef.current);
       const b64 = btoa(String.fromCharCode(...new Uint8Array(pcm16.buffer)));
-      
+
       if (wsRef.current && wsRef.current.readyState === 1) {
         wsRef.current.send(JSON.stringify({
           type: "audio_chunk_partial",
@@ -259,11 +290,10 @@ export default function RoomPage({ token, onLogout }) {
           segment_hint: currentSegmentHintRef.current,
           seq: seqRef.current++,
           pcm16_base64: b64,
-          source_lang: sourceLang,
-          target_lang: targetLang
+          language: myLanguage  // Pass user's language preference to STT
         }));
       }
-      
+
       lastPartialSentRef.current = now;
       const keepSamples = 8000;
       if (partialBufferRef.current.length > keepSamples) {
@@ -271,6 +301,22 @@ export default function RoomPage({ token, onLogout }) {
       }
     } catch (e) {
       console.error("Partial send failed:", e);
+    }
+  }
+
+  function sendFinalTranscription() {
+    // Send audio_end to trigger auto-finalization of accumulated partials
+    try {
+      if (wsRef.current && wsRef.current.readyState === 1) {
+        wsRef.current.send(JSON.stringify({
+          type: "audio_end",
+          roomId: roomId,
+          device: "web"
+        }));
+        console.log("[VAD] Sent audio_end to finalize segment");
+      }
+    } catch (e) {
+      console.error("Final send failed:", e);
     }
   }
   
@@ -292,8 +338,8 @@ export default function RoomPage({ token, onLogout }) {
       }
     }
 
-    const wsUrl = (location.protocol === "https:" ? "wss://" : "ws://") +
-      location.host + `/ws/rooms/${encodeURIComponent(roomId)}?token=${encodeURIComponent(authToken)}`;
+    const wsUrl = (window.location.protocol === "https:" ? "wss://" : "ws://") +
+      window.location.host + `/ws/rooms/${encodeURIComponent(roomId)}?token=${encodeURIComponent(authToken)}`;
     const ws = new WebSocket(wsUrl);
     ws.onmessage = onMsg;
     ws.onopen = () => setStatus("streaming");
@@ -313,17 +359,67 @@ export default function RoomPage({ token, onLogout }) {
     const processor = audioContext.createScriptProcessor(4096, 1, 1);
     
     processor.onaudioprocess = (e) => {
-      if (!isSpeakingRef.current) return;
-      
       const inputData = e.inputBuffer.getChannelData(0);
+
+      // Calculate audio energy for VAD
+      let energy = 0;
+      for (let i = 0; i < inputData.length; i++) {
+        energy += inputData[i] * inputData[i];
+      }
+      energy = Math.sqrt(energy / inputData.length);
+
+      const isSpeech = energy > 0.002; // energyThreshold
+
+      if (isSpeech) {
+        vadSpeechFramesRef.current++;
+        vadSilenceFramesRef.current = 0;
+
+        // Start speech if threshold reached
+        if (!vadIsDetectedRef.current && vadSpeechFramesRef.current >= 5) {
+          vadIsDetectedRef.current = true;
+          setVadStatus("🎤 Speaking...");
+          isSpeakingRef.current = true;
+          partialBufferRef.current = new Float32Array(0);
+          lastPartialSentRef.current = 0;
+          currentSegmentHintRef.current = Date.now();
+        }
+      } else {
+        vadSilenceFramesRef.current++;
+
+        if (vadIsDetectedRef.current) {
+          // End speech if silence threshold reached
+          if (vadSilenceFramesRef.current >= 20) {
+            vadIsDetectedRef.current = false;
+            vadSpeechFramesRef.current = 0;
+            setVadStatus("✅ Processing...");
+            isSpeakingRef.current = false;
+
+            // Send audio_end to finalize accumulated partials
+            sendFinalTranscription();
+
+            // Clear buffers
+            partialBufferRef.current = new Float32Array(0);
+            currentSegmentHintRef.current = null;
+
+            // Return to listening status after a delay
+            setTimeout(() => setVadStatus("👂 Listening..."), 300);
+          }
+        } else {
+          vadSpeechFramesRef.current = Math.max(0, vadSpeechFramesRef.current - 1);
+        }
+      }
+
+      // Only process audio for transmission when speaking is detected
+      if (!isSpeakingRef.current) return;
+
       const resampled = resampleTo16k(inputData, 48000);
-      
+
       const oldLen = partialBufferRef.current.length;
       const newBuffer = new Float32Array(oldLen + resampled.length);
       newBuffer.set(partialBufferRef.current);
       newBuffer.set(resampled, oldLen);
       partialBufferRef.current = newBuffer;
-      
+
       sendPartialIfReady();
     };
     
@@ -334,95 +430,43 @@ export default function RoomPage({ token, onLogout }) {
     scriptProcessorRef.current = processor;
     partialBufferRef.current = new Float32Array(0);
     lastPartialSentRef.current = 0;
-    
-    try {
-      const vad = await MicVAD.new({
-        positiveSpeechThreshold: 0.8,
-        negativeSpeechThreshold: 0.75,
-        minSpeechFrames: 5,
-        redemptionFrames: 10,
-        preSpeechPadFrames: 1,
-        onSpeechStart: () => {
-          if (pushToTalk && !isPressing) return;
-          setVadStatus("🎤 Speaking...");
-          isSpeakingRef.current = true;
-          partialBufferRef.current = new Float32Array(0);
-          lastPartialSentRef.current = 0;
-          currentSegmentHintRef.current = Date.now();
-        },
-        onSpeechEnd: (audio) => {
-          if (pushToTalk && !isPressing) return;
-          setVadStatus("✅ Processing...");
-          isSpeakingRef.current = false;
-          
-          if (wsRef.current && wsRef.current.readyState === 1 && isRecordingRef.current) {
-            const pcm16 = floatTo16(audio);
-            const b64 = btoa(String.fromCharCode(...new Uint8Array(pcm16.buffer)));
-            wsRef.current.send(JSON.stringify({
-              type: "audio_chunk",
-              roomId: roomId,
-              device: "web",
-              seq: seqRef.current++,
-              pcm16_base64: b64,
-              source_lang: sourceLang,
-              target_lang: targetLang
-            }));
-          }
-          
-          partialBufferRef.current = new Float32Array(0);
-          currentSegmentHintRef.current = null;
-          setTimeout(() => setVadStatus("👂 Listening..."), 300);
-        },
-        onVADMisfire: () => {
-          setVadStatus("👂 Listening...");
-          isSpeakingRef.current = false;
-          partialBufferRef.current = new Float32Array(0);
-          currentSegmentHintRef.current = null;
-        },
-      });
-      
-      vadRef.current = vad;
-      isRecordingRef.current = true;
-      
-      await vad.start();
-      
-      setVadReady(true);
-      setVadStatus("👂 Listening...");
-      
-    } catch (err) {
-      console.error("VAD initialization failed:", err);
-      setStatus("VAD error");
-      setVadStatus("Failed");
-      setVadReady(false);
-    }
+
+    // Initialize VAD state
+    vadSpeechFramesRef.current = 0;
+    vadSilenceFramesRef.current = 0;
+    vadIsDetectedRef.current = false;
+
+    isRecordingRef.current = true;
+    setVadReady(true);
+    setVadStatus("👂 Listening...");
   }
   
   function stop() {
     isRecordingRef.current = false;
     isSpeakingRef.current = false;
     setVadReady(false);
-    
-    if (vadRef.current) {
-      vadRef.current.pause();
-      vadRef.current = null;
-    }
-    
+
+    // Reset VAD state
+    vadSpeechFramesRef.current = 0;
+    vadSilenceFramesRef.current = 0;
+    vadIsDetectedRef.current = false;
+
     if (scriptProcessorRef.current) {
       scriptProcessorRef.current.disconnect();
       scriptProcessorRef.current = null;
     }
-    
+
     if (audioContextRef.current) {
       audioContextRef.current.close();
       audioContextRef.current = null;
     }
-    
+
     try {
       if (wsRef.current && wsRef.current.readyState === 1) {
         wsRef.current.send(JSON.stringify({ type: "audio_end", roomId: roomId, device: "web" }));
       }
     } catch {}
-    
+
     setStatus("idle");
     setVadStatus("idle");
   }
@@ -446,9 +490,9 @@ export default function RoomPage({ token, onLogout }) {
     setLoadingHistory(true);
     
     try {
-      console.log(`[History] Fetching: room=${roomId}, target=${targetLang}`);
+      console.log(`[History] Fetching: room=${roomId}, target=${myLanguage}`);
       const r = await fetch(
-        `/history/room/${encodeURIComponent(roomId)}?target_lang=${encodeURIComponent(targetLang)}`,
+        `/history/room/${encodeURIComponent(roomId)}?target_lang=${encodeURIComponent(myLanguage)}`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
@@ -523,9 +567,8 @@ export default function RoomPage({ token, onLogout }) {
     }
   }
   
-  const srcLang = languages.find(l => l.code === sourceLang);
-  const tgtLang = languages.find(l => l.code === targetLang);
-  
+  const myLang = languages.find(l => l.code === myLanguage);
+
   return (
     <div style={{
       height: "100vh",
@@ -717,40 +760,19 @@ export default function RoomPage({ token, onLogout }) {
           }}
           onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{margin: "0 0 1rem 0", fontSize: "1.2rem"}}>Select Languages</h3>
-            
-            <div style={{marginBottom: "1rem"}}>
-              <label style={{display: "block", fontSize: "0.85rem", color: "#999", marginBottom: "0.5rem"}}>
-                Source Language
-              </label>
-              <select
-                value={sourceLang}
-                onChange={(e) => setSourceLang(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "0.85rem",
-                  background: "#2a2a2a",
-                  border: "1px solid #444",
-                  borderRadius: "10px",
-                  color: "white",
-                  fontSize: "1rem"
-                }}
-              >
-                {languages.map(lang => (
-                  <option key={lang.code} value={lang.code}>
-                    {lang.flag} {lang.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
+            <h3 style={{margin: "0 0 1rem 0", fontSize: "1.2rem"}}>My Language</h3>
+            <p style={{margin: "0 0 1rem 0", fontSize: "0.85rem", color: "#999"}}>
+              Select the language you speak and want to read messages in.
+              Messages will be automatically translated to your language.
+            </p>
+
             <div style={{marginBottom: "1.5rem"}}>
               <label style={{display: "block", fontSize: "0.85rem", color: "#999", marginBottom: "0.5rem"}}>
-                Target Language
+                I speak and want to read
               </label>
               <select
-                value={targetLang}
-                onChange={(e) => setTargetLang(e.target.value)}
+                value={myLanguage}
+                onChange={(e) => setMyLanguage(e.target.value)}
                 style={{
                   width: "100%",
                   padding: "0.85rem",
@@ -932,28 +954,46 @@ export default function RoomPage({ token, onLogout }) {
                 )}
               </div>
               
-              {seg.translation && (
-                <div style={{
-                  color: seg.translation.final ? "#fff" : "#bbb",
-                  fontSize: "1rem",
-                  fontWeight: "500",
-                  marginBottom: "0.4rem",
-                  lineHeight: "1.45"
-                }}>
-                  {seg.translation.text}
-                  {!seg.translation.final && <span style={{marginLeft: "0.5rem", color: "#666"}}>⋯</span>}
-                </div>
-              )}
-              
-              {seg.source && (
-                <div style={{
-                  color: "#666",
-                  fontSize: "0.8rem",
-                  fontStyle: "italic",
-                  lineHeight: "1.35"
-                }}>
-                  {seg.source.text}
-                </div>
+              {seg.translation ? (
+                <>
+                  {/* Translation - large font */}
+                  <div style={{
+                    color: seg.translation.final ? "#fff" : "#bbb",
+                    fontSize: "1rem",
+                    fontWeight: "500",
+                    marginBottom: "0.4rem",
+                    lineHeight: "1.45"
+                  }}>
+                    {seg.translation.text}
+                    {!seg.translation.final && <span style={{marginLeft: "0.5rem", color: "#666"}}>⋯</span>}
+                  </div>
+                  {/* Original text - small font below */}
+                  {seg.source && (
+                    <div style={{
+                      color: "#666",
+                      fontSize: "0.8rem",
+                      fontStyle: "italic",
+                      lineHeight: "1.35"
+                    }}>
+                      {seg.source.text}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* No translation - show source in large font (own message) */}
+                  {seg.source && (
+                    <div style={{
+                      color: seg.source.final ? "#fff" : "#bbb",
+                      fontSize: "1rem",
+                      fontWeight: "500",
+                      lineHeight: "1.45"
+                    }}>
+                      {seg.source.text}
+                      {!seg.source.final && <span style={{marginLeft: "0.5rem", color: "#666"}}>⋯</span>}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           );
