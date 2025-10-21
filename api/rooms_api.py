@@ -38,6 +38,15 @@ class RoomResponse(BaseModel):
     requires_login: bool
     max_participants: int
     created_at: datetime
+    admin_left_at: datetime | None = None
+
+
+class RoomStatusResponse(BaseModel):
+    """Room status including admin presence."""
+    code: str
+    admin_present: bool
+    admin_left_at: datetime | None = None
+    expires_at: datetime | None = None  # When room will be deleted (admin_left_at + 30 min)
 
 
 def get_db():
@@ -127,7 +136,8 @@ async def create_room(
         is_public=room.is_public,
         requires_login=room.requires_login,
         max_participants=room.max_participants,
-        created_at=room.created_at
+        created_at=room.created_at,
+        admin_left_at=room.admin_left_at
     )
 
 
@@ -160,7 +170,8 @@ async def get_room(
         is_public=room.is_public,
         requires_login=room.requires_login,
         max_participants=room.max_participants,
-        created_at=room.created_at
+        created_at=room.created_at,
+        admin_left_at=room.admin_left_at
     )
 
 
@@ -283,5 +294,56 @@ async def update_room_recording(
         is_public=room.is_public,
         requires_login=room.requires_login,
         max_participants=room.max_participants,
-        created_at=room.created_at
+        created_at=room.created_at,
+        admin_left_at=room.admin_left_at
+    )
+
+
+@router.get("/api/rooms/{room_code}/status", response_model=RoomStatusResponse)
+async def get_room_status(
+    room_code: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Get room status including admin presence and expiration time.
+
+    Args:
+        room_code: The room code
+        request: FastAPI request object (to access ws_manager)
+        db: Database session
+        user: Authenticated user
+
+    Returns:
+        RoomStatusResponse with admin presence and expiration info
+    """
+    from datetime import timedelta
+
+    # Get room from database
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # Check if admin is currently connected via WebSocket
+    wsman = getattr(request.app.state, 'wsman', None)
+    admin_present = False
+
+    if wsman:
+        for ws in wsman.rooms.get(room_code, []):
+            user_id = getattr(ws.state, 'user_id', None)
+            if user_id and not str(user_id).startswith('guest:') and user_id == room.owner_id:
+                admin_present = True
+                break
+
+    # Calculate expiration time if admin has left
+    expires_at = None
+    if room.admin_left_at and not admin_present:
+        expires_at = room.admin_left_at + timedelta(minutes=30)
+
+    return RoomStatusResponse(
+        code=room.code,
+        admin_present=admin_present,
+        admin_left_at=room.admin_left_at,
+        expires_at=expires_at
     )

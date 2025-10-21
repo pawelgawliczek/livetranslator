@@ -1,6 +1,7 @@
 # /opt/stack/livetranslator/api/ws_manager.py
 import asyncio
 import time
+from datetime import datetime
 from typing import Dict, Set, Tuple
 
 import httpx
@@ -8,9 +9,12 @@ import orjson
 import redis.asyncio as redis
 import structlog
 from fastapi import WebSocket
+from sqlalchemy.orm import Session
 
 from .persistence import save_stt_event, upsert_final_translation
 from .metrics import MET_STT_EVENTS, MET_MT_REQ, MET_MT_ERR, MET_MT_LAT, E2E_LAT
+from .models import Room
+from .db import SessionLocal
 
 
 class WSManager:
@@ -134,17 +138,62 @@ class WSManager:
             except Exception as e:
                 self.log.error("persist_mt_error", room=room, segment=seg_id, err=str(e))
 
+    async def _check_admin_presence(self, room_id: str):
+        """
+        Check if the room admin is present. If admin left, mark admin_left_at.
+        If admin rejoined, clear admin_left_at.
+        """
+        try:
+            db: Session = SessionLocal()
+            try:
+                room = db.query(Room).filter(Room.code == room_id).first()
+                if not room:
+                    return
+
+                # Check if admin is currently connected
+                admin_present = False
+                for ws in self.rooms.get(room_id, []):
+                    user_id = getattr(ws.state, 'user_id', None)
+                    # Check if this user is the admin (not a guest)
+                    if user_id and not str(user_id).startswith('guest:') and user_id == room.owner_id:
+                        admin_present = True
+                        break
+
+                # Update database based on admin presence
+                if admin_present and room.admin_left_at:
+                    # Admin rejoined - clear the timestamp
+                    room.admin_left_at = None
+                    db.commit()
+                    self.log.info("admin_rejoined", room=room_id, owner_id=room.owner_id)
+                elif not admin_present and not room.admin_left_at:
+                    # Admin left - set the timestamp
+                    room.admin_left_at = datetime.utcnow()
+                    db.commit()
+                    self.log.info("admin_left", room=room_id, owner_id=room.owner_id, timestamp=room.admin_left_at)
+            finally:
+                db.close()
+        except Exception as e:
+            self.log.error("admin_check_error", room=room_id, err=str(e))
+
     async def connect(self, room_id: str, ws: WebSocket):
         await ws.accept()
         self.rooms.setdefault(room_id, set()).add(ws)
+
+        # Check if admin rejoined
+        await self._check_admin_presence(room_id)
+
         self.log.info("ws_join", room=room_id, conns=len(self.rooms.get(room_id, [])))
 
-    def disconnect(self, room_id: str, ws: WebSocket):
+    async def disconnect(self, room_id: str, ws: WebSocket):
         conns = self.rooms.get(room_id)
         if conns and ws in conns:
             conns.remove(ws)
             if not conns:
                 self.rooms.pop(room_id, None)
+
+        # Check if admin left
+        await self._check_admin_presence(room_id)
+
         self.log.info("ws_leave", room=room_id, conns=len(self.rooms.get(room_id, [])))
 
     async def broadcast(self, room_id: str, payload: dict):

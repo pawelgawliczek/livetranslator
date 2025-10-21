@@ -45,7 +45,9 @@ export default function RoomPage({ token, onLogout }) {
   });
   const [isPressing, setIsPressing] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  
+  const [isRoomAdmin, setIsRoomAdmin] = useState(false);
+  const [showAdminLeaveWarning, setShowAdminLeaveWarning] = useState(false);
+
   const wsRef = useRef(null);
   const presenceWsRef = useRef(null); // Persistent presence WebSocket
   const seqRef = useRef(1);
@@ -132,6 +134,40 @@ export default function RoomPage({ token, onLogout }) {
         });
     }
   }, [persistenceEnabled, isGuest, token, roomId]);
+
+  // Check if current user is the room admin
+  useEffect(() => {
+    if (!isGuest && token) {
+      fetch(`/api/rooms/${roomId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const userId = parseInt(payload.sub);
+            setIsRoomAdmin(data.owner_id === userId);
+          } catch (e) {
+            console.error('Failed to check admin status:', e);
+          }
+        })
+        .catch(err => console.error('Failed to fetch room info:', err));
+    }
+  }, [roomId, token, isGuest]);
+
+  // Warn admin before leaving
+  useEffect(() => {
+    if (isRoomAdmin) {
+      const handleBeforeUnload = (e) => {
+        e.preventDefault();
+        e.returnValue = 'Room will be automatically deleted 30 minutes after you leave. Are you sure?';
+        return e.returnValue;
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }
+  }, [isRoomAdmin]);
 
   // Load history on mount and when my language changes
   useEffect(() => {

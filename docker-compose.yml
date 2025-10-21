@@ -238,3 +238,18 @@ services:
     volumes:
       - ./api/services/persistence_service.py:/app/persistence_service.py:ro
     command: ["python", "persistence_service.py"]
+
+  room_cleanup:
+    image: livetranslator-api:latest
+    restart: always
+    environment:
+      <<: *common_env
+      PYTHONUNBUFFERED: "1"
+      POSTGRES_DSN: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      ROOM_CLEANUP_INTERVAL: "300"  # Check every 5 minutes
+      ADMIN_ABSENT_THRESHOLD: "30"  # Delete rooms after 30 minutes
+    depends_on:
+      postgres: { condition: service_healthy }
+      api: { condition: service_started }
+    networks: [stack_appnet]
+    command: ["python", "-m", "api.services.room_cleanup_service"]

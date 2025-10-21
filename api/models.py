@@ -22,6 +22,7 @@ class Room(Base):
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     recording: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    admin_left_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
     # New fields for Phase 1
     is_public: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

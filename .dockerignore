@@ -1,0 +1,17 @@
+data/
+.git/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+node_modules/
+.env
+.venv
+venv/
+ENV/
