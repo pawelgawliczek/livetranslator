@@ -6,6 +6,7 @@ import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import RoomsPage from "./pages/RoomsPage";
 import RoomPage from "./pages/RoomPage";
+import JoinPage from "./pages/JoinPage";
 
 function App() {
   const [token, setToken] = React.useState(localStorage.getItem("token") || "");
@@ -26,13 +27,14 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage onLogin={login} />} />
         <Route path="/signup" element={<SignupPage onSignup={login} />} />
-        <Route 
-          path="/rooms" 
-          element={token ? <RoomsPage token={token} onLogout={logout} onLogin={login} /> : <Navigate to="/login" />} 
+        <Route path="/join/:inviteCode" element={<JoinPage token={token} onLogin={login} />} />
+        <Route
+          path="/rooms"
+          element={token ? <RoomsPage token={token} onLogout={logout} onLogin={login} /> : <Navigate to="/login" />}
         />
-        <Route 
-          path="/room/:roomId" 
-          element={token ? <RoomPage token={token} onLogout={logout} /> : <Navigate to="/login" />} 
+        <Route
+          path="/room/:roomId"
+          element={<RoomPage token={token} onLogout={logout} />}
         />
       </Routes>
     </BrowserRouter>

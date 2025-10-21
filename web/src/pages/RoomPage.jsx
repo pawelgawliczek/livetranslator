@@ -1,11 +1,26 @@
 import React, { useRef, useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { MicVAD } from "@ricky0123/vad-web";
+import InviteModal from "../components/InviteModal";
+import ParticipantsModal from "../components/ParticipantsModal";
 
 export default function RoomPage({ token, onLogout }) {
   const { roomId } = useParams();
   const navigate = useNavigate();
-  
+  const location = useLocation();
+
+  // Check if this is a guest session
+  const isGuest = sessionStorage.getItem('is_guest') === 'true';
+  const guestName = sessionStorage.getItem('guest_display_name') || 'Guest';
+  const guestLang = sessionStorage.getItem('guest_language') || 'en';
+
+  // If no token and not a guest, redirect to login
+  React.useEffect(() => {
+    if (!token && !isGuest) {
+      navigate('/login');
+    }
+  }, [token, isGuest, navigate]);
+
   const [status, setStatus] = useState("idle");
   const [vadStatus, setVadStatus] = useState("idle");
   const [vadReady, setVadReady] = useState(false);
@@ -13,12 +28,14 @@ export default function RoomPage({ token, onLogout }) {
   const [costs, setCosts] = useState(null);
   const [showCosts, setShowCosts] = useState(false);
   const [showLangPicker, setShowLangPicker] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [showParticipants, setShowParticipants] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [sourceLang, setSourceLang] = useState(() => {
-    return localStorage.getItem('lt_source_lang') || "auto";
+    return isGuest ? "auto" : (localStorage.getItem('lt_source_lang') || "auto");
   });
   const [targetLang, setTargetLang] = useState(() => {
-    return localStorage.getItem('lt_target_lang') || "en";
+    return isGuest ? guestLang : (localStorage.getItem('lt_target_lang') || "en");
   });
   const [pushToTalk, setPushToTalk] = useState(() => {
     return localStorage.getItem('lt_push_to_talk') === 'true';
@@ -27,6 +44,7 @@ export default function RoomPage({ token, onLogout }) {
   const [loadingHistory, setLoadingHistory] = useState(true);
   
   const wsRef = useRef(null);
+  const presenceWsRef = useRef(null); // Persistent presence WebSocket
   const seqRef = useRef(1);
   const isRecordingRef = useRef(false);
   const vadRef = useRef(null);
@@ -37,7 +55,7 @@ export default function RoomPage({ token, onLogout }) {
   const lastPartialSentRef = useRef(0);
   const currentSegmentHintRef = useRef(null);
   const chatEndRef = useRef(null);
-  
+
   const segsRef = useRef(new Map());
   const dirtyRef = useRef(false);
   
@@ -49,13 +67,17 @@ export default function RoomPage({ token, onLogout }) {
   ];
   
   useEffect(() => {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      setUserEmail(payload.email || "User");
-    } catch (e) {
-      console.error("Failed to decode token:", e);
+    if (isGuest) {
+      setUserEmail(guestName);
+    } else if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUserEmail(payload.email || "User");
+      } catch (e) {
+        console.error("Failed to decode token:", e);
+      }
     }
-  }, [token]);
+  }, [token, isGuest, guestName]);
   
   // Save language preferences to localStorage
   useEffect(() => {
@@ -74,7 +96,58 @@ export default function RoomPage({ token, onLogout }) {
   useEffect(() => {
     fetchHistory();
   }, [roomId, targetLang]);
-  
+
+  // Establish persistent presence WebSocket when room page loads
+  useEffect(() => {
+    let authToken = token;
+    if (isGuest) {
+      authToken = sessionStorage.getItem('guest_token');
+    }
+
+    if (!authToken) {
+      console.log('[RoomPage] No auth token, skipping presence WebSocket');
+      return;
+    }
+
+    try {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws/rooms/${encodeURIComponent(roomId)}?token=${encodeURIComponent(authToken)}`;
+      console.log('[RoomPage] Opening persistent presence WebSocket:', wsUrl);
+
+      const presenceWs = new WebSocket(wsUrl);
+      presenceWsRef.current = presenceWs;
+
+      presenceWs.onopen = () => {
+        console.log('[RoomPage] Presence WebSocket connected! User is now visible in participants list.');
+      };
+
+      presenceWs.onmessage = (event) => {
+        // Receive messages on this WebSocket but don't process them
+        // This is just for presence tracking
+        console.log('[RoomPage] Presence WS received:', event.data);
+      };
+
+      presenceWs.onerror = (err) => {
+        console.error('[RoomPage] Presence WebSocket error:', err);
+      };
+
+      presenceWs.onclose = () => {
+        console.log('[RoomPage] Presence WebSocket closed');
+      };
+    } catch (e) {
+      console.error('[RoomPage] Failed to create presence WebSocket:', e);
+    }
+
+    // Cleanup: close presence WebSocket when component unmounts
+    return () => {
+      if (presenceWsRef.current) {
+        console.log('[RoomPage] Closing presence WebSocket on unmount');
+        presenceWsRef.current.close();
+        presenceWsRef.current = null;
+      }
+    };
+  }, [roomId, token, isGuest]);
+
   // Auto-scroll to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -203,13 +276,24 @@ export default function RoomPage({ token, onLogout }) {
   
   async function start() {
     if (isRecordingRef.current) return;
-    
+
     setStatus("connecting");
     setVadStatus("⏳ Loading...");
     setVadReady(false);
-    
-    const wsUrl = (location.protocol === "https:" ? "wss://" : "ws://") + 
-      location.host + `/ws/rooms/${encodeURIComponent(roomId)}?token=${encodeURIComponent(token)}`;
+
+    // Determine which token to use
+    let authToken = token;
+    if (isGuest) {
+      authToken = sessionStorage.getItem('guest_token');
+      if (!authToken) {
+        alert("Guest token not found. Please scan the invite QR code again.");
+        navigate('/');
+        return;
+      }
+    }
+
+    const wsUrl = (location.protocol === "https:" ? "wss://" : "ws://") +
+      location.host + `/ws/rooms/${encodeURIComponent(roomId)}?token=${encodeURIComponent(authToken)}`;
     const ws = new WebSocket(wsUrl);
     ws.onmessage = onMsg;
     ws.onopen = () => setStatus("streaming");
@@ -514,6 +598,50 @@ export default function RoomPage({ token, onLogout }) {
           )}
         </div>
         
+        {/* Participants button - right */}
+        <button
+          onClick={() => setShowParticipants(true)}
+          style={{
+            background: "#2a2a2a",
+            border: "1px solid #444",
+            borderRadius: "8px",
+            color: "white",
+            cursor: "pointer",
+            padding: "0.5rem 0.65rem",
+            fontSize: "0.75rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minWidth: "50px",
+            flexShrink: 0
+          }}
+          title="View participants"
+        >
+          👥
+        </button>
+
+        {/* Invite button - right */}
+        <button
+          onClick={() => setShowInvite(true)}
+          style={{
+            background: "#2a2a2a",
+            border: "1px solid #444",
+            borderRadius: "8px",
+            color: "white",
+            cursor: "pointer",
+            padding: "0.5rem 0.65rem",
+            fontSize: "0.75rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minWidth: "50px",
+            flexShrink: 0
+          }}
+          title="Invite others"
+        >
+          ✉️
+        </button>
+
         {/* Language selector - right */}
         <button
           onClick={() => setShowLangPicker(true)}
@@ -536,7 +664,7 @@ export default function RoomPage({ token, onLogout }) {
         >
           🌐
         </button>
-        
+
         {/* Costs button - right */}
         <button
           onClick={() => {
@@ -909,6 +1037,24 @@ export default function RoomPage({ token, onLogout }) {
           )}
         </button>
       </div>
+
+      {/* Invite Modal */}
+      {showInvite && (
+        <InviteModal
+          roomCode={roomId}
+          onClose={() => setShowInvite(false)}
+        />
+      )}
+
+      {/* Participants Modal */}
+      {showParticipants && (
+        <ParticipantsModal
+          roomCode={roomId}
+          token={token}
+          isOpen={showParticipants}
+          onClose={() => setShowParticipants(false)}
+        />
+      )}
     </div>
   );
 }

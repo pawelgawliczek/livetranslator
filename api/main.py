@@ -16,6 +16,8 @@ from .auth import router as auth_router
 from .costs_api import router as costs_router
 from .history_api import router as history_router
 from .invites_api import router as invites_router
+from .rooms_api import router as rooms_router
+from .guest_api import router as guest_router
 
 app = FastAPI(title="LiveTranslator API")
 app.include_router(events_router)
@@ -23,6 +25,8 @@ app.include_router(auth_router)
 app.include_router(costs_router)
 app.include_router(history_router)
 app.include_router(invites_router)
+app.include_router(rooms_router)
+app.include_router(guest_router)
 
 structlog.configure(
     processors=[
@@ -49,6 +53,9 @@ app.add_middleware(
 wsman = WSManager(str(settings.LT_REDIS_URL), str(settings.LT_MT_BASE_URL), "en")
 stt = STTClient(str(settings.LT_REDIS_URL))
 mt = MTClient(str(settings.LT_MT_BASE_URL))
+
+# Store wsman in app state so other endpoints can access it
+app.state.wsman = wsman
 
 @app.on_event("startup")
 async def _startup():
@@ -82,6 +89,15 @@ async def ws_room(ws: WebSocket, room_id: str):
 
     MET_WS_CONNS.inc()
     await wsman.connect(room_id, ws)
+
+    # Broadcast participant joined event to notify other users in the room
+    await wsman.broadcast(room_id, {
+        "type": "participant_joined",
+        "room_id": room_id,
+        "user_email": user_email,
+        "user_id": user_id
+    })
+
     try:
         while True:
             msg = await ws.receive_json()

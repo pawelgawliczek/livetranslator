@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import QuickRoomModal from "../components/QuickRoomModal";
 
 export default function RoomsPage({ token, onLogout, onLogin }) {
   const navigate = useNavigate();
@@ -8,6 +9,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
   const [userEmail, setUserEmail] = useState("");
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showQuickRoom, setShowQuickRoom] = useState(false);
   
   // Check for token in URL (from Google OAuth redirect)
   useEffect(() => {
@@ -119,6 +121,51 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
           border: "1px solid #333"
         }}>
           <h2 style={{fontSize: "1.25rem", marginBottom: "1rem"}}>Create New Room</h2>
+
+          {/* Quick Room Button */}
+          <div style={{marginBottom: "1rem"}}>
+            <button
+              onClick={() => setShowQuickRoom(true)}
+              style={{
+                width: "100%",
+                padding: "1rem 1.5rem",
+                background: "linear-gradient(135deg, #6366f1 0%, #3b82f6 100%)",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "1.05rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.5rem",
+                transition: "transform 0.2s, box-shadow 0.2s",
+                boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)"
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.boxShadow = "0 6px 20px rgba(59, 130, 246, 0.4)";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.3)";
+              }}
+            >
+              <span style={{fontSize: "1.5rem"}}>⚡</span>
+              Quick Room (Instant QR Code)
+            </button>
+          </div>
+
+          <div style={{
+            textAlign: "center",
+            color: "#666",
+            fontSize: "0.85rem",
+            margin: "1rem 0"
+          }}>
+            or create a named room
+          </div>
+
           <div style={{display: "flex", gap: "1rem"}}>
             <input
               type="text"
@@ -198,6 +245,14 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
           )}
         </div>
       </div>
+
+      {/* Quick Room Modal */}
+      {showQuickRoom && (
+        <QuickRoomModal
+          token={token}
+          onClose={() => setShowQuickRoom(false)}
+        />
+      )}
     </div>
   );
 }
