@@ -8,5 +8,5 @@ engine = create_engine(settings.LT_DB_URL, pool_pre_ping=True, pool_size=5, max_
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 def migrate():
-    from .models import User, Room, Device, Event  # noqa
+    from .models import User, Room, Device, Event, RoomParticipant, RoomCost  # noqa
     Base.metadata.create_all(engine)

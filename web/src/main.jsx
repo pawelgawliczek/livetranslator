@@ -28,7 +28,7 @@ function App() {
         <Route path="/signup" element={<SignupPage onSignup={login} />} />
         <Route 
           path="/rooms" 
-          element={token ? <RoomsPage token={token} onLogout={logout} /> : <Navigate to="/login" />} 
+          element={token ? <RoomsPage token={token} onLogout={logout} onLogin={login} /> : <Navigate to="/login" />} 
         />
         <Route 
           path="/room/:roomId" 

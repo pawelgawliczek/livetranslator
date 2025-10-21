@@ -15,12 +15,14 @@ from .events import router as events_router
 from .auth import router as auth_router
 from .costs_api import router as costs_router
 from .history_api import router as history_router
+from .invites_api import router as invites_router
 
 app = FastAPI(title="LiveTranslator API")
 app.include_router(events_router)
 app.include_router(auth_router)
 app.include_router(costs_router)
 app.include_router(history_router)
+app.include_router(invites_router)
 
 structlog.configure(
     processors=[

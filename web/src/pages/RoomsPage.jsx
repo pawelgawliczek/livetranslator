@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
-export default function RoomsPage({ token, onLogout }) {
+export default function RoomsPage({ token, onLogout, onLogin }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [newRoomName, setNewRoomName] = useState("");
@@ -15,7 +15,7 @@ export default function RoomsPage({ token, onLogout }) {
     const urlToken = params.get('token');
     if (urlToken && !token) {
       // If there's a token in URL and we don't have one yet
-      window.location.href = `/?token=${urlToken}`;
+      onLogin(urlToken);
     }
   }, [location, token]);
   

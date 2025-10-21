@@ -16,12 +16,18 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 class Room(Base):
-    recording: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     __tablename__ = "rooms"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     code: Mapped[str] = mapped_column(String(16), unique=True, index=True, nullable=False)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    recording: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # New fields for Phase 1
+    is_public: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    requires_login: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    max_participants: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+
     owner = relationship("User")
 
 class Device(Base):
@@ -43,7 +49,7 @@ class Event(Base):
 
 class RoomCost(Base):
     __tablename__ = "room_costs"
-    
+
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     room_id: Mapped[str] = mapped_column(Text, nullable=False)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -52,3 +58,19 @@ class RoomCost(Base):
     units: Mapped[Optional[int]] = mapped_column(BigInteger)
     unit_type: Mapped[Optional[str]] = mapped_column(Text)
     amount_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=0)
+
+class RoomParticipant(Base):
+    __tablename__ = "room_participants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), index=True, nullable=False)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    session_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    spoken_language: Mapped[str] = mapped_column(String(10), nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    left_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    room = relationship("Room")
+    user = relationship("User")
