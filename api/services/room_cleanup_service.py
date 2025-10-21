@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
 Room cleanup service - removes rooms where admin has been absent for 30+ minutes
+Archives room metadata before deletion to preserve history
 """
 import asyncio
 import os
 from datetime import datetime, timedelta
+from decimal import Decimal
 
-from sqlalchemy import select, Table, Column, Integer, String, DateTime, Boolean, ForeignKey, MetaData
+from sqlalchemy import select, Table, Column, Integer, String, DateTime, Boolean, ForeignKey, MetaData, text, Numeric, BigInteger
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 # Configuration
@@ -22,7 +24,7 @@ print(f"  Database: {POSTGRES_DSN.split('@')[1] if '@' in POSTGRES_DSN else POST
 engine = create_async_engine(POSTGRES_DSN, echo=False)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-# Define rooms table metadata (without importing full models)
+# Define table metadata (without importing full models)
 metadata = MetaData()
 rooms_table = Table(
     'rooms',
@@ -32,18 +34,124 @@ rooms_table = Table(
     Column('owner_id', Integer),
     Column('created_at', DateTime),
     Column('recording', Boolean),
+    Column('is_public', Boolean),
+    Column('requires_login', Boolean),
+    Column('max_participants', Integer),
     Column('admin_left_at', DateTime, nullable=True),
 )
 
+room_archive_table = Table(
+    'room_archive',
+    metadata,
+    Column('id', Integer, primary_key=True),
+    Column('room_code', String(12)),
+    Column('owner_id', Integer),
+    Column('created_at', DateTime),
+    Column('archived_at', DateTime),
+    Column('recording', Boolean),
+    Column('is_public', Boolean),
+    Column('requires_login', Boolean),
+    Column('max_participants', Integer),
+    Column('total_participants', Integer),
+    Column('total_messages', Integer),
+    Column('duration_minutes', Numeric(10, 2)),
+    Column('stt_minutes', Numeric(10, 2)),
+    Column('stt_cost_usd', Numeric(12, 6)),
+    Column('mt_cost_usd', Numeric(12, 6)),
+    Column('total_cost_usd', Numeric(12, 6)),
+    Column('archive_reason', String(50)),
+)
+
+async def archive_room(session, room_id: int, room_code: str, owner_id: int, created_at: datetime,
+                       recording: bool, is_public: bool, requires_login: bool, max_participants: int):
+    """Archive room metadata before deletion"""
+    try:
+        # Get aggregated metrics
+        # 1. Count participants
+        participants_result = await session.execute(
+            text("SELECT COUNT(DISTINCT user_id) FROM room_participants WHERE room_id = :room_id AND user_id IS NOT NULL"),
+            {"room_id": room_id}
+        )
+        total_participants = participants_result.scalar() or 0
+
+        # 2. Count messages
+        messages_result = await session.execute(
+            text("SELECT COUNT(*) FROM segments WHERE room_id = :room_id AND final = true"),
+            {"room_id": room_id}
+        )
+        total_messages = messages_result.scalar() or 0
+
+        # 3. Calculate duration (time from created_at to now)
+        duration = datetime.utcnow() - created_at
+        duration_minutes = Decimal(duration.total_seconds() / 60)
+
+        # 4. Get cost metrics from room_costs table
+        costs_result = await session.execute(
+            text("""
+                SELECT
+                    SUM(CASE WHEN pipeline = 'stt_final' THEN units ELSE 0 END) / 60.0 as stt_minutes,
+                    SUM(CASE WHEN pipeline = 'stt_final' THEN amount_usd ELSE 0 END) as stt_cost,
+                    SUM(CASE WHEN pipeline = 'mt' THEN amount_usd ELSE 0 END) as mt_cost
+                FROM room_costs
+                WHERE room_id = :room_code
+            """),
+            {"room_code": room_code}
+        )
+        cost_data = costs_result.first()
+        stt_minutes = Decimal(cost_data[0] or 0)
+        stt_cost = Decimal(cost_data[1] or 0)
+        mt_cost = Decimal(cost_data[2] or 0)
+        total_cost = stt_cost + mt_cost
+
+        # Insert into room_archive
+        from sqlalchemy import insert
+        archive_stmt = insert(room_archive_table).values(
+            room_code=room_code,
+            owner_id=owner_id,
+            created_at=created_at,
+            archived_at=datetime.utcnow(),
+            recording=recording,
+            is_public=is_public,
+            requires_login=requires_login,
+            max_participants=max_participants,
+            total_participants=total_participants,
+            total_messages=total_messages,
+            duration_minutes=duration_minutes,
+            stt_minutes=stt_minutes,
+            stt_cost_usd=stt_cost,
+            mt_cost_usd=mt_cost,
+            total_cost_usd=total_cost,
+            archive_reason="cleanup"
+        )
+        await session.execute(archive_stmt)
+
+        print(f"[Room Cleanup]   Archived: {total_participants} participants, {total_messages} messages, "
+              f"{float(stt_minutes):.1f} STT min, ${float(total_cost):.4f}")
+
+        return True
+    except Exception as e:
+        print(f"[Room Cleanup]   ✗ Archive failed: {e}")
+        return False
+
 async def cleanup_abandoned_rooms():
-    """Delete rooms where admin has been absent for more than the threshold"""
+    """Archive and delete rooms where admin has been absent for more than the threshold"""
     async with AsyncSessionLocal() as session:
         try:
             # Calculate cutoff time
             cutoff_time = datetime.utcnow() - timedelta(minutes=ADMIN_ABSENT_THRESHOLD_MINUTES)
 
             # Find rooms where admin left before cutoff time
-            stmt = select(rooms_table.c.id, rooms_table.c.code, rooms_table.c.admin_left_at).where(
+            stmt = select(
+                rooms_table.c.id,
+                rooms_table.c.code,
+                rooms_table.c.owner_id,
+                rooms_table.c.created_at,
+                rooms_table.c.recording,
+                rooms_table.c.is_public,
+                rooms_table.c.requires_login,
+                rooms_table.c.max_participants,
+                rooms_table.c.admin_left_at
+            ).where(
                 rooms_table.c.admin_left_at.isnot(None),
                 rooms_table.c.admin_left_at < cutoff_time
             )
@@ -51,21 +159,38 @@ async def cleanup_abandoned_rooms():
             abandoned_rooms = result.all()
 
             if abandoned_rooms:
-                print(f"[Room Cleanup] Found {len(abandoned_rooms)} abandoned rooms to delete")
+                print(f"[Room Cleanup] Found {len(abandoned_rooms)} abandoned rooms to archive and delete")
 
                 for room in abandoned_rooms:
                     elapsed = datetime.utcnow() - room.admin_left_at
                     elapsed_minutes = int(elapsed.total_seconds() / 60)
 
-                    print(f"[Room Cleanup] Deleting room {room.code} (admin absent for {elapsed_minutes} minutes)")
+                    print(f"[Room Cleanup] Processing room {room.code} (admin absent for {elapsed_minutes} minutes)")
 
-                    # Delete the room (CASCADE will handle related records)
-                    from sqlalchemy import delete
-                    delete_stmt = delete(rooms_table).where(rooms_table.c.id == room.id)
-                    await session.execute(delete_stmt)
+                    # Archive room data before deletion
+                    archived = await archive_room(
+                        session,
+                        room.id,
+                        room.code,
+                        room.owner_id,
+                        room.created_at,
+                        room.recording,
+                        room.is_public,
+                        room.requires_login,
+                        room.max_participants
+                    )
+
+                    if archived:
+                        # Delete the room (CASCADE will handle related records)
+                        from sqlalchemy import delete
+                        delete_stmt = delete(rooms_table).where(rooms_table.c.id == room.id)
+                        await session.execute(delete_stmt)
+                        print(f"[Room Cleanup]   ✓ Deleted room {room.code}")
+                    else:
+                        print(f"[Room Cleanup]   ⚠ Skipped deletion due to archive failure")
 
                 await session.commit()
-                print(f"[Room Cleanup] ✓ Deleted {len(abandoned_rooms)} abandoned rooms")
+                print(f"[Room Cleanup] ✓ Completed cleanup of {len(abandoned_rooms)} rooms")
             else:
                 print(f"[Room Cleanup] No abandoned rooms found")
 

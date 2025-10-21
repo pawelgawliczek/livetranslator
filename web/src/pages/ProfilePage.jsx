@@ -535,6 +535,7 @@ export default function ProfilePage({ token, onLogout }) {
                     <tr>
                       <th style={styles.th}>Room Code</th>
                       <th style={styles.th}>Created</th>
+                      <th style={styles.th}>Duration</th>
                       <th style={styles.th}>Minutes</th>
                       <th style={styles.th}>Cost</th>
                       <th style={styles.th}>Participants</th>
@@ -543,19 +544,37 @@ export default function ProfilePage({ token, onLogout }) {
                   </thead>
                   <tbody>
                     {history.rooms.map((room) => (
-                      <tr key={room.room_code}>
-                        <td style={styles.td}>{room.room_code}</td>
+                      <tr key={room.room_code} style={room.archived ? styles.archivedRow : {}}>
+                        <td style={styles.td}>
+                          {room.room_code}
+                          {room.archived && (
+                            <span style={styles.archivedBadge}> ARCHIVED</span>
+                          )}
+                        </td>
                         <td style={styles.td}>{new Date(room.created_at).toLocaleDateString()}</td>
+                        <td style={styles.td}>
+                          {room.duration_minutes ? `${room.duration_minutes.toFixed(0)} min` : '-'}
+                        </td>
                         <td style={styles.td}>{room.stt_minutes.toFixed(2)}</td>
                         <td style={styles.td}>${room.total_cost_usd.toFixed(4)}</td>
                         <td style={styles.td}>{room.participant_count}</td>
                         <td style={styles.td}>
-                          <button
-                            onClick={() => navigate(`/room/${room.room_code}`)}
-                            style={styles.actionButton}
-                          >
-                            View
-                          </button>
+                          {room.archived ? (
+                            <button
+                              disabled
+                              style={styles.actionButtonDisabled}
+                              title="Archived rooms cannot be viewed"
+                            >
+                              Archived
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => navigate(`/room/${room.room_code}`)}
+                              style={styles.actionButton}
+                            >
+                              View
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -929,6 +948,44 @@ const styles = {
     cursor: "pointer",
     fontSize: "12px",
     fontWeight: "500"
+  },
+  actionButtonDisabled: {
+    padding: "6px 12px",
+    background: "#4a4a4a",
+    color: "#999",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "not-allowed",
+    fontSize: "12px",
+    fontWeight: "500"
+  },
+  archivedRow: {
+    opacity: 0.7
+  },
+  archivedBadge: {
+    fontSize: "10px",
+    fontWeight: "bold",
+    color: "#ef4444",
+    marginLeft: "8px",
+    padding: "2px 6px",
+    background: "rgba(239, 68, 68, 0.1)",
+    borderRadius: "4px"
+  },
+  statusBadgeActive: {
+    fontSize: "12px",
+    fontWeight: "600",
+    color: "#10b981",
+    padding: "4px 8px",
+    background: "rgba(16, 185, 129, 0.1)",
+    borderRadius: "4px"
+  },
+  statusBadgeArchived: {
+    fontSize: "12px",
+    fontWeight: "600",
+    color: "#ef4444",
+    padding: "4px 8px",
+    background: "rgba(239, 68, 68, 0.1)",
+    borderRadius: "4px"
   },
   emptyState: {
     textAlign: "center",

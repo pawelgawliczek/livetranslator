@@ -109,3 +109,29 @@ class UserUsage(Base):
     __table_args__ = (
         Index('ix_user_usage_billing_period', 'user_id', 'billing_period_start'),
     )
+
+class RoomArchive(Base):
+    __tablename__ = "room_archive"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    room_code: Mapped[str] = mapped_column(String(12), unique=True, nullable=False)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    archived_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    recording: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    is_public: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    requires_login: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    max_participants: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+
+    # Aggregated metrics
+    total_participants: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_messages: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duration_minutes: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
+    stt_minutes: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
+    stt_cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=0, nullable=False)
+    mt_cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=0, nullable=False)
+    total_cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=0, nullable=False)
+
+    archive_reason: Mapped[str] = mapped_column(String(50), default="cleanup", nullable=False)
+
+    owner = relationship("User")

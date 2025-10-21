@@ -2,7 +2,11 @@
 
 ## Overview
 
-The room cleanup service automatically deletes abandoned rooms (where the admin has been absent for 30+ minutes) while preserving all billing data and user information.
+The room cleanup service automatically **archives and deletes** abandoned rooms (where the admin has been absent for 30+ minutes) while preserving all billing data, historical metrics, and user information.
+
+**NEW (2025-10-21):** Rooms are now archived to `room_archive` table before deletion, preserving historical data including:
+- Duration, STT minutes, cost, participants, and message count
+- Users can view their complete room history including deleted rooms via the history API
 
 ## Service Details
 
@@ -25,13 +29,21 @@ ADMIN_ABSENT_THRESHOLD=30      # Delete rooms after 30 minutes of admin absence
    - `admin_left_at` is NOT NULL
    - `admin_left_at` < NOW() - 30 minutes
 
-2. **Deletes the room**, which CASCADE deletes:
+2. **Archives the room** to `room_archive` table with pre-calculated metrics:
+   - Total participants (COUNT DISTINCT from `room_participants`)
+   - Total messages (COUNT from `segments` WHERE final = true)
+   - Duration in minutes (created_at to now)
+   - STT minutes and costs (from `room_costs`)
+   - MT costs (from `room_costs`)
+
+3. **Deletes the room**, which CASCADE deletes:
    - `segments` (transcription messages)
    - `devices` (device records)
    - `events` (event records)
    - `room_participants` (participant list)
 
-3. **Preserves** (NO foreign key, won't be deleted):
+4. **Preserves** (NO foreign key, won't be deleted):
+   - `room_archive` - **NEW**: Historical room data with metrics ✅
    - `room_costs` - Uses `room_code` (string) not `room_id` (FK) ✅
    - `translations` - Uses `room_code` (string) not `room_id` (FK) ✅
    - `users` - Never touched ✅
@@ -52,12 +64,52 @@ events.room_id            → rooms.id  ON DELETE CASCADE
 room_participants.room_id → rooms.id  ON DELETE CASCADE
 ```
 
+### Room Archive Table (NEW - Migration 004)
+
+**Purpose:** Preserve room history after deletion for user visibility and analytics
+
+As of migration [004_add_room_archive.sql](migrations/004_add_room_archive.sql):
+
+```sql
+CREATE TABLE room_archive (
+    id SERIAL PRIMARY KEY,
+    room_code VARCHAR(12) UNIQUE NOT NULL,
+    owner_id INTEGER REFERENCES users(id),
+    created_at TIMESTAMP NOT NULL,
+    archived_at TIMESTAMP DEFAULT NOW(),
+
+    -- Room settings
+    recording BOOLEAN,
+    is_public BOOLEAN,
+    requires_login BOOLEAN,
+    max_participants INTEGER,
+
+    -- Pre-calculated metrics (captured at archive time)
+    total_participants INTEGER DEFAULT 0,
+    total_messages INTEGER DEFAULT 0,
+    duration_minutes NUMERIC(10, 2) DEFAULT 0,
+    stt_minutes NUMERIC(10, 2) DEFAULT 0,
+    stt_cost_usd NUMERIC(12, 6) DEFAULT 0,
+    mt_cost_usd NUMERIC(12, 6) DEFAULT 0,
+    total_cost_usd NUMERIC(12, 6) DEFAULT 0,
+
+    archive_reason VARCHAR(50) DEFAULT 'cleanup'
+);
+```
+
+**Benefits:**
+- Users can see complete room history via `/api/user/history`
+- Historical metrics are pre-calculated for performance
+- No need to JOIN deleted room data at query time
+- Preserves audit trail for billing/support
+
 ### No Foreign Key (PRESERVED on room deletion)
 
 ```sql
 -- These use room_code (string), no FK:
 room_costs.room_id      = 'q-mh0ly685'  (room code as TEXT, not FK)
 translations.room_id    = 'q-mh0ly685'  (room code as VARCHAR, not FK)
+room_archive.room_code  = 'q-mh0ly685'  (room code as VARCHAR, not FK)
 ```
 
 ## User Quota System
