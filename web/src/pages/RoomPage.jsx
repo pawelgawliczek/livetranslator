@@ -353,12 +353,47 @@ export default function RoomPage({ token, onLogout }) {
     
     seqRef.current = 1;
     
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 48000 } });
+    // Request microphone with Chrome-compatible constraints
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,  // Enable AGC - Chrome might need this for proper levels
+        channelCount: 1,
+        sampleRate: 48000
+      }
+    });
+
     const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+
+    // Resume audio context (required in Chrome)
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
+
     const source = audioContext.createMediaStreamSource(stream);
     const processor = audioContext.createScriptProcessor(4096, 1, 1);
-    
+
+    // Debug microphone stream
+    const audioTracks = stream.getAudioTracks();
+    console.log('[VAD] Audio context created, state:', audioContext.state, 'sampleRate:', audioContext.sampleRate);
+    console.log('[VAD] Audio tracks:', audioTracks.length, audioTracks.map(t => ({
+      label: t.label,
+      enabled: t.enabled,
+      muted: t.muted,
+      readyState: t.readyState,
+      settings: t.getSettings()
+    })));
+
+    let audioProcessCallCount = 0;
     processor.onaudioprocess = (e) => {
+      audioProcessCallCount++;
+
+      // Log first few callbacks to confirm it's working
+      if (audioProcessCallCount <= 3) {
+        console.log(`[VAD] Audio process callback #${audioProcessCallCount} fired`);
+      }
+
       const inputData = e.inputBuffer.getChannelData(0);
 
       // Calculate audio energy for VAD
@@ -368,7 +403,15 @@ export default function RoomPage({ token, onLogout }) {
       }
       energy = Math.sqrt(energy / inputData.length);
 
-      const isSpeech = energy > 0.002; // energyThreshold
+      // Much more sensitive threshold for Chrome
+      const energyThreshold = 0.0001; // Very sensitive
+      const isSpeech = energy > energyThreshold;
+
+      // Log energy more frequently for debugging
+      if (audioProcessCallCount % 100 === 0) {
+        const maxSample = Math.max(...inputData.map(Math.abs));
+        console.log(`[VAD Debug #${audioProcessCallCount}] Energy: ${energy.toFixed(6)}, Max sample: ${maxSample.toFixed(6)}, Threshold: ${energyThreshold}, isSpeech: ${isSpeech}`);
+      }
 
       if (isSpeech) {
         vadSpeechFramesRef.current++;
@@ -425,7 +468,7 @@ export default function RoomPage({ token, onLogout }) {
     
     source.connect(processor);
     processor.connect(audioContext.destination);
-    
+
     audioContextRef.current = audioContext;
     scriptProcessorRef.current = processor;
     partialBufferRef.current = new Float32Array(0);
@@ -435,6 +478,8 @@ export default function RoomPage({ token, onLogout }) {
     vadSpeechFramesRef.current = 0;
     vadSilenceFramesRef.current = 0;
     vadIsDetectedRef.current = false;
+    setVadStatus("👂 Listening...");
+    console.log('[VAD] Initialized and ready');
 
     isRecordingRef.current = true;
     setVadReady(true);
