@@ -18,6 +18,10 @@ from .history_api import router as history_router
 from .invites_api import router as invites_router
 from .rooms_api import router as rooms_router
 from .guest_api import router as guest_router
+from .profile_api import router as profile_router
+from .subscription_api import router as subscription_router
+from .billing_api import router as billing_router
+from .user_history_api import router as user_history_router
 
 app = FastAPI(title="LiveTranslator API")
 app.include_router(events_router)
@@ -27,6 +31,10 @@ app.include_router(history_router)
 app.include_router(invites_router)
 app.include_router(rooms_router)
 app.include_router(guest_router)
+app.include_router(profile_router)
+app.include_router(subscription_router)
+app.include_router(billing_router)
+app.include_router(user_history_router)
 
 structlog.configure(
     processors=[

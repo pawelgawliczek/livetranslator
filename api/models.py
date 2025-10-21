@@ -75,3 +75,37 @@ class RoomParticipant(Base):
 
     room = relationship("Room")
     user = relationship("User")
+
+class UserSubscription(Base):
+    __tablename__ = "user_subscriptions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False, unique=True)
+    plan: Mapped[str] = mapped_column(String(20), default="free", nullable=False)  # free, plus, pro
+    status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)  # active, cancelled, expired
+    monthly_quota_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # NULL means unlimited
+    billing_period_start: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    billing_period_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user = relationship("User", backref="subscription")
+
+class UserUsage(Base):
+    __tablename__ = "user_usage"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    room_code: Mapped[str] = mapped_column(String(16), nullable=False)
+    billing_period_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    stt_minutes: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    stt_cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=0, nullable=False)
+    mt_cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=0, nullable=False)
+    total_cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User")
+
+    __table_args__ = (
+        Index('ix_user_usage_billing_period', 'user_id', 'billing_period_start'),
+    )

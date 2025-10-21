@@ -97,20 +97,36 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
             <h1 style={{fontSize: "2rem", marginBottom: "0.5rem"}}>Rooms</h1>
             <p style={{color: "#999", fontSize: "0.9rem"}}>Logged in as {userEmail}</p>
           </div>
-          <button
-            onClick={onLogout}
-            style={{
-              padding: "0.75rem 1.5rem",
-              background: "#dc2626",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontWeight: "600"
-            }}
-          >
-            Logout
-          </button>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={() => navigate("/profile")}
+              style={{
+                padding: "0.75rem 1.5rem",
+                background: "#6366f1",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600"
+              }}
+            >
+              Profile
+            </button>
+            <button
+              onClick={onLogout}
+              style={{
+                padding: "0.75rem 1.5rem",
+                background: "#dc2626",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600"
+              }}
+            >
+              Logout
+            </button>
+          </div>
         </div>
         
         <div style={{

@@ -1,0 +1,125 @@
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional
+from .db import SessionLocal
+from .models import User, UserSubscription
+from .auth_deps import get_current_user
+
+router = APIRouter(prefix="/api/subscription", tags=["subscription"])
+
+def get_db():
+    db = SessionLocal()
+    try: yield db
+    finally: db.close()
+
+class SubscriptionOut(BaseModel):
+    id: int
+    plan: str
+    status: str
+    monthly_quota_minutes: Optional[int]
+    billing_period_start: datetime
+    billing_period_end: datetime
+    created_at: datetime
+    updated_at: datetime
+
+class SubscriptionPlanIn(BaseModel):
+    plan: str  # free, plus, pro
+
+# Plan configurations
+PLAN_CONFIG = {
+    "free": {
+        "monthly_quota_minutes": 60,  # 1 hour per month
+        "features": ["Basic translation", "1 hour per month"]
+    },
+    "plus": {
+        "monthly_quota_minutes": None,  # Unlimited
+        "features": ["Unlimited translation", "Priority support", "Advanced features"]
+    },
+    "pro": {
+        "monthly_quota_minutes": None,  # Unlimited
+        "features": ["Unlimited translation", "24/7 support", "Advanced features", "API access"]
+    }
+}
+
+@router.get("", response_model=SubscriptionOut)
+def get_subscription(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get current user's subscription"""
+    user_email = user.get("email")
+    user_obj = db.scalar(select(User).where(User.email == user_email))
+    if not user_obj:
+        raise HTTPException(404, "User not found")
+
+    subscription = db.scalar(select(UserSubscription).where(UserSubscription.user_id == user_obj.id))
+
+    if not subscription:
+        # Create default free subscription
+        subscription = UserSubscription(
+            user_id=user_obj.id,
+            plan="free",
+            status="active",
+            monthly_quota_minutes=60,
+            billing_period_start=datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0),
+            billing_period_end=(datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0) + relativedelta(months=1))
+        )
+        db.add(subscription)
+        db.commit()
+        db.refresh(subscription)
+
+    return SubscriptionOut(
+        id=subscription.id,
+        plan=subscription.plan,
+        status=subscription.status,
+        monthly_quota_minutes=subscription.monthly_quota_minutes,
+        billing_period_start=subscription.billing_period_start,
+        billing_period_end=subscription.billing_period_end,
+        created_at=subscription.created_at,
+        updated_at=subscription.updated_at
+    )
+
+@router.patch("", response_model=SubscriptionOut)
+def update_subscription(
+    plan_update: SubscriptionPlanIn,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user subscription plan"""
+    if plan_update.plan not in PLAN_CONFIG:
+        raise HTTPException(400, "Invalid plan")
+
+    user_email = user.get("email")
+    user_obj = db.scalar(select(User).where(User.email == user_email))
+    if not user_obj:
+        raise HTTPException(404, "User not found")
+
+    subscription = db.scalar(select(UserSubscription).where(UserSubscription.user_id == user_obj.id))
+
+    if not subscription:
+        raise HTTPException(404, "Subscription not found")
+
+    # Update plan
+    subscription.plan = plan_update.plan
+    subscription.monthly_quota_minutes = PLAN_CONFIG[plan_update.plan]["monthly_quota_minutes"]
+    subscription.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(subscription)
+
+    return SubscriptionOut(
+        id=subscription.id,
+        plan=subscription.plan,
+        status=subscription.status,
+        monthly_quota_minutes=subscription.monthly_quota_minutes,
+        billing_period_start=subscription.billing_period_start,
+        billing_period_end=subscription.billing_period_end,
+        created_at=subscription.created_at,
+        updated_at=subscription.updated_at
+    )
+
+@router.get("/plans")
+def get_plans():
+    """Get available subscription plans"""
+    return PLAN_CONFIG
