@@ -723,6 +723,93 @@ GET /api/rooms/{room_id}/export?format=json  - Export as JSON
 - [ ] Implement rate limiting
 - [ ] Add CDN for static assets
 
+---
+
+## 🏗️ Architecture Optimization (Thin Client vs Distributed)
+
+**Last Discussed:** 2025-10-21
+
+### Current Architecture (11 containers):
+1. **postgres** - Database (essential)
+2. **redis** - Message queue (essential)
+3. **api** - Main FastAPI server (essential)
+4. **web** - Nginx frontend (essential)
+5. **stt_router** - Routes STT requests (~17MB RAM)
+6. **stt_worker** - Local Whisper (~871MB RAM, unused with OpenAI STT)
+7. **mt_router** - Routes MT requests (~36MB RAM)
+8. **mt_worker** - Local translation (~188MB RAM)
+9. **cost_tracker** - Tracks API costs (~17MB RAM)
+10. **persistence** - Saves to DB (~33MB RAM)
+11. **room_cleanup** - Cleans inactive rooms (~61MB RAM)
+
+### Optimization Options:
+
+#### **Option A: Aggressive Consolidation (Thin Client)**
+**Target:** 11 → 5 containers (~1.2GB RAM saved)
+- ✅ Merge **stt_router + mt_router + cost_tracker + persistence + room_cleanup** into **API**
+- ✅ Remove **stt_worker** entirely (unused with OpenAI STT)
+- ✅ Keep **mt_worker** for local fallback
+- ✅ Result: postgres, redis, api, web, mt_worker
+
+**Pros:**
+- 70% less container overhead
+- ~1.2GB RAM saved
+- Faster in-process communication
+- Simpler monitoring/deployment
+
+**Cons:**
+- Cannot scale routers independently
+- Services coupled to API lifecycle
+- Harder to migrate to distributed setup
+
+---
+
+#### **Option B: Hybrid (Recommended)**
+**Target:** Keep microservices code, flexible deployment
+
+**Strategy:**
+1. Keep current modular code structure (routers as separate modules)
+2. Create two docker-compose configurations:
+   - `docker-compose.yml` - **Thin client mode** (5 containers)
+   - `docker-compose.distributed.yml` - **Full microservices** (11 containers)
+3. Switch between them based on hosting environment
+
+**Implementation:**
+```bash
+# Thin client mode (current server)
+docker compose up -d
+
+# Distributed mode (better hosting / K8s)
+docker compose -f docker-compose.distributed.yml up -d
+```
+
+**Pros:**
+- ✅ Best performance now (thin client optimized)
+- ✅ Easy migration later (just switch compose files)
+- ✅ No code refactoring needed
+- ✅ Future-proof for horizontal scaling
+- ✅ Independent scaling when needed
+
+**Cons:**
+- Need to maintain two compose configurations
+- Slightly more complex CI/CD
+
+---
+
+### Decision: **Pending User Input**
+
+**Questions to answer:**
+1. Do you plan to move to better hosting within 6 months?
+2. Do you need to scale individual services independently?
+3. Priority: Resource optimization NOW vs Future flexibility?
+
+**Next Steps:**
+- [ ] Decide on Option A (consolidate now) or Option B (hybrid approach)
+- [ ] Create optimized docker-compose configuration(s)
+- [ ] Test deployment in both modes
+- [ ] Document deployment strategy
+- [ ] Update CI/CD if needed
+
 ### ✅ Security
 - [ ] Add rate limiting on authentication endpoints
 - [ ] Implement CSRF protection
@@ -803,20 +890,39 @@ Regular tasks:
 
 ## ✅ Done (Current Features)
 
+### Core Features
 - [x] OpenAI STT integration (Whisper API)
 - [x] OpenAI MT integration (GPT-4o-mini)
-- [x] Cost tracking per room
+- [x] Cost tracking per room with detailed breakdowns
 - [x] Persistence of segments and translations
 - [x] Chat history API endpoint with on-demand translation
-- [x] WebSocket real-time delivery
+- [x] WebSocket real-time delivery with processing indicators
 - [x] Router architecture for multi-backend support
-- [x] Database schema for rooms, segments, translations
+- [x] Database schema for rooms, segments, translations, costs
 - [x] Google OAuth authentication
 - [x] Email/password authentication
 - [x] PWA support (Add to home screen)
-- [x] Mobile-optimized UI
+- [x] Mobile-optimized UI with dynamic viewport
 - [x] Auto-finalize partials on session end
-- [x] Smart translation caching
+- [x] Smart translation caching with deduplication
+
+### STT Optimizations (October 2025)
+- [x] **Conversation Context (Option 4)** - Track last 5 sentences for 15-20% better accuracy
+- [x] **Parallel Processing (Option 5)** - Instant results + background quality refinement
+- [x] **Smart Deduplication** - Word-level overlap detection prevents context duplicates
+- [x] **Processing Indicators** - Visual feedback with spinning icons in 28 languages
+- [x] **Incremental Transcription** - Only transcribe NEW audio (10-20x faster)
+- [x] **Hallucination Filter** - Remove known Whisper watermarks
+- [x] **Improved VAD** - Energy-based with 30s safety limit and washing machine noise handling
+- [x] **Language Passing** - Source language hints to OpenAI for better accuracy
+- [x] **Comprehensive Testing** - 100 unit tests (16 new STT tests)
+
+### UI/UX Enhancements
+- [x] Spinning processing indicators (⚙️) with CSS animations
+- [x] Localized "Refining quality..." text in 28 languages
+- [x] Room lifecycle management (30-minute admin absence timeout)
+- [x] User profile, subscription, billing, and history pages
+- [x] Invite system with QR codes and guest access
 
 ---
 

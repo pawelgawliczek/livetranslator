@@ -63,9 +63,13 @@ async def transcribe_audio_chunk(audio_base64: str, language: str = None, prompt
         result = response.json()
 
         detected_lang = result.get("language", "auto")
-        print(f"[OpenAI STT] Detected language: {detected_lang}, text: {result.get('text', '')[:50]}")
+        text = result.get("text", "")
+        words = result.get("words", [])
+
+        print(f"[OpenAI STT] Detected language: {detected_lang}, text: {text[:50]}, words: {len(words)}")
 
         return {
-            "text": result.get("text", ""),
-            "language": detected_lang
+            "text": text,
+            "language": detected_lang,
+            "words": words  # Array of {word, start, end} for timestamp-based deduplication
         }

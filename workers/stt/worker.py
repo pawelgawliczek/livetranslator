@@ -46,9 +46,13 @@ async def stt_loop():
             continue
         try:
             data = jloads(msg["data"])
+            msg_type = data.get("type", "")
             room  = data.get("room_id") or data.get("roomId") or "demo"
             dev   = data.get("device") or data.get("deviceId") or "dev"
             seq   = int(data.get("seq", 0))
+
+            print(f"[STT Worker] Received {msg_type} for room={room} device={dev} seq={seq}")
+
             audio = pcm16_b64_to_float32(data.get("pcm16_base64", ""))  # expected 16k mono
 
             k = _key(room, dev)
@@ -61,30 +65,36 @@ async def stt_loop():
                 if buf.size > keep:
                     buf = buf[-keep:]
                 buffers[k] = buf
+                print(f"[STT Worker] Buffer size: {buf.size} samples ({buf.size/16000:.1f}s)")
 
             # no audio → nothing to do
             if buf.size < 12800:  # need at least 1s
+                print(f"[STT Worker] Buffer too small ({buf.size} < 12800), skipping transcription")
                 continue
 
-            # transcribe last window; small beam for speed
+            print(f"[STT Worker] Starting transcription of {buf.size/16000:.1f}s buffer...")
+            # transcribe last window; beam_size=3 for better quality (vs beam_size=1)
             segments, _ = model.transcribe(
                 buf,
                 language=None,  # auto
                 vad_filter=True,
                 condition_on_previous_text=COND_PREV,
-                beam_size=1,
+                beam_size=3,  # Increased from 1 for better quality (still fast)
                 temperature=0.0,
                 no_speech_threshold=0.6,
                 log_prob_threshold=-1.0,
                 compression_ratio_threshold=2.4,
             )
 
+            print(f"[STT Worker] Transcription complete, processing segments...")
             # pick the last segment text if any
             last_text = None
             for seg in segments:
                 last_text = seg.text.strip()
+                print(f"[STT Worker] Segment: {seg.text.strip()}")
 
             if last_text:
+                print(f"[STT Worker] Publishing result: {last_text}")
                 payload = {
                     "type": "partial",
                     "room_id": room,
@@ -95,9 +105,14 @@ async def stt_loop():
                     "lang": "auto"
                 }
                 await r.publish("stt_events", jdumps(payload).decode())
+                print(f"[STT Worker] ✓ Published to stt_events")
+            else:
+                print(f"[STT Worker] No text detected in audio")
 
         except Exception as e:
-            print("stt error:", repr(e))
+            print(f"[STT Worker] ERROR: {repr(e)}")
+            import traceback
+            traceback.print_exc()
 
 # minimal health (optional: keep)
 if __name__ == "__main__":

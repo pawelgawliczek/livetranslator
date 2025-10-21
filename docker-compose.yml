@@ -117,12 +117,12 @@ services:
       <<: *common_env
       REDIS_URL: redis://redis:6379/5
       STT_CHAN_LOCAL_IN: stt_local_in
-      WHISPER_MODEL: base
-      CHUNK_MS: "400"
+      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+      CHUNK_MS: ${CHUNK_MS:-400}
       COMPUTE_TYPE: int8
-      NUM_THREADS: "2"
-      CONDITION_ON_PREVIOUS_TEXT: "true"
-      MAX_REDECODE_SEC: "1.5"
+      NUM_THREADS: ${NUM_THREADS:-4}
+      CONDITION_ON_PREVIOUS_TEXT: ${CONDITION_ON_PREVIOUS_TEXT:-true}
+      MAX_REDECODE_SEC: ${MAX_REDECODE_SEC:-3}
       VAD: "true"
       AUDIO_DIR: /data/audio
       MODELS_DIR: /models
@@ -178,9 +178,11 @@ services:
       REDIS_URL: redis://redis:6379/5
       STT_INPUT_CHANNEL: stt_input
       STT_OUTPUT_CHANNEL: stt_local_in
-      LT_STT_PARTIAL_MODE: ${LT_STT_PARTIAL_MODE}
+      LT_STT_PARTIAL_MODE: ${LT_STT_PARTIAL_MODE:-local}
+      LT_STT_FINAL_MODE: ${LT_STT_FINAL_MODE:-openai_chunked}
       STT_OUTPUT_EVENTS: stt_events
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_STT_MODEL: ${OPENAI_STT_MODEL:-whisper-1}
     depends_on:
       redis: { condition: service_healthy }
     networks: [stack_appnet]
@@ -195,13 +197,17 @@ services:
       REDIS_URL: redis://redis:6379/5
       MT_INPUT_CHANNEL: mt_requests
       MT_OUTPUT_CHANNEL: mt_events
-      LT_MT_MODE: ${LT_MT_MODE}
+      LT_MT_MODE: ${LT_MT_MODE:-openai}
+      LT_MT_MODE_PARTIAL: ${LT_MT_MODE_PARTIAL:-local}
+      LT_MT_MODE_FINAL: ${LT_MT_MODE_FINAL:-openai}
       LT_DEFAULT_TGT: ${LT_DEFAULT_TGT:-en}
+      LT_MT_BASE_URL: http://mt_worker:8081
       STT_EVENTS_CHANNEL: stt_events
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_MT_MODEL: ${OPENAI_MT_MODEL}
+      OPENAI_MT_MODEL: ${OPENAI_MT_MODEL:-gpt-4o-mini}
     depends_on:
       redis: { condition: service_healthy }
+      mt_worker: { condition: service_started }
     networks: [stack_appnet]
 
   cost_tracker:
