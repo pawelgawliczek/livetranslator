@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import Footer from "../components/Footer";
 
 const LANGUAGES = [
   { code: "en", name: "English" },
@@ -200,7 +201,8 @@ export default function ProfilePage({ token, onLogout }) {
 
   return (
     <div style={styles.container}>
-      <div style={styles.header}>
+      <div style={{ flex: 1 }}>
+        <div style={styles.header}>
         <h1 style={styles.title}>Profile Settings</h1>
         <div style={styles.headerButtons}>
           <button onClick={() => navigate("/rooms")} style={styles.backButton}>
@@ -572,7 +574,9 @@ export default function ProfilePage({ token, onLogout }) {
             )}
           </div>
         )}
+        </div>
       </div>
+      <Footer />
     </div>
   );
 }
@@ -581,7 +585,9 @@ const styles = {
   container: {
     minHeight: "100vh",
     background: "#0a0a0a",
-    padding: "20px"
+    padding: "20px 20px 10px 20px",
+    display: "flex",
+    flexDirection: "column"
   },
   loading: {
     color: "white",

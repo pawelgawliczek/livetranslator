@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import QuickRoomModal from "../components/QuickRoomModal";
+import Footer from "../components/Footer";
 
 export default function RoomsPage({ token, onLogout, onLogin }) {
   const navigate = useNavigate();
@@ -81,12 +82,17 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
       background: "#0a0a0a",
       color: "white",
       fontFamily: "system-ui, -apple-system, sans-serif",
-      padding: "2rem"
+      display: "flex",
+      flexDirection: "column"
     }}>
       <div style={{
-        maxWidth: "800px",
-        margin: "0 auto"
+        flex: 1,
+        padding: "2rem 2rem 1rem 2rem"
       }}>
+        <div style={{
+          maxWidth: "800px",
+          margin: "0 auto"
+        }}>
         <div style={{
           display: "flex",
           justifyContent: "space-between",
@@ -260,6 +266,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
             </div>
           )}
         </div>
+        </div>
       </div>
 
       {/* Quick Room Modal */}
@@ -269,6 +276,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
           onClose={() => setShowQuickRoom(false)}
         />
       )}
+      <Footer />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import Footer from "../components/Footer";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -18,75 +19,75 @@ export default function LandingPage() {
   return (
     <div style={{
       minHeight: "100vh",
-      height: "100vh",
       background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
       display: "flex",
       flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
       color: "white",
-      fontFamily: "system-ui, -apple-system, sans-serif",
-      padding: "2rem",
-      position: "fixed",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      overflow: "auto"
+      fontFamily: "system-ui, -apple-system, sans-serif"
     }}>
-      <h1 style={{
-        fontSize: "clamp(2.5rem, 8vw, 4rem)",
-        fontWeight: "bold",
-        marginBottom: "1rem",
-        textAlign: "center"
+      <div style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "2rem 2rem 1rem 2rem"
       }}>
-        LiveTranslator
-      </h1>
-      
-      <p style={{
-        fontSize: "clamp(1.1rem, 3vw, 1.5rem)",
-        marginBottom: "3rem",
-        textAlign: "center",
-        maxWidth: "600px"
-      }}>
-        Real-time multilingual speech collaboration platform
-      </p>
-      
-      <div style={{display: "flex", gap: "1rem", flexWrap: "wrap", justifyContent: "center"}}>
-        <button
-          onClick={() => navigate("/login")}
-          style={{
-            padding: "1rem 2rem",
-            background: "white",
-            color: "#667eea",
-            border: "none",
-            borderRadius: "12px",
-            fontSize: "1.1rem",
-            fontWeight: "600",
-            cursor: "pointer",
-            minWidth: "150px"
-          }}
-        >
-          Sign In
-        </button>
-        
-        <button
-          onClick={() => navigate("/signup")}
-          style={{
-            padding: "1rem 2rem",
-            background: "rgba(255,255,255,0.2)",
-            color: "white",
-            border: "2px solid white",
-            borderRadius: "12px",
-            fontSize: "1.1rem",
-            fontWeight: "600",
-            cursor: "pointer",
-            minWidth: "150px"
-          }}
-        >
-          Create Account
-        </button>
+        <h1 style={{
+          fontSize: "clamp(2.5rem, 8vw, 4rem)",
+          fontWeight: "bold",
+          marginBottom: "1rem",
+          textAlign: "center"
+        }}>
+          LiveTranslator
+        </h1>
+
+        <p style={{
+          fontSize: "clamp(1.1rem, 3vw, 1.5rem)",
+          marginBottom: "3rem",
+          textAlign: "center",
+          maxWidth: "600px"
+        }}>
+          Real-time multilingual speech collaboration platform
+        </p>
+
+        <div style={{display: "flex", gap: "1rem", flexWrap: "wrap", justifyContent: "center"}}>
+          <button
+            onClick={() => navigate("/login")}
+            style={{
+              padding: "1rem 2rem",
+              background: "white",
+              color: "#667eea",
+              border: "none",
+              borderRadius: "12px",
+              fontSize: "1.1rem",
+              fontWeight: "600",
+              cursor: "pointer",
+              minWidth: "150px"
+            }}
+          >
+            Sign In
+          </button>
+
+          <button
+            onClick={() => navigate("/signup")}
+            style={{
+              padding: "1rem 2rem",
+              background: "rgba(255,255,255,0.2)",
+              color: "white",
+              border: "2px solid white",
+              borderRadius: "12px",
+              fontSize: "1.1rem",
+              fontWeight: "600",
+              cursor: "pointer",
+              minWidth: "150px"
+            }}
+          >
+            Create Account
+          </button>
+        </div>
       </div>
+      <Footer />
     </div>
   );
 }

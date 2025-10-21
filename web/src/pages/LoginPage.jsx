@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import Footer from "../components/Footer";
 
 export default function LoginPage({ onLogin }) {
   const navigate = useNavigate();
@@ -52,21 +53,19 @@ export default function LoginPage({ onLogin }) {
   return (
     <div style={{
       minHeight: "100vh",
-      height: "100vh",
       background: "#0a0a0a",
       display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontFamily: "system-ui, -apple-system, sans-serif",
-      padding: "1rem",
-      position: "fixed",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      overflow: "auto"
+      flexDirection: "column",
+      fontFamily: "system-ui, -apple-system, sans-serif"
     }}>
       <div style={{
+        flex: 1,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1rem 1rem 0.5rem 1rem"
+      }}>
+        <div style={{
         maxWidth: "450px",
         width: "100%",
         background: "#1a1a1a",
@@ -237,7 +236,9 @@ export default function LoginPage({ onLogin }) {
             Sign up
           </span>
         </p>
+        </div>
       </div>
+      <Footer />
     </div>
   );
 }

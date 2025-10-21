@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import Footer from "../components/Footer";
 
 export default function JoinPage({ token, onLogin }) {
   const { inviteCode } = useParams();
@@ -96,12 +97,15 @@ export default function JoinPage({ token, onLogin }) {
   if (status === "validating") {
     return (
       <div style={styles.container}>
-        <div style={styles.card}>
-          <div style={styles.loadingSpinner}>
-            <div style={styles.spinner}></div>
-            <p style={styles.loadingText}>Validating invite...</p>
+        <div style={styles.content}>
+          <div style={styles.card}>
+            <div style={styles.loadingSpinner}>
+              <div style={styles.spinner}></div>
+              <p style={styles.loadingText}>Validating invite...</p>
+            </div>
           </div>
         </div>
+        <Footer />
       </div>
     );
   }
@@ -109,17 +113,20 @@ export default function JoinPage({ token, onLogin }) {
   if (status === "invalid") {
     return (
       <div style={styles.container}>
-        <div style={styles.card}>
-          <div style={styles.errorIcon}>⚠️</div>
-          <h1 style={styles.title}>Invalid Invite</h1>
-          <p style={styles.errorText}>{error}</p>
-          <button
-            style={styles.primaryButton}
-            onClick={() => navigate("/")}
-          >
-            Go to Home
-          </button>
+        <div style={styles.content}>
+          <div style={styles.card}>
+            <div style={styles.errorIcon}>⚠️</div>
+            <h1 style={styles.title}>Invalid Invite</h1>
+            <p style={styles.errorText}>{error}</p>
+            <button
+              style={styles.primaryButton}
+              onClick={() => navigate("/")}
+            >
+              Go to Home
+            </button>
+          </div>
         </div>
+        <Footer />
       </div>
     );
   }
@@ -127,19 +134,23 @@ export default function JoinPage({ token, onLogin }) {
   if (status === "joining") {
     return (
       <div style={styles.container}>
-        <div style={styles.card}>
-          <div style={styles.loadingSpinner}>
-            <div style={styles.spinner}></div>
-            <p style={styles.loadingText}>Joining room...</p>
+        <div style={styles.content}>
+          <div style={styles.card}>
+            <div style={styles.loadingSpinner}>
+              <div style={styles.spinner}></div>
+              <p style={styles.loadingText}>Joining room...</p>
+            </div>
           </div>
         </div>
+        <Footer />
       </div>
     );
   }
 
   return (
     <div style={styles.container}>
-      <div style={styles.card}>
+      <div style={styles.content}>
+        <div style={styles.card}>
         <div style={styles.header}>
           <div style={styles.checkIcon}>✓</div>
           <h1 style={styles.title}>Join Room</h1>
@@ -241,7 +252,9 @@ export default function JoinPage({ token, onLogin }) {
             )}
           </div>
         )}
+        </div>
       </div>
+      <Footer />
     </div>
   );
 }
@@ -253,9 +266,14 @@ const styles = {
     color: "white",
     fontFamily: "system-ui, -apple-system, sans-serif",
     display: "flex",
+    flexDirection: "column"
+  },
+  content: {
+    flex: 1,
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "1rem"
+    padding: "1rem 1rem 0.5rem 1rem"
   },
   card: {
     background: "#1a1a1a",
