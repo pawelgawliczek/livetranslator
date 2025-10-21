@@ -66,7 +66,8 @@ export default function JoinPage({ token, onLogin }) {
           body: JSON.stringify({
             display_name: displayName,
             room_code: roomInfo.room_code,
-            invite_code: inviteCode
+            invite_code: inviteCode,
+            language: language
           })
         });
 

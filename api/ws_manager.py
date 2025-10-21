@@ -20,6 +20,14 @@ class WSManager:
         self.default_tgt = default_tgt
         self.log = structlog.get_logger("wsman")
 
+    async def get_room_languages(self, room_id: str) -> set:
+        """Get all unique languages needed in a room"""
+        languages = set()
+        for ws in self.rooms.get(room_id, []):
+            lang = getattr(ws.state, 'preferred_lang', 'en')
+            languages.add(lang)
+        return languages
+
     async def run_pubsub(self):
         pubsub = self.redis.pubsub()
         await pubsub.subscribe("stt_events", "mt_events")
@@ -56,12 +64,24 @@ class WSManager:
         src_lang = data.get("lang") or "auto"
         text = (data.get("text") or "").strip()
         kind = "final" if is_final else "partial"
+        speaker = data.get("speaker", "system")
 
         MET_STT_EVENTS.labels(kind=kind).inc()
-        self.log.info("stt_event", kind=kind, room=room, segment=seg_id, revision=rev)
+        self.log.info("stt_event", kind=kind, room=room, segment=seg_id, revision=rev, speaker=speaker)
 
-        # broadcast raw STT
+        # broadcast raw STT to all participants
         await self.broadcast(room, data)
+
+        # Get all target languages needed in this room
+        target_languages = await self.get_room_languages(room)
+
+        # Store target languages in Redis for MT router to use
+        if target_languages:
+            key = f"room:{room}:target_languages"
+            await self.redis.sadd(key, *target_languages)
+            await self.redis.expire(key, 3600)  # Expire after 1 hour
+
+            self.log.info("room_languages", room=room, languages=list(target_languages))
 
         # persist STT
         try:
@@ -77,9 +97,9 @@ class WSManager:
         text = (data.get("text") or "").strip()
         kind = "final" if is_final else "partial"
 
-        self.log.info("mt_event", kind=kind, room=room, segment=seg_id)
+        self.log.info("mt_event", kind=kind, room=room, segment=seg_id, tgt=tgt_lang)
 
-        # broadcast translation to WebSocket
+        # Targeted broadcast: only send translation to users who need this target language
         out = {
             "type": f"translation_{kind}",
             "room_id": room,
@@ -89,7 +109,22 @@ class WSManager:
             "text": text,
             "final": is_final,
         }
-        await self.broadcast(room, out)
+
+        # Send to participants who have this language as their preference
+        sent_count = 0
+        for ws in list(self.rooms.get(room, [])):
+            try:
+                user_lang = getattr(ws.state, 'preferred_lang', 'en')
+                # Send translation if it matches user's language preference
+                if user_lang == tgt_lang:
+                    await ws.send_json(out)
+                    sent_count += 1
+            except Exception as e:
+                self.log.error("broadcast_failed", room=room, err=str(e))
+                self.disconnect(room, ws)
+
+        self.log.info("targeted_broadcast", room=room, type=out.get("type"),
+                     segment=seg_id, tgt=tgt_lang, sent=sent_count)
 
         # persist final translations
         if is_final and text:

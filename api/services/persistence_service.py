@@ -19,14 +19,15 @@ MT_EVENTS = "mt_events"
 print("[Persistence] Starting...")
 
 room_cache = {}
+recording_status_cache = {}  # Cache room recording status to avoid DB queries on every event
 
 async def persist_loop():
     r = redis.from_url(REDIS_URL, decode_responses=True)
     pubsub = r.pubsub()
     await pubsub.subscribe(STT_EVENTS, MT_EVENTS)
-    
+
     db_pool = await asyncpg.create_pool(POSTGRES_DSN, min_size=2, max_size=10)
-    
+
     print(f"[Persistence] Listening on {STT_EVENTS}, {MT_EVENTS}")
     
     async for msg in pubsub.listen():
@@ -42,10 +43,10 @@ async def persist_loop():
                 continue
             
             async with db_pool.acquire() as conn:
-                # Get or create room
+                # Get or create room and check recording status
                 if room_code not in room_cache:
                     room_row = await conn.fetchrow(
-                        "SELECT id FROM rooms WHERE code = $1", room_code
+                        "SELECT id, recording FROM rooms WHERE code = $1", room_code
                     )
                     if not room_row:
                         room_id = await conn.fetchval(
@@ -57,11 +58,27 @@ async def persist_loop():
                             room_code
                         )
                         room_cache[room_code] = room_id
+                        recording_status_cache[room_code] = True  # Default to recording enabled
                         print(f"[Persistence] Created room: {room_code} -> {room_id}")
                     else:
                         room_cache[room_code] = room_row["id"]
-                
+                        recording_status_cache[room_code] = room_row["recording"]
+
                 room_id = room_cache[room_code]
+
+                # Check if recording is enabled for this room
+                # Refresh status from DB every 100 events to catch updates
+                if msg_type in ["stt_final", "translation_final"]:
+                    # Periodically refresh recording status
+                    if hash(room_code + str(msg.get("segment_id", 0))) % 100 == 0:
+                        recording_enabled = await conn.fetchval(
+                            "SELECT recording FROM rooms WHERE id = $1", room_id
+                        )
+                        recording_status_cache[room_code] = recording_enabled
+
+                # Skip persistence if recording is disabled
+                if not recording_status_cache.get(room_code, True):
+                    continue
                 
                 # Persist STT final
                 if msg_type == "stt_final":

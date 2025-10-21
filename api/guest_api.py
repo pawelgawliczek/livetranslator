@@ -20,6 +20,7 @@ class GuestTokenRequest(BaseModel):
     display_name: str
     room_code: str
     invite_code: str
+    language: str = "en"
 
 
 class GuestTokenResponse(BaseModel):
@@ -55,6 +56,7 @@ async def create_guest_token(request: GuestTokenRequest):
         "email": f"{request.display_name} (Guest)",
         "display_name": request.display_name,
         "room_code": request.room_code,
+        "preferred_lang": request.language,
         "is_guest": True,
         "iat": int(now.timestamp()),
         "exp": int(exp.timestamp())

@@ -80,8 +80,10 @@ async def ws_room(ws: WebSocket, room_id: str):
         claims = verify_token(token)
         user_id = claims.get("sub")
         user_email = claims.get("email", "unknown")
+        user_lang = claims.get("preferred_lang", "en")  # Get language from token
         ws.state.user = user_id
         ws.state.email = user_email
+        ws.state.preferred_lang = user_lang
     except Exception:
         await ws.accept()
         await ws.close(code=4401)
@@ -95,12 +97,27 @@ async def ws_room(ws: WebSocket, room_id: str):
         "type": "participant_joined",
         "room_id": room_id,
         "user_email": user_email,
-        "user_id": user_id
+        "user_id": user_id,
+        "preferred_lang": user_lang
     })
 
     try:
         while True:
             msg = await ws.receive_json()
+
+            # Handle language preference update
+            if msg.get("type") == "set_language":
+                new_lang = msg.get("language", "en")
+                ws.state.preferred_lang = new_lang
+                # Notify room about language change
+                await wsman.broadcast(room_id, {
+                    "type": "participant_language_changed",
+                    "room_id": room_id,
+                    "user_email": user_email,
+                    "preferred_lang": new_lang
+                })
+                continue
+
             # Always ensure room id and speaker
             if "room_id" not in msg:
                 msg["room_id"] = room_id
@@ -108,8 +125,9 @@ async def ws_room(ws: WebSocket, room_id: str):
                 msg["speaker"] = user_email
 
             if msg.get("type") in ["audio_chunk", "audio_chunk_partial"]:
-                # Add speaker to message before forwarding
+                # Add speaker and their language to message before forwarding
                 msg["speaker"] = user_email
+                msg["speaker_lang"] = ws.state.preferred_lang
                 await stt.push_raw(msg)
             else:
                 # forward control events

@@ -60,6 +60,10 @@ async def router_loop():
                 device = data.get("device", "web")
                 language_hint = data.get("language", "auto")  # Get language preference from frontend
 
+                # Filter out invalid language values from frontend
+                if language_hint in [None, "undefined", "null", ""]:
+                    language_hint = "auto"
+
                 audio_bytes = base64.b64decode(audio_b64)
                 duration_sec = len(audio_bytes) / (16000 * 2)
 
@@ -82,9 +86,17 @@ async def router_loop():
                 session["target_lang"] = target_lang  # Update if changed
                 session["language_hint"] = language_hint  # Update if changed
 
-                # Accumulate audio bytes
-                old_audio_len = len(session["accumulated_audio"])
+                # Accumulate audio bytes, but cap at 30 seconds to avoid OpenAI file size limit
+                MAX_AUDIO_SECONDS = 30
+                MAX_AUDIO_BYTES = MAX_AUDIO_SECONDS * 16000 * 2  # 30s at 16kHz mono 16-bit
+
                 session["accumulated_audio"] += audio_bytes
+
+                # Trim from the beginning if we exceed the max
+                if len(session["accumulated_audio"]) > MAX_AUDIO_BYTES:
+                    # Keep only the last MAX_AUDIO_BYTES
+                    session["accumulated_audio"] = session["accumulated_audio"][-MAX_AUDIO_BYTES:]
+
                 new_audio_len = len(session["accumulated_audio"])
 
                 print(f"[STT Router] Processing PARTIAL: room={room} speaker={speaker} segment={session['segment_id']} chunk={session['chunk_count']} lang_hint={language_hint} total_audio={new_audio_len/32000:.1f}s target={target_lang}")
@@ -119,17 +131,9 @@ async def router_loop():
                     
                     await r.publish(STT_OUTPUT_EVENTS, jdumps(stt_event))
                     print(f"[STT Router] ✓ Partial {session['segment_id']}: {session['accumulated_text'][:80]}...")
-                    
-                    # Track cost
-                    cost_event = {
-                        "room_id": room,
-                        "pipeline": "stt",
-                        "mode": "openai",
-                        "units": duration_sec,
-                        "unit_type": "seconds"
-                    }
-                    await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
-                    
+
+                    # Note: Cost tracking happens only on finalization (audio_end) to avoid double-counting
+
                 except Exception as e:
                     print(f"[STT Router] ✗ Partial transcription failed: {e}")
                     
@@ -139,6 +143,10 @@ async def router_loop():
                 audio_b64 = data.get("pcm16_base64", "")
                 device = data.get("device", "web")
                 language_hint = data.get("language", "auto")  # Get language preference from frontend
+
+                # Filter out invalid language values from frontend
+                if language_hint in [None, "undefined", "null", ""]:
+                    language_hint = "auto"
 
                 audio_bytes = base64.b64decode(audio_b64)
                 duration_sec = len(audio_bytes) / (16000 * 2)
@@ -217,8 +225,23 @@ async def router_loop():
                             "target_lang": session["target_lang"]
                         }
                         await r.publish(STT_OUTPUT_EVENTS, jdumps(stt_event))
-                        print(f"[STT Router] ✓ Auto-finalized segment {session['segment_id']} on session end: {session['accumulated_text'][:60]}...")
+                        print(f"[STT Router] ✓ Finalized segment {session['segment_id']} on audio_end: {session['accumulated_text'][:60]}...")
+
+                        # Track cost for the accumulated audio
+                        audio_duration = len(session["accumulated_audio"]) / (16000 * 2)
+                        cost_event = {
+                            "room_id": room,
+                            "pipeline": "stt",
+                            "mode": "openai",
+                            "units": audio_duration,
+                            "unit_type": "seconds"
+                        }
+                        await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
+                        print(f"[STT Router] 💰 Cost tracked: {audio_duration:.1f}s audio")
+
+                    # IMPORTANT: Delete the session to start fresh for next sentence
                     del partial_sessions[room]
+                    print(f"[STT Router] Session cleared for room={room}, ready for next sentence")
                 
         except Exception as e:
             print(f"[STT Router] Error processing message: {e}")

@@ -67,8 +67,7 @@ class ParticipantInfo(BaseModel):
     display_name: str
     email: str
     is_guest: bool
-    source_lang: str
-    target_lang: str
+    preferred_lang: str
     is_speaking: bool
 
 
@@ -191,15 +190,19 @@ async def get_room_participants(
     if not wsman:
         raise HTTPException(status_code=500, detail="WebSocket manager not available")
 
-    participants = []
-
     # Get all WebSocket connections for this room
     room_connections = wsman.rooms.get(room_code, set())
+
+    # Group connections by user to deduplicate (same user with multiple tabs/devices)
+    user_map = {}
 
     for ws in room_connections:
         # Extract user info from WebSocket state
         user_email = getattr(ws.state, 'email', 'Unknown')
         user_id = getattr(ws.state, 'user', None)
+
+        # Use user_id as the unique key (handles both authenticated users and guests)
+        unique_key = str(user_id) if user_id else user_email
 
         # Determine if guest by checking user_id format
         is_guest = user_id and str(user_id).startswith('guest:')
@@ -212,13 +215,73 @@ async def get_room_participants(
         else:
             display_name = user_email.split('@')[0] if '@' in user_email else user_email
 
-        participants.append(ParticipantInfo(
+        # Get user's preferred language
+        preferred_lang = getattr(ws.state, 'preferred_lang', 'en')
+
+        # Store or update user info (last connection wins for language preference)
+        user_map[unique_key] = ParticipantInfo(
             display_name=display_name,
             email=user_email,
             is_guest=is_guest,
-            source_lang="auto",  # TODO: Store language preferences in WebSocket state
-            target_lang="en",    # TODO: Store language preferences in WebSocket state
+            preferred_lang=preferred_lang,
             is_speaking=False    # TODO: Track speaking status
-        ))
+        )
+
+    # Convert map to list
+    participants = list(user_map.values())
 
     return ParticipantsResponse(participants=participants)
+
+
+class UpdateRecordingRequest(BaseModel):
+    """Request to update room recording setting."""
+    recording: bool
+
+
+@router.patch("/api/rooms/{room_code}/recording", response_model=RoomResponse)
+async def update_room_recording(
+    room_code: str,
+    request: UpdateRecordingRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Toggle room recording/persistence setting.
+
+    Args:
+        room_code: The room code
+        request: Recording setting update
+        db: Database session
+        user: Authenticated user (must be room owner)
+
+    Returns:
+        RoomResponse with updated room details
+
+    Raises:
+        HTTPException: 404 if room not found, 403 if not owner
+    """
+    user_id = int(user.get("sub"))
+
+    # Get room
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # Verify user owns the room
+    if room.owner_id != user_id:
+        raise HTTPException(status_code=403, detail="Only room owner can modify recording settings")
+
+    # Update recording setting
+    room.recording = request.recording
+    db.commit()
+    db.refresh(room)
+
+    return RoomResponse(
+        id=room.id,
+        code=room.code,
+        owner_id=room.owner_id,
+        is_public=room.is_public,
+        requires_login=room.requires_login,
+        max_participants=room.max_participants,
+        created_at=room.created_at
+    )

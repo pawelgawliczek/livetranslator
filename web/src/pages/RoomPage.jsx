@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import InviteModal from "../components/InviteModal";
 import ParticipantsModal from "../components/ParticipantsModal";
+import SettingsMenu from "../components/SettingsMenu";
 
 export default function RoomPage({ token, onLogout }) {
   const { roomId } = useParams();
@@ -29,12 +30,18 @@ export default function RoomPage({ token, onLogout }) {
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [myLanguage, setMyLanguage] = useState(() => {
-    return isGuest ? guestLang : (localStorage.getItem('lt_my_language') || "en");
+    const stored = isGuest ? guestLang : localStorage.getItem('lt_my_language');
+    // If no language stored, we'll force selection via modal
+    return stored || null;
   });
   const [pushToTalk, setPushToTalk] = useState(() => {
     return localStorage.getItem('lt_push_to_talk') === 'true';
+  });
+  const [persistenceEnabled, setPersistenceEnabled] = useState(() => {
+    return localStorage.getItem('lt_persistence_enabled') === 'true';
   });
   const [isPressing, setIsPressing] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -78,10 +85,18 @@ export default function RoomPage({ token, onLogout }) {
       }
     }
   }, [token, isGuest, guestName]);
-  
+
+  // Force language selection if not set
+  useEffect(() => {
+    if (!myLanguage) {
+      setShowSettings(true);
+      console.log('[Language] No language set, forcing selection modal');
+    }
+  }, [myLanguage]);
+
   // Save language preference to localStorage
   useEffect(() => {
-    if (!isGuest) {
+    if (!isGuest && myLanguage) {
       localStorage.setItem('lt_my_language', myLanguage);
     }
   }, [myLanguage, isGuest]);
@@ -90,6 +105,34 @@ export default function RoomPage({ token, onLogout }) {
     localStorage.setItem('lt_push_to_talk', pushToTalk.toString());
   }, [pushToTalk]);
 
+  useEffect(() => {
+    if (!isGuest && token) {
+      localStorage.setItem('lt_persistence_enabled', persistenceEnabled.toString());
+
+      // Call API to update persistence setting on server
+      fetch(`/api/rooms/${roomId}/recording`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ recording: persistenceEnabled })
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Failed to update recording setting');
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log('[Persistence] ✓ Recording setting updated on server:', persistenceEnabled);
+        })
+        .catch(error => {
+          console.error('[Persistence] Failed to update server:', error);
+        });
+    }
+  }, [persistenceEnabled, isGuest, token, roomId]);
+
   // Load history on mount and when my language changes
   useEffect(() => {
     fetchHistory();
@@ -97,7 +140,7 @@ export default function RoomPage({ token, onLogout }) {
 
   // Send language update to server when it changes
   useEffect(() => {
-    if (presenceWsRef.current && presenceWsRef.current.readyState === 1) {
+    if (presenceWsRef.current && presenceWsRef.current.readyState === 1 && myLanguage) {
       presenceWsRef.current.send(JSON.stringify({
         type: "set_language",
         language: myLanguage
@@ -128,12 +171,14 @@ export default function RoomPage({ token, onLogout }) {
 
       presenceWs.onopen = () => {
         console.log('[RoomPage] Presence WebSocket connected! User is now visible in participants list.');
-        // Send initial language preference
-        presenceWs.send(JSON.stringify({
-          type: "set_language",
-          language: myLanguage
-        }));
-        console.log('[RoomPage] Sent initial language to server:', myLanguage);
+        // Send initial language preference (if selected)
+        if (myLanguage) {
+          presenceWs.send(JSON.stringify({
+            type: "set_language",
+            language: myLanguage
+          }));
+          console.log('[RoomPage] Sent initial language to server:', myLanguage);
+        }
       };
 
       presenceWs.onmessage = (event) => {
@@ -290,7 +335,7 @@ export default function RoomPage({ token, onLogout }) {
           segment_hint: currentSegmentHintRef.current,
           seq: seqRef.current++,
           pcm16_base64: b64,
-          language: myLanguage  // Pass user's language preference to STT
+          language: myLanguage || "auto"  // Use "auto" if language not yet selected
         }));
       }
 
@@ -305,9 +350,27 @@ export default function RoomPage({ token, onLogout }) {
   }
 
   function sendFinalTranscription() {
-    // Send audio_end to trigger auto-finalization of accumulated partials
+    // Send any remaining buffered audio first, then audio_end
     try {
       if (wsRef.current && wsRef.current.readyState === 1) {
+        // Send any remaining audio in the buffer (even if below minimum threshold)
+        if (partialBufferRef.current.length > 0) {
+          const pcm16 = floatTo16(partialBufferRef.current);
+          const b64 = btoa(String.fromCharCode(...new Uint8Array(pcm16.buffer)));
+
+          wsRef.current.send(JSON.stringify({
+            type: "audio_chunk_partial",
+            roomId: roomId,
+            device: "web",
+            segment_hint: currentSegmentHintRef.current,
+            seq: seqRef.current++,
+            pcm16_base64: b64,
+            language: myLanguage || "auto"
+          }));
+          console.log("[VAD] Sent final partial chunk before audio_end");
+        }
+
+        // Then send audio_end to trigger finalization
         wsRef.current.send(JSON.stringify({
           type: "audio_end",
           roomId: roomId,
@@ -430,8 +493,8 @@ export default function RoomPage({ token, onLogout }) {
         vadSilenceFramesRef.current++;
 
         if (vadIsDetectedRef.current) {
-          // End speech if silence threshold reached
-          if (vadSilenceFramesRef.current >= 20) {
+          // End speech if silence threshold reached (8 frames = ~800ms)
+          if (vadSilenceFramesRef.current >= 8) {
             vadIsDetectedRef.current = false;
             vadSpeechFramesRef.current = 0;
             setVadStatus("✅ Processing...");
@@ -686,79 +749,9 @@ export default function RoomPage({ token, onLogout }) {
           )}
         </div>
         
-        {/* Participants button - right */}
+        {/* Menu button - right */}
         <button
-          onClick={() => setShowParticipants(true)}
-          style={{
-            background: "#2a2a2a",
-            border: "1px solid #444",
-            borderRadius: "8px",
-            color: "white",
-            cursor: "pointer",
-            padding: "0.5rem 0.65rem",
-            fontSize: "0.75rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minWidth: "50px",
-            flexShrink: 0
-          }}
-          title="View participants"
-        >
-          👥
-        </button>
-
-        {/* Invite button - right */}
-        <button
-          onClick={() => setShowInvite(true)}
-          style={{
-            background: "#2a2a2a",
-            border: "1px solid #444",
-            borderRadius: "8px",
-            color: "white",
-            cursor: "pointer",
-            padding: "0.5rem 0.65rem",
-            fontSize: "0.75rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minWidth: "50px",
-            flexShrink: 0
-          }}
-          title="Invite others"
-        >
-          ✉️
-        </button>
-
-        {/* Language selector - right */}
-        <button
-          onClick={() => setShowLangPicker(true)}
-          disabled={status !== "idle"}
-          style={{
-            background: "#2a2a2a",
-            border: "1px solid #444",
-            borderRadius: "8px",
-            color: "white",
-            cursor: status === "idle" ? "pointer" : "not-allowed",
-            padding: "0.5rem 0.65rem",
-            fontSize: "0.75rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minWidth: "50px",
-            flexShrink: 0,
-            opacity: status === "idle" ? 1 : 0.6
-          }}
-        >
-          🌐
-        </button>
-
-        {/* Costs button - right */}
-        <button
-          onClick={() => {
-            fetchCosts();
-            setShowCosts(true);
-          }}
+          onClick={() => setShowSettings(true)}
           style={{
             background: "#2a2a2a",
             border: "1px solid #444",
@@ -773,8 +766,9 @@ export default function RoomPage({ token, onLogout }) {
             minWidth: "40px",
             flexShrink: 0
           }}
+          title="Menu"
         >
-          💰
+          ⋮
         </button>
       </div>
       
@@ -1122,6 +1116,37 @@ export default function RoomPage({ token, onLogout }) {
           )}
         </button>
       </div>
+
+      {/* Settings Menu */}
+      <SettingsMenu
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        isGuest={isGuest}
+        myLanguage={myLanguage}
+        languages={languages}
+        onLanguageChange={(lang) => {
+          setMyLanguage(lang);
+          setShowSettings(false);
+          setShowLangPicker(true);
+        }}
+        onShowParticipants={() => {
+          setShowSettings(false);
+          setShowParticipants(true);
+        }}
+        onShowInvite={() => {
+          setShowSettings(false);
+          setShowInvite(true);
+        }}
+        onShowCosts={() => {
+          setShowSettings(false);
+          fetchCosts();
+          setShowCosts(true);
+        }}
+        onLogout={onLogout}
+        canChangeLanguage={status === "idle"}
+        persistenceEnabled={persistenceEnabled}
+        onTogglePersistence={() => setPersistenceEnabled(!persistenceEnabled)}
+      />
 
       {/* Invite Modal */}
       {showInvite && (

@@ -126,5 +126,10 @@ def google_callback(code: str, db: Session = Depends(get_db)):
         raise HTTPException(400, f"Google authentication failed: {str(e)}")
 
 def _issue(u: User) -> TokenOut:
-    claims = {"sub": str(u.id), "email": u.email, "exp": datetime.utcnow() + timedelta(hours=12)}
+    claims = {
+        "sub": str(u.id),
+        "email": u.email,
+        "preferred_lang": u.preferred_lang,
+        "exp": datetime.utcnow() + timedelta(hours=12)
+    }
     return TokenOut(access_token=jwt.encode(claims, JWT_SECRET, algorithm=ALGO))
