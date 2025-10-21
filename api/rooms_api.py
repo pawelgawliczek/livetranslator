@@ -48,6 +48,11 @@ class RoomStatusResponse(BaseModel):
     admin_left_at: datetime | None = None
     expires_at: datetime | None = None  # When room will be deleted (admin_left_at + 30 min)
 
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat() + 'Z' if v else None
+        }
+
 
 def get_db():
     """Get database session."""
@@ -331,14 +336,22 @@ async def get_room_status(
 
     if wsman:
         for ws in wsman.rooms.get(room_code, []):
-            user_id = getattr(ws.state, 'user_id', None)
-            if user_id and not str(user_id).startswith('guest:') and user_id == room.owner_id:
-                admin_present = True
-                break
+            user_id = getattr(ws.state, 'user', None)  # Fixed: was 'user_id', should be 'user'
+            if user_id and not str(user_id).startswith('guest:'):
+                try:
+                    # Convert to int for comparison with owner_id
+                    if int(user_id) == room.owner_id:
+                        admin_present = True
+                        break
+                except (ValueError, TypeError):
+                    # Skip if user_id can't be converted to int
+                    continue
 
     # Calculate expiration time if admin has left
     expires_at = None
-    if room.admin_left_at and not admin_present:
+    if room.admin_left_at:
+        # Always calculate expires_at if admin_left_at is set
+        # This ensures clients get the countdown even during the debounce period
         expires_at = room.admin_left_at + timedelta(minutes=30)
 
     return RoomStatusResponse(

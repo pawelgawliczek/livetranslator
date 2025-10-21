@@ -47,10 +47,15 @@ export default function RoomPage({ token, onLogout }) {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
   const [showAdminLeaveWarning, setShowAdminLeaveWarning] = useState(false);
+  const [roomStatus, setRoomStatus] = useState(null);
+  const [showExpirationModal, setShowExpirationModal] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(null);
+  const [showAdminLeftNotification, setShowAdminLeftNotification] = useState(false);
 
   const wsRef = useRef(null);
   const presenceWsRef = useRef(null); // Persistent presence WebSocket
   const seqRef = useRef(1);
+  const hasSeenAdminLeftNotificationRef = useRef(false); // Use ref for immediate updates
   const isRecordingRef = useRef(false);
   const audioContextRef = useRef(null);
   const scriptProcessorRef = useRef(null);
@@ -155,6 +160,66 @@ export default function RoomPage({ token, onLogout }) {
     }
   }, [roomId, token, isGuest]);
 
+  // Poll room status every 5 seconds to check admin presence
+  useEffect(() => {
+    // Get the appropriate token (regular user or guest)
+    let authToken = token;
+    if (isGuest) {
+      authToken = sessionStorage.getItem('guest_token');
+    }
+
+    if (!authToken) return;
+
+    const pollRoomStatus = async () => {
+      try {
+        const res = await fetch(`/api/rooms/${roomId}/status`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (res.ok) {
+          const status = await res.json();
+          setRoomStatus(status);
+
+          // Calculate time remaining if admin is absent
+          if (!status.admin_present && status.expires_at) {
+            // Parse expires_at as UTC and convert to local time for comparison
+            const expiresAt = new Date(status.expires_at);
+            const now = new Date();
+
+            const remaining = Math.max(0, expiresAt - now);
+            setTimeRemaining(remaining);
+
+            // Show one-time notification when admin first leaves (for non-admin users only)
+            if (!isRoomAdmin && !hasSeenAdminLeftNotificationRef.current && remaining > 0) {
+              setShowAdminLeftNotification(true);
+              hasSeenAdminLeftNotificationRef.current = true; // Set immediately
+            }
+
+            // Show expiration modal if time is up
+            if (remaining === 0 && !isRoomAdmin) {
+              setShowExpirationModal(true);
+            }
+          } else {
+            setTimeRemaining(null);
+            // Reset notification flag when admin returns
+            if (status.admin_present) {
+              hasSeenAdminLeftNotificationRef.current = false;
+              setShowAdminLeftNotification(false);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch room status:', err);
+      }
+    };
+
+    // Poll immediately and then every 5 seconds
+    pollRoomStatus();
+    const interval = setInterval(pollRoomStatus, 5000);
+
+    return () => clearInterval(interval);
+  }, [roomId, token, isGuest, isRoomAdmin]);
+
   // Warn admin before leaving
   useEffect(() => {
     if (isRoomAdmin) {
@@ -168,6 +233,15 @@ export default function RoomPage({ token, onLogout }) {
       return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }
   }, [isRoomAdmin]);
+
+  // Custom back button handler for admin
+  const handleBackClick = () => {
+    if (isRoomAdmin) {
+      setShowAdminLeaveWarning(true);
+    } else {
+      navigate("/rooms");
+    }
+  };
 
   // Load history on mount and when my language changes
   useEffect(() => {
@@ -421,6 +495,12 @@ export default function RoomPage({ token, onLogout }) {
   
   async function start() {
     if (isRecordingRef.current) return;
+
+    // Prevent starting only if room is about to expire (less than 1 minute remaining)
+    if (!isRoomAdmin && roomStatus && !roomStatus.admin_present && timeRemaining !== null && timeRemaining < 60000) {
+      alert("Cannot start recording: Room is closing soon. Recording will be available if the admin rejoins.");
+      return;
+    }
 
     setStatus("connecting");
     setVadStatus("⏳ Loading...");
@@ -710,6 +790,13 @@ export default function RoomPage({ token, onLogout }) {
       return "";
     }
   }
+
+  function formatCountdown(milliseconds) {
+    if (milliseconds === null || milliseconds === undefined) return "";
+    const minutes = Math.floor(milliseconds / 60000);
+    const seconds = Math.floor((milliseconds % 60000) / 1000);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
   
   const myLang = languages.find(l => l.code === myLanguage);
 
@@ -738,7 +825,7 @@ export default function RoomPage({ token, onLogout }) {
       }}>
         {/* Back button - left */}
         <button
-          onClick={() => navigate("/rooms")}
+          onClick={handleBackClick}
           style={{
             background: "#2a2a2a",
             border: "1px solid #444",
@@ -807,7 +894,35 @@ export default function RoomPage({ token, onLogout }) {
           ⋮
         </button>
       </div>
-      
+
+      {/* Admin Absence Banner - Countdown Timer */}
+      {!isRoomAdmin && roomStatus && !roomStatus.admin_present && timeRemaining !== null && timeRemaining > 0 && (
+        <div style={{
+          background: timeRemaining < 60000
+            ? "linear-gradient(135deg, #dc2626 0%, #991b1b 100%)"
+            : "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+          padding: "0.75rem 1rem",
+          color: "white",
+          fontSize: "0.85rem",
+          fontWeight: "600",
+          textAlign: "center",
+          borderBottom: "1px solid rgba(255,255,255,0.2)",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.3)"
+        }}>
+          <div style={{ marginBottom: "0.25rem" }}>
+            ⚠️ Room admin has left
+          </div>
+          <div style={{ fontSize: "0.75rem", fontWeight: "normal", opacity: 0.95 }}>
+            Room will close in {formatCountdown(timeRemaining)}
+          </div>
+          {timeRemaining < 60000 && (
+            <div style={{ fontSize: "0.7rem", fontWeight: "normal", opacity: 0.85, marginTop: "0.25rem" }}>
+              Recording and translation will be disabled soon
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Language Picker Modal */}
       {showLangPicker && (
         <div style={{
@@ -1200,6 +1315,229 @@ export default function RoomPage({ token, onLogout }) {
           isOpen={showParticipants}
           onClose={() => setShowParticipants(false)}
         />
+      )}
+
+      {/* Admin Leave Warning Modal */}
+      {showAdminLeaveWarning && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0,0,0,0.9)",
+          zIndex: 150,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1rem"
+        }}>
+          <div style={{
+            background: "#1a1a1a",
+            borderRadius: "16px",
+            padding: "2rem",
+            maxWidth: "400px",
+            width: "100%",
+            border: "2px solid #f59e0b"
+          }}>
+            <div style={{ fontSize: "2.5rem", textAlign: "center", marginBottom: "1rem" }}>
+              ⚠️
+            </div>
+            <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.3rem", textAlign: "center" }}>
+              Are you sure you want to leave?
+            </h3>
+            <p style={{ margin: "0 0 1.5rem 0", fontSize: "0.95rem", color: "#ccc", lineHeight: "1.5" }}>
+              As the room admin, when you leave:
+            </p>
+            <ul style={{ margin: "0 0 1.5rem 0", fontSize: "0.9rem", color: "#ccc", lineHeight: "1.6", paddingLeft: "1.5rem" }}>
+              <li>Other participants will be notified</li>
+              <li>Recording and translation will be disabled</li>
+              <li>The room will <strong style={{ color: "#f59e0b" }}>automatically close in 30 minutes</strong></li>
+              <li>All participants will be removed when time expires</li>
+            </ul>
+            <p style={{ margin: "0 0 1.5rem 0", fontSize: "0.85rem", color: "#999", fontStyle: "italic" }}>
+              You can rejoin anytime within 30 minutes to reset the timer.
+            </p>
+            <div style={{ display: "flex", gap: "0.75rem" }}>
+              <button
+                onClick={() => setShowAdminLeaveWarning(false)}
+                style={{
+                  flex: 1,
+                  padding: "0.85rem",
+                  background: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "10px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "1rem"
+                }}
+              >
+                Stay
+              </button>
+              <button
+                onClick={() => {
+                  setShowAdminLeaveWarning(false);
+                  navigate("/rooms");
+                }}
+                style={{
+                  flex: 1,
+                  padding: "0.85rem",
+                  background: "#dc2626",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "10px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "1rem"
+                }}
+              >
+                Leave Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Left Notification - Dismissible */}
+      {showAdminLeftNotification && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0,0,0,0.85)",
+          zIndex: 150,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1rem"
+        }}
+        onClick={() => setShowAdminLeftNotification(false)}
+        >
+          <div style={{
+            background: "#1a1a1a",
+            borderRadius: "16px",
+            padding: "2rem",
+            maxWidth: "400px",
+            width: "100%",
+            border: "2px solid #f59e0b"
+          }}
+          onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: "2.5rem", textAlign: "center", marginBottom: "1rem" }}>
+              ⚠️
+            </div>
+            <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.3rem", textAlign: "center" }}>
+              Room Admin Has Left
+            </h3>
+            <p style={{ margin: "0 0 1.5rem 0", fontSize: "0.95rem", color: "#ccc", lineHeight: "1.5", textAlign: "center" }}>
+              The room creator has disconnected from this session.
+            </p>
+            <div style={{ background: "#2a2a2a", padding: "1rem", borderRadius: "12px", marginBottom: "1.5rem" }}>
+              <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", color: "#fff", fontWeight: "600" }}>
+                What happens next:
+              </p>
+              <ul style={{ margin: "0", fontSize: "0.85rem", color: "#ccc", lineHeight: "1.6", paddingLeft: "1.5rem" }}>
+                <li>You can continue using the room</li>
+                <li>A countdown timer will be visible at the top</li>
+                <li>The room will close automatically in <strong style={{ color: "#f59e0b" }}>30 minutes</strong></li>
+                <li>If the admin rejoins, the timer will reset</li>
+              </ul>
+            </div>
+            <button
+              onClick={() => setShowAdminLeftNotification(false)}
+              style={{
+                width: "100%",
+                padding: "0.85rem",
+                background: "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: "10px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "1rem"
+              }}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Room Expiration Modal */}
+      {showExpirationModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0,0,0,0.95)",
+          zIndex: 200,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1rem"
+        }}>
+          <div style={{
+            background: "#1a1a1a",
+            borderRadius: "16px",
+            padding: "2.5rem 2rem",
+            maxWidth: "450px",
+            width: "100%",
+            border: "2px solid #dc2626",
+            textAlign: "center"
+          }}>
+            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>
+              👋
+            </div>
+            <h2 style={{ margin: "0 0 1rem 0", fontSize: "1.5rem", color: "white" }}>
+              Thank you for joining!
+            </h2>
+            <p style={{ margin: "0 0 1.5rem 0", fontSize: "1rem", color: "#ccc", lineHeight: "1.6" }}>
+              This room has been closed because the admin has been away for 30 minutes.
+            </p>
+            <p style={{ margin: "0 0 2rem 0", fontSize: "0.9rem", color: "#999" }}>
+              Create your own account to host unlimited translation rooms.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <button
+                onClick={() => navigate("/register")}
+                style={{
+                  width: "100%",
+                  padding: "1rem",
+                  background: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "12px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "1.05rem"
+                }}
+              >
+                Create Account
+              </button>
+              <button
+                onClick={() => navigate("/login")}
+                style={{
+                  width: "100%",
+                  padding: "1rem",
+                  background: "#2a2a2a",
+                  color: "white",
+                  border: "1px solid #444",
+                  borderRadius: "12px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "1.05rem"
+                }}
+              >
+                Sign In
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

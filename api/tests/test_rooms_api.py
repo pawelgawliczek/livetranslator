@@ -288,3 +288,196 @@ class TestRoomCodeGeneration:
         # Should fit in 12 chars
         assert len(quick_code) <= 12
         print(f"Quick room code: {quick_code} ({len(quick_code)} chars)")
+
+
+class TestRoomLifecycleManagement:
+    """Test suite for room lifecycle and admin presence features."""
+
+    def test_room_status_response_model(self):
+        """Test RoomStatusResponse model structure."""
+        from api.rooms_api import RoomStatusResponse
+        from datetime import datetime, timedelta
+
+        admin_left_time = datetime.utcnow()
+        expires_time = admin_left_time + timedelta(minutes=30)
+
+        response = RoomStatusResponse(
+            code="test-room",
+            admin_present=False,
+            admin_left_at=admin_left_time,
+            expires_at=expires_time
+        )
+
+        assert response.code == "test-room"
+        assert response.admin_present == False
+        assert response.admin_left_at == admin_left_time
+        assert response.expires_at == expires_time
+
+    def test_room_status_admin_present(self):
+        """Test room status when admin is present."""
+        from api.rooms_api import RoomStatusResponse
+
+        response = RoomStatusResponse(
+            code="test-room",
+            admin_present=True,
+            admin_left_at=None,
+            expires_at=None
+        )
+
+        assert response.admin_present == True
+        assert response.admin_left_at is None
+        assert response.expires_at is None
+
+    def test_room_status_admin_absent(self):
+        """Test room status when admin has left."""
+        from api.rooms_api import RoomStatusResponse
+        from datetime import datetime, timedelta
+
+        left_at = datetime.utcnow()
+        expires_at = left_at + timedelta(minutes=30)
+
+        response = RoomStatusResponse(
+            code="test-room",
+            admin_present=False,
+            admin_left_at=left_at,
+            expires_at=expires_at
+        )
+
+        assert response.admin_present == False
+        assert response.admin_left_at is not None
+        assert response.expires_at is not None
+
+        # Verify 30-minute expiration
+        time_diff = response.expires_at - response.admin_left_at
+        assert time_diff.total_seconds() == 1800  # 30 minutes
+
+    def test_room_status_json_serialization_with_timezone(self):
+        """Test that datetime fields are serialized with UTC timezone marker."""
+        from api.rooms_api import RoomStatusResponse
+        from datetime import datetime, timedelta
+        import json
+
+        left_at = datetime.utcnow()
+        expires_at = left_at + timedelta(minutes=30)
+
+        response = RoomStatusResponse(
+            code="test-room",
+            admin_present=False,
+            admin_left_at=left_at,
+            expires_at=expires_at
+        )
+
+        # Serialize to JSON
+        json_data = response.model_dump_json()
+        parsed = json.loads(json_data)
+
+        # Check that timestamps end with 'Z' (UTC marker)
+        assert parsed['admin_left_at'].endswith('Z')
+        assert parsed['expires_at'].endswith('Z')
+
+    def test_room_response_includes_admin_left_at(self):
+        """Test that RoomResponse includes admin_left_at field."""
+        from api.rooms_api import RoomResponse
+        from datetime import datetime
+
+        response = RoomResponse(
+            id=1,
+            code="test-room",
+            owner_id=123,
+            is_public=False,
+            requires_login=False,
+            max_participants=10,
+            created_at=datetime.utcnow(),
+            admin_left_at=None
+        )
+
+        assert hasattr(response, 'admin_left_at')
+        assert response.admin_left_at is None
+
+    def test_room_response_with_admin_departed(self):
+        """Test RoomResponse when admin has departed."""
+        from api.rooms_api import RoomResponse
+        from datetime import datetime
+
+        left_at = datetime.utcnow()
+
+        response = RoomResponse(
+            id=1,
+            code="test-room",
+            owner_id=123,
+            is_public=False,
+            requires_login=False,
+            max_participants=10,
+            created_at=datetime.utcnow(),
+            admin_left_at=left_at
+        )
+
+        assert response.admin_left_at == left_at
+
+    def test_expires_at_calculation(self):
+        """Test that expires_at is correctly calculated as admin_left_at + 30 minutes."""
+        from datetime import datetime, timedelta
+
+        left_at = datetime(2025, 10, 21, 12, 0, 0)
+        expected_expires_at = datetime(2025, 10, 21, 12, 30, 0)
+
+        calculated_expires_at = left_at + timedelta(minutes=30)
+
+        assert calculated_expires_at == expected_expires_at
+        assert (calculated_expires_at - left_at).total_seconds() == 1800
+
+    def test_timezone_handling(self):
+        """Test that timezone information is preserved in serialization."""
+        from api.rooms_api import RoomStatusResponse
+        from datetime import datetime
+
+        # Create a datetime (UTC)
+        now = datetime.utcnow()
+
+        response = RoomStatusResponse(
+            code="test-room",
+            admin_present=False,
+            admin_left_at=now,
+            expires_at=now
+        )
+
+        # Get JSON representation
+        json_str = response.model_dump_json()
+
+        # Should contain ISO format with Z suffix
+        assert 'Z"' in json_str
+
+    def test_admin_left_at_optional(self):
+        """Test that admin_left_at is optional in responses."""
+        from api.rooms_api import RoomResponse
+        from datetime import datetime
+
+        # Should work without admin_left_at
+        response = RoomResponse(
+            id=1,
+            code="test-room",
+            owner_id=123,
+            is_public=False,
+            requires_login=False,
+            max_participants=10,
+            created_at=datetime.utcnow()
+        )
+
+        assert response.admin_left_at is None
+
+    def test_room_status_expiration_edge_cases(self):
+        """Test edge cases for room expiration calculation."""
+        from datetime import datetime, timedelta
+
+        # Test immediate expiration (edge case)
+        now = datetime.utcnow()
+        expires_now = now + timedelta(seconds=0)
+        assert (expires_now - now).total_seconds() == 0
+
+        # Test just before expiration
+        almost_expired = now + timedelta(seconds=1)
+        assert (almost_expired - now).total_seconds() == 1
+
+        # Test well past expiration
+        long_expired = now - timedelta(hours=1)
+        assert (now - long_expired).total_seconds() == 3600

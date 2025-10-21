@@ -23,6 +23,7 @@ class WSManager:
         self.rooms: Dict[str, Set[WebSocket]] = {}
         self.default_tgt = default_tgt
         self.log = structlog.get_logger("wsman")
+        self._pending_admin_checks: Dict[str, asyncio.Task] = {}  # Debounce admin checks
 
     async def get_room_languages(self, room_id: str) -> set:
         """Get all unique languages needed in a room"""
@@ -138,10 +139,10 @@ class WSManager:
             except Exception as e:
                 self.log.error("persist_mt_error", room=room, segment=seg_id, err=str(e))
 
-    async def _check_admin_presence(self, room_id: str):
+    async def _do_admin_check(self, room_id: str):
         """
-        Check if the room admin is present. If admin left, mark admin_left_at.
-        If admin rejoined, clear admin_left_at.
+        Internal method that actually performs the admin presence check.
+        This is called after debouncing.
         """
         try:
             db: Session = SessionLocal()
@@ -152,12 +153,22 @@ class WSManager:
 
                 # Check if admin is currently connected
                 admin_present = False
+                connected_users = []
                 for ws in self.rooms.get(room_id, []):
-                    user_id = getattr(ws.state, 'user_id', None)
+                    user_id = getattr(ws.state, 'user', None)
+                    connected_users.append(user_id)
                     # Check if this user is the admin (not a guest)
-                    if user_id and not str(user_id).startswith('guest:') and user_id == room.owner_id:
-                        admin_present = True
-                        break
+                    if user_id and not str(user_id).startswith('guest:'):
+                        try:
+                            # Convert to int for comparison with owner_id
+                            if int(user_id) == room.owner_id:
+                                admin_present = True
+                                break
+                        except (ValueError, TypeError):
+                            # Skip if user_id can't be converted to int
+                            continue
+
+                self.log.info("admin_check_complete", room=room_id, admin_present=admin_present, owner_id=room.owner_id, connected_users=connected_users)
 
                 # Update database based on admin presence
                 if admin_present and room.admin_left_at:
@@ -165,15 +176,41 @@ class WSManager:
                     room.admin_left_at = None
                     db.commit()
                     self.log.info("admin_rejoined", room=room_id, owner_id=room.owner_id)
-                elif not admin_present and not room.admin_left_at:
+                elif not admin_present and not room.admin_left_at and len(connected_users) > 0:
                     # Admin left - set the timestamp
-                    room.admin_left_at = datetime.utcnow()
-                    db.commit()
-                    self.log.info("admin_left", room=room_id, owner_id=room.owner_id, timestamp=room.admin_left_at)
+                    # Only mark as left if there are non-admin users still connected
+                    has_non_admin_users = any(
+                        user_id and str(user_id).startswith('guest:')
+                        for user_id in connected_users
+                    )
+                    if has_non_admin_users:
+                        room.admin_left_at = datetime.utcnow()
+                        db.commit()
+                        self.log.info("admin_left", room=room_id, owner_id=room.owner_id, timestamp=room.admin_left_at)
             finally:
                 db.close()
         except Exception as e:
             self.log.error("admin_check_error", room=room_id, err=str(e))
+        finally:
+            # Clean up the pending task
+            if room_id in self._pending_admin_checks:
+                del self._pending_admin_checks[room_id]
+
+    async def _check_admin_presence(self, room_id: str):
+        """
+        Check if the room admin is present with 3-second debouncing.
+        Multiple rapid calls will only trigger one check after the delay.
+        """
+        # Cancel any pending check for this room
+        if room_id in self._pending_admin_checks:
+            self._pending_admin_checks[room_id].cancel()
+
+        # Schedule a new check after 3 seconds
+        async def delayed_check():
+            await asyncio.sleep(3)
+            await self._do_admin_check(room_id)
+
+        self._pending_admin_checks[room_id] = asyncio.create_task(delayed_check())
 
     async def connect(self, room_id: str, ws: WebSocket):
         await ws.accept()

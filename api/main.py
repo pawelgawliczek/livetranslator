@@ -133,7 +133,7 @@ async def ws_room(ws: WebSocket, room_id: str):
                 # forward control events
                 await stt.push_raw(msg)
     except WebSocketDisconnect:
-        wsman.disconnect(room_id, ws)
+        await wsman.disconnect(room_id, ws)
         MET_WS_CONNS.dec()
 
 class TReq(BaseModel):
