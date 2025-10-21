@@ -9,6 +9,59 @@ export default function RoomPage({ token, onLogout }) {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Add spinning animation for processing indicator
+  React.useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      .processing-spinner {
+        display: inline-block;
+        animation: spin 1s linear infinite;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
+  // Translations for "Refining quality..." in different languages
+  const getProcessingText = (lang) => {
+    const translations = {
+      'en': 'Refining quality...',
+      'es': 'Mejorando calidad...',
+      'fr': 'Amélioration de la qualité...',
+      'de': 'Qualität verbessern...',
+      'it': 'Miglioramento qualità...',
+      'pt': 'Melhorando qualidade...',
+      'ru': 'Улучшение качества...',
+      'zh': '提高质量中...',
+      'ja': '品質向上中...',
+      'ko': '품질 개선 중...',
+      'ar': '...تحسين الجودة',
+      'hi': 'गुणवत्ता में सुधार...',
+      'pl': 'Poprawa jakości...',
+      'nl': 'Kwaliteit verbeteren...',
+      'tr': 'Kalite iyileştiriliyor...',
+      'sv': 'Förbättrar kvalitet...',
+      'da': 'Forbedrer kvalitet...',
+      'fi': 'Parannetaan laatua...',
+      'no': 'Forbedrer kvalitet...',
+      'cs': 'Zlepšování kvality...',
+      'ro': 'Îmbunătățire calitate...',
+      'hu': 'Minőség javítása...',
+      'uk': 'Покращення якості...',
+      'el': 'Βελτίωση ποιότητας...',
+      'he': '...שיפור איכות',
+      'th': 'กำลังปรับปรุงคุณภาพ...',
+      'vi': 'Cải thiện chất lượng...',
+      'id': 'Meningkatkan kualitas...',
+      'ms': 'Meningkatkan kualiti...',
+    };
+    return translations[lang] || translations['en'];
+  };
+
   // Check if this is a guest session
   const isGuest = sessionStorage.getItem('is_guest') === 'true';
   const guestName = sessionStorage.getItem('guest_display_name') || 'Guest';
@@ -59,6 +112,7 @@ export default function RoomPage({ token, onLogout }) {
   const isRecordingRef = useRef(false);
   const audioContextRef = useRef(null);
   const scriptProcessorRef = useRef(null);
+  const streamRef = useRef(null);
   const partialBufferRef = useRef(new Float32Array(0));
   const isSpeakingRef = useRef(false);
   const lastPartialSentRef = useRef(0);
@@ -68,10 +122,17 @@ export default function RoomPage({ token, onLogout }) {
   const segsRef = useRef(new Map());
   const dirtyRef = useRef(false);
 
-  // VAD state
+  // VAD state - will be replaced by ML VAD
   const vadSpeechFramesRef = useRef(0);
   const vadSilenceFramesRef = useRef(0);
   const vadIsDetectedRef = useRef(false);
+
+  // Improved VAD configuration - stricter silence detection to prevent repetitions
+  const silenceFramesRef = useRef(0);  // Count consecutive silent frames
+  const speechFramesRef = useRef(0);   // Count consecutive speech frames
+  const SILENCE_THRESHOLD = 20;        // 20 frames (~200ms) of silence before stopping
+  const SPEECH_THRESHOLD = 5;          // 5 frames (~50ms) of speech to start
+  const ENERGY_THRESHOLD = 0.015;      // Much higher threshold for washing machine noise (was 0.004)
 
   const languages = [
     { code: "auto", name: "Auto", flag: "🌐" },
@@ -531,138 +592,145 @@ export default function RoomPage({ token, onLogout }) {
     wsRef.current = ws;
     
     seqRef.current = 1;
-    
-    // Request microphone with Chrome-compatible constraints
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,  // Enable AGC - Chrome might need this for proper levels
-        channelCount: 1,
-        sampleRate: 48000
-      }
-    });
 
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+    // Start improved energy-based VAD
+    console.log('[VAD] Starting voice activity detection...');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
 
-    // Resume audio context (required in Chrome)
-    if (audioContext.state === 'suspended') {
-      await audioContext.resume();
-    }
+      const sourceSampleRate = audioContext.sampleRate;
+      const targetSampleRate = 16000;
+      console.log(`[VAD] Audio context sample rate: ${sourceSampleRate}Hz -> resampling to ${targetSampleRate}Hz`);
 
-    const source = audioContext.createMediaStreamSource(stream);
-    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      // Reset VAD state
+      silenceFramesRef.current = 0;
+      speechFramesRef.current = 0;
+      isSpeakingRef.current = false;
+      partialBufferRef.current = new Float32Array(0);
+      lastPartialSentRef.current = 0;
 
-    // Debug microphone stream
-    const audioTracks = stream.getAudioTracks();
-    console.log('[VAD] Audio context created, state:', audioContext.state, 'sampleRate:', audioContext.sampleRate);
-    console.log('[VAD] Audio tracks:', audioTracks.length, audioTracks.map(t => ({
-      label: t.label,
-      enabled: t.enabled,
-      muted: t.muted,
-      readyState: t.readyState,
-      settings: t.getSettings()
-    })));
+      processor.onaudioprocess = (e) => {
+        if (!isRecordingRef.current || !wsRef.current) return;
 
-    let audioProcessCallCount = 0;
-    processor.onaudioprocess = (e) => {
-      audioProcessCallCount++;
+        const inputData = e.inputBuffer.getChannelData(0);
 
-      // Log first few callbacks to confirm it's working
-      if (audioProcessCallCount <= 3) {
-        console.log(`[VAD] Audio process callback #${audioProcessCallCount} fired`);
-      }
+        // Resample to 16kHz using simple linear interpolation
+        const resampledLength = Math.floor(inputData.length * targetSampleRate / sourceSampleRate);
+        const resampled = new Float32Array(resampledLength);
+        const ratio = (inputData.length - 1) / (resampledLength - 1);
 
-      const inputData = e.inputBuffer.getChannelData(0);
-
-      // Calculate audio energy for VAD
-      let energy = 0;
-      for (let i = 0; i < inputData.length; i++) {
-        energy += inputData[i] * inputData[i];
-      }
-      energy = Math.sqrt(energy / inputData.length);
-
-      // Much more sensitive threshold for Chrome
-      const energyThreshold = 0.0001; // Very sensitive
-      const isSpeech = energy > energyThreshold;
-
-      // Log energy more frequently for debugging
-      if (audioProcessCallCount % 100 === 0) {
-        const maxSample = Math.max(...inputData.map(Math.abs));
-        console.log(`[VAD Debug #${audioProcessCallCount}] Energy: ${energy.toFixed(6)}, Max sample: ${maxSample.toFixed(6)}, Threshold: ${energyThreshold}, isSpeech: ${isSpeech}`);
-      }
-
-      if (isSpeech) {
-        vadSpeechFramesRef.current++;
-        vadSilenceFramesRef.current = 0;
-
-        // Start speech if threshold reached
-        if (!vadIsDetectedRef.current && vadSpeechFramesRef.current >= 5) {
-          vadIsDetectedRef.current = true;
-          setVadStatus("🎤 Speaking...");
-          isSpeakingRef.current = true;
-          partialBufferRef.current = new Float32Array(0);
-          lastPartialSentRef.current = 0;
-          currentSegmentHintRef.current = Date.now();
+        for (let i = 0; i < resampledLength; i++) {
+          const srcIndex = i * ratio;
+          const srcIndexFloor = Math.floor(srcIndex);
+          const srcIndexCeil = Math.min(srcIndexFloor + 1, inputData.length - 1);
+          const fraction = srcIndex - srcIndexFloor;
+          resampled[i] = inputData[srcIndexFloor] * (1 - fraction) + inputData[srcIndexCeil] * fraction;
         }
-      } else {
-        vadSilenceFramesRef.current++;
 
-        if (vadIsDetectedRef.current) {
-          // End speech if silence threshold reached (8 frames = ~800ms)
-          if (vadSilenceFramesRef.current >= 8) {
-            vadIsDetectedRef.current = false;
-            vadSpeechFramesRef.current = 0;
+        // Calculate RMS energy on resampled data
+        let sum = 0;
+        for (let i = 0; i < resampled.length; i++) {
+          sum += resampled[i] * resampled[i];
+        }
+        const rms = Math.sqrt(sum / resampled.length);
+
+        // Speech/silence detection with hysteresis
+        if (rms > ENERGY_THRESHOLD) {
+          speechFramesRef.current++;
+          silenceFramesRef.current = 0;
+
+          // Start speaking after SPEECH_THRESHOLD frames
+          if (!isSpeakingRef.current && speechFramesRef.current >= SPEECH_THRESHOLD) {
+            console.log('[VAD] 🎤 Speech started');
+            setVadStatus("🎤 Speaking...");
+            isSpeakingRef.current = true;
+            partialBufferRef.current = new Float32Array(0);
+            lastPartialSentRef.current = 0;
+            currentSegmentHintRef.current = Date.now();
+          }
+        } else {
+          silenceFramesRef.current++;
+          speechFramesRef.current = 0;
+
+          // Stop speaking after SILENCE_THRESHOLD frames
+          if (isSpeakingRef.current && silenceFramesRef.current >= SILENCE_THRESHOLD) {
+            console.log('[VAD] ✅ Speech ended (silence detected)');
             setVadStatus("✅ Processing...");
             isSpeakingRef.current = false;
 
-            // Send audio_end to finalize accumulated partials
-            sendFinalTranscription();
+            // Send audio_end signal to prevent repetitions
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({
+                type: "audio_end",
+                room_id: roomId,
+                seq: 0
+              }));
+              console.log('[VAD] Sent audio_end signal');
+            }
 
-            // Clear buffers
             partialBufferRef.current = new Float32Array(0);
             currentSegmentHintRef.current = null;
-
-            // Return to listening status after a delay
             setTimeout(() => setVadStatus("👂 Listening..."), 300);
           }
-        } else {
-          vadSpeechFramesRef.current = Math.max(0, vadSpeechFramesRef.current - 1);
         }
-      }
 
-      // Only process audio for transmission when speaking is detected
-      if (!isSpeakingRef.current) return;
+        // SAFETY: Force stop if recording exceeds 30 seconds
+        if (isSpeakingRef.current && currentSegmentHintRef.current) {
+          const recordingDuration = Date.now() - currentSegmentHintRef.current;
+          if (recordingDuration > 30000) {
+            console.log(`[VAD] ⚠️ Force stopping - exceeded 30s limit (${recordingDuration}ms)`);
+            isSpeakingRef.current = false;
 
-      const resampled = resampleTo16k(inputData, 48000);
+            // Send audio_end signal
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({
+                type: "audio_end",
+                room_id: roomId,
+                seq: 0
+              }));
+              console.log('[VAD] Sent audio_end signal (force stop)');
+            }
 
-      const oldLen = partialBufferRef.current.length;
-      const newBuffer = new Float32Array(oldLen + resampled.length);
-      newBuffer.set(partialBufferRef.current);
-      newBuffer.set(resampled, oldLen);
-      partialBufferRef.current = newBuffer;
+            partialBufferRef.current = new Float32Array(0);
+            currentSegmentHintRef.current = null;
+            setVadStatus("⚠️ Auto-stopped");
+            setTimeout(() => setVadStatus("👂 Listening..."), 1000);
+          }
+        }
 
-      sendPartialIfReady();
-    };
-    
-    source.connect(processor);
-    processor.connect(audioContext.destination);
+        // Accumulate resampled audio during speech
+        if (isSpeakingRef.current) {
+          const oldLen = partialBufferRef.current.length;
+          const newBuffer = new Float32Array(oldLen + resampled.length);
+          newBuffer.set(partialBufferRef.current);
+          newBuffer.set(resampled, oldLen);
+          partialBufferRef.current = newBuffer;
+          sendPartialIfReady();
+        }
+      };
 
-    audioContextRef.current = audioContext;
-    scriptProcessorRef.current = processor;
-    partialBufferRef.current = new Float32Array(0);
-    lastPartialSentRef.current = 0;
+      source.connect(processor);
+      processor.connect(audioContext.destination);
 
-    // Initialize VAD state
-    vadSpeechFramesRef.current = 0;
-    vadSilenceFramesRef.current = 0;
-    vadIsDetectedRef.current = false;
-    setVadStatus("👂 Listening...");
-    console.log('[VAD] Initialized and ready');
+      // Store references for cleanup
+      audioContextRef.current = audioContext;
+      scriptProcessorRef.current = processor;
+      streamRef.current = stream;
 
-    isRecordingRef.current = true;
-    setVadReady(true);
-    setVadStatus("👂 Listening...");
+      console.log('[VAD] ✅ Voice activity detection started successfully');
+      setVadReady(true);
+      setVadStatus("👂 Listening...");
+      isRecordingRef.current = true;
+    } catch (err) {
+      console.error('[VAD] ❌ Failed to start:', err);
+      setStatus("mic error");
+      setVadStatus("❌ Microphone error");
+      alert(`Failed to start microphone: ${err.message}`);
+      return;
+    }
   }
   
   function stop() {
@@ -670,20 +738,25 @@ export default function RoomPage({ token, onLogout }) {
     isSpeakingRef.current = false;
     setVadReady(false);
 
-    // Reset VAD state
-    vadSpeechFramesRef.current = 0;
-    vadSilenceFramesRef.current = 0;
-    vadIsDetectedRef.current = false;
+    // Stop VAD and clean up audio resources
+    console.log('[VAD] Stopping voice activity detection...');
 
     if (scriptProcessorRef.current) {
       scriptProcessorRef.current.disconnect();
       scriptProcessorRef.current = null;
     }
 
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+
     if (audioContextRef.current) {
       audioContextRef.current.close();
       audioContextRef.current = null;
     }
+
+    console.log('[VAD] ✅ Voice activity detection stopped');
 
     try {
       if (wsRef.current && wsRef.current.readyState === 1) {
@@ -1157,6 +1230,19 @@ export default function RoomPage({ token, onLogout }) {
                     {seg.translation.text}
                     {!seg.translation.final && <span style={{marginLeft: "0.5rem", color: "#666"}}>⋯</span>}
                   </div>
+                  {seg.translation.final && seg.translation.processing && (
+                    <div style={{
+                      fontSize: "0.75rem",
+                      color: "#888",
+                      marginTop: "0.25rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem"
+                    }}>
+                      <span className="processing-spinner">⚙️</span>
+                      <span>{getProcessingText(myLanguage || 'en')}</span>
+                    </div>
+                  )}
                   {/* Original text - small font below */}
                   {seg.source && (
                     <div style={{
@@ -1173,15 +1259,30 @@ export default function RoomPage({ token, onLogout }) {
                 <>
                   {/* No translation - show source in large font (own message) */}
                   {seg.source && (
-                    <div style={{
-                      color: seg.source.final ? "#fff" : "#bbb",
-                      fontSize: "1rem",
-                      fontWeight: "500",
-                      lineHeight: "1.45"
-                    }}>
-                      {seg.source.text}
-                      {!seg.source.final && <span style={{marginLeft: "0.5rem", color: "#666"}}>⋯</span>}
-                    </div>
+                    <>
+                      <div style={{
+                        color: seg.source.final ? "#fff" : "#bbb",
+                        fontSize: "1rem",
+                        fontWeight: "500",
+                        lineHeight: "1.45"
+                      }}>
+                        {seg.source.text}
+                        {!seg.source.final && <span style={{marginLeft: "0.5rem", color: "#666"}}>⋯</span>}
+                      </div>
+                      {seg.source.final && seg.source.processing && (
+                        <div style={{
+                          fontSize: "0.75rem",
+                          color: "#888",
+                          marginTop: "0.25rem",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.4rem"
+                        }}>
+                          <span className="processing-spinner">⚙️</span>
+                          <span>{getProcessingText(myLanguage || 'en')}</span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </>
               )}
