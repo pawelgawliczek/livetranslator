@@ -671,10 +671,9 @@ export default function RoomPage({ token, onLogout }) {
       }
 
       lastPartialSentRef.current = now;
-      const keepSamples = 4800;  // Keep 0.3s of context for overlapping windows
-      if (partialBufferRef.current.length > keepSamples) {
-        partialBufferRef.current = partialBufferRef.current.slice(-keepSamples);
-      }
+      // Clear buffer after sending - don't keep overlapping audio for streaming STT
+      // Overlapping windows cause audio duplications in the accumulated buffer
+      partialBufferRef.current = new Float32Array(0);
     } catch (e) {
       console.error("Partial send failed:", e);
     }
@@ -756,7 +755,15 @@ export default function RoomPage({ token, onLogout }) {
     // Start improved energy-based VAD
     console.log('[VAD] Starting voice activity detection...');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: { ideal: 48000 },  // Higher quality, browser will downsample if needed
+          echoCancellation: true,
+          noiseSuppression: false,       // Disable to preserve speech quality
+          autoGainControl: true          // Enable automatic gain control
+        }
+      });
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const source = audioContext.createMediaStreamSource(stream);
       const processor = audioContext.createScriptProcessor(4096, 1, 1);

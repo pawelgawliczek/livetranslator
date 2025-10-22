@@ -57,6 +57,7 @@ class StreamingConnection:
         self.segment_id = None
         self.revision = 0
         self.accumulated_text = ""
+        self.finalized_text = ""  # For Speechmatics: text confirmed by AddTranscript
 
         self._lock = threading.Lock()
 
@@ -109,6 +110,14 @@ class StreamingConnection:
             print(f"[StreamingConnection] Error sending audio: {e}")
             await self.on_error({"error": str(e), "room_id": self.room_id, "provider": self.provider})
             raise
+
+    def reset_for_new_segment(self, segment_id: int):
+        """Reset accumulated state for a new audio segment."""
+        print(f"[StreamingConnection] 🔄 Resetting for new segment {segment_id}")
+        self.segment_id = segment_id
+        self.revision = 0
+        self.accumulated_text = ""
+        self.finalized_text = ""
 
     async def close(self):
         """Close the streaming connection."""
@@ -172,6 +181,8 @@ class StreamingConnection:
         )
 
         # Send StartRecognition message
+        print(f"[StreamingConnection] Config: lang={self.language}, op={operating_point}, delay={max_delay}, diar={diarization}")
+
         start_recognition = {
             "message": "StartRecognition",
             "audio_format": {
@@ -188,8 +199,9 @@ class StreamingConnection:
             }
         }
 
+        print(f"[StreamingConnection] Sending StartRecognition...")
         await self.ws_client.send(json.dumps(start_recognition))
-        print(f"[StreamingConnection] Sent StartRecognition to Speechmatics")
+        print(f"[StreamingConnection] ✓ Sent StartRecognition to Speechmatics")
 
         # Start listening for responses in background
         asyncio.create_task(self._speechmatics_listener())
@@ -208,39 +220,45 @@ class StreamingConnection:
                         print(f"[StreamingConnection] Speechmatics recognition started for room={self.room_id}")
 
                     elif msg_type == "AddPartialTranscript":
-                        # Partial result - Speechmatics with enable_partials sends word-by-word updates
-                        # NOT accumulated text, so we need to accumulate on our side
+                        # Speechmatics sends partial updates that may replace previous partials
+                        # We need to keep finalized text and append new partials
                         metadata = msg.get("metadata", {})
-                        text = metadata.get("transcript", "")
+                        partial_text = metadata.get("transcript", "").strip()
 
-                        if text:
-                            # Accumulate words - append new text to existing
-                            if self.accumulated_text:
-                                self.accumulated_text += " " + text
+                        if partial_text:
+                            # Combine finalized text + current partial
+                            if self.finalized_text:
+                                full_text = self.finalized_text + " " + partial_text
                             else:
-                                self.accumulated_text = text
+                                full_text = partial_text
 
+                            self.accumulated_text = full_text
                             self.revision += 1
 
-                            print(f"[StreamingConnection] 📝 Accumulated: '{self.accumulated_text}'")
+                            print(f"[StreamingConnection] 📝 Partial: fin='{self.finalized_text[:30] if self.finalized_text else ''}' + part='{partial_text[:30]}'")
 
                             await self.on_partial({
-                                "text": self.accumulated_text,
+                                "text": full_text,
                                 "language": self.language,
                                 "room_id": self.room_id,
                                 "is_final": False
                             })
-                        elif not text and self.accumulated_text:
-                            # Empty partial might indicate word boundary - just skip
-                            pass
 
                     elif msg_type == "AddTranscript":
-                        # Final result
+                        # Final result - this is confirmed text that won't change
                         metadata = msg.get("metadata", {})
-                        text = metadata.get("transcript", "")
-                        if text:
+                        final_text = metadata.get("transcript", "").strip()
+                        if final_text:
+                            # Add to finalized text
+                            if self.finalized_text:
+                                self.finalized_text += " " + final_text
+                            else:
+                                self.finalized_text = final_text
+
+                            print(f"[StreamingConnection] ✓ Finalized: '{final_text[:50]}'")
+
                             await self.on_final({
-                                "text": text,
+                                "text": final_text,
                                 "language": self.language,
                                 "room_id": self.room_id,
                                 "is_final": True
@@ -367,6 +385,11 @@ class StreamingManager:
             await conn.connect()
             self.connections[key] = conn
             return conn
+
+    def get_connection(self, room_id: str, provider: str) -> Optional[StreamingConnection]:
+        """Get existing connection without creating a new one."""
+        key = self._get_key(room_id, provider)
+        return self.connections.get(key)
 
     async def close_connection(self, room_id: str, provider: str):
         """Close and remove a connection."""

@@ -108,8 +108,19 @@ async def transcribe_audio_chunk(
             operating_point=operating_point,
             max_delay=max_delay,
             enable_partials=True,
-            diarization="speaker" if diarization else "none"
+            diarization="speaker" if diarization else "none",
+            max_delay_mode=config.get("max_delay_mode", "flexible"),
+            enable_entities=config.get("enable_entities", True)
         )
+
+        # Add advanced features if provided
+        if "punctuation_overrides" in config:
+            punctuation_config = config["punctuation_overrides"]
+            transcription_config.punctuation_overrides = punctuation_config
+
+        if "speaker_diarization_config" in config:
+            speaker_config = config["speaker_diarization_config"]
+            transcription_config.speaker_diarization_config = speaker_config
 
         # Create WebSocket client
         ws_client = WebsocketClient(settings)

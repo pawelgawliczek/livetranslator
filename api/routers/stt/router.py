@@ -19,6 +19,7 @@ Migration from v1:
 import os
 import asyncio
 import base64
+import time
 from datetime import datetime
 import redis.asyncio as redis
 
@@ -209,6 +210,16 @@ async def router_loop():
                         quality_tier=quality_tier
                     )
 
+                    # Check if there's an existing streaming connection we should reuse
+                    existing_connection = streaming_manager.get_connection(room, provider_config["provider"])
+                    print(f"[STT Router] DEBUG NEW SEGMENT: room={room}, provider={provider_config['provider']}, existing_connection={existing_connection}")
+                    if existing_connection:
+                        # Reset the connection for the new segment
+                        print(f"[STT Router] ♻️  Reusing existing connection for new segment {segment_id}")
+                        existing_connection.reset_for_new_segment(segment_id)
+                    else:
+                        print(f"[STT Router] 🆕 No existing connection found, will create new one")
+
                     partial_sessions[room] = {
                         "segment_id": segment_id,
                         "last_transcribed_length": 0,
@@ -225,7 +236,7 @@ async def router_loop():
                         "no_change_count": 0,
                         "last_new_text": "",
                         "conversation_history": [],
-                        "streaming_connection": None  # Will be set if using streaming
+                        "streaming_connection": existing_connection  # Reuse existing connection
                     }
 
                 session = partial_sessions[room]
@@ -233,17 +244,21 @@ async def router_loop():
                 session["target_lang"] = target_lang
                 session["language_hint"] = language_hint
 
-                # Accumulate audio bytes, cap at 30 seconds
+                # Accumulate audio bytes
+                # For streaming providers: Keep full audio for debugging (no trim)
+                # For non-streaming providers: Cap at 30 seconds
                 MAX_AUDIO_SECONDS = 30
                 MAX_AUDIO_BYTES = MAX_AUDIO_SECONDS * 16000 * 2
 
                 session["accumulated_audio"] += audio_bytes
 
-                # Trim from beginning if we exceed max
-                if len(session["accumulated_audio"]) > MAX_AUDIO_BYTES:
-                    trim_amount = len(session["accumulated_audio"]) - MAX_AUDIO_BYTES
-                    session["accumulated_audio"] = session["accumulated_audio"][-MAX_AUDIO_BYTES:]
-                    session["last_transcribed_length"] = max(0, session["last_transcribed_length"] - trim_amount)
+                # Only trim for non-streaming providers (they need the buffer for batch transcription)
+                # Streaming providers send audio in real-time, so we keep full audio for debugging
+                if session["provider"] not in STREAMING_PROVIDERS:
+                    if len(session["accumulated_audio"]) > MAX_AUDIO_BYTES:
+                        trim_amount = len(session["accumulated_audio"]) - MAX_AUDIO_BYTES
+                        session["accumulated_audio"] = session["accumulated_audio"][-MAX_AUDIO_BYTES:]
+                        session["last_transcribed_length"] = max(0, session["last_transcribed_length"] - trim_amount)
 
                 new_audio_len = len(session["accumulated_audio"])
 
@@ -260,8 +275,18 @@ async def router_loop():
                         # Define callbacks for streaming events
                         async def on_partial(result):
                             """Handle partial results from streaming connection."""
+                            # Check if session still exists (might be deleted after audio_end)
+                            if room not in partial_sessions:
+                                print(f"[STT Router] ⚠️  Ignoring late partial for {room} (session already cleared)")
+                                return
+
                             text = result.get("text", "").strip()
                             if not text:
+                                return
+
+                            # Filter out meaningless partials (just punctuation)
+                            if len(text) <= 3 and all(c in '.!?, ' for c in text):
+                                print(f"[STT Router] ⏭️  Skipping meaningless partial: '{text}'")
                                 return
 
                             # Speechmatics sends the FULL accumulated transcript in each partial
@@ -519,11 +544,61 @@ async def router_loop():
                 if room in partial_sessions:
                     session = partial_sessions[room]
 
-                    # Close streaming connection if exists
-                    if session.get("streaming_connection"):
-                        print(f"[STT Router] 🔌 Closing streaming connection for room={room}")
-                        await streaming_manager.close_connection(room, session["provider"])
-                    if session["accumulated_audio"] and len(session["accumulated_audio"]) > 0:
+                    # DON'T close streaming connection - keep it persistent per room!
+                    # Only close on disconnect or long timeout
+                    # if session.get("streaming_connection"):
+                    #     print(f"[STT Router] 🔌 Closing streaming connection for room={room}")
+                    #     await streaming_manager.close_connection(room, session["provider"])
+
+                    # Check if we have a streaming connection with finalized text
+                    streaming_conn = session.get("streaming_connection")
+                    print(f"[STT Router] DEBUG: streaming_conn={streaming_conn}, has_finalized={hasattr(streaming_conn, 'finalized_text') if streaming_conn else False}, finalized_text='{streaming_conn.finalized_text[:50] if streaming_conn and hasattr(streaming_conn, 'finalized_text') else 'N/A'}'")
+
+                    # Send final result if we have finalized text
+                    if streaming_conn and hasattr(streaming_conn, 'finalized_text') and streaming_conn.finalized_text:
+                        # Use finalized text from streaming connection (already high quality)
+                        final_text = streaming_conn.finalized_text.strip()
+                        print(f"[STT Router] ✅ Using streaming finalized text: {final_text[:80]}...")
+
+                        quality_event = {
+                            "type": "stt_final",
+                            "room_id": room,
+                            "segment_id": session["segment_id"],
+                            "revision": session["chunk_count"],
+                            "text": final_text,
+                            "lang": session.get("detected_lang", "auto"),
+                            "final": True,
+                            "processing": False,
+                            "ts_iso": None,
+                            "device": "web",
+                            "speaker": session["speaker"],
+                            "target_lang": session["target_lang"],
+                            "provider": session["provider"]
+                        }
+                        await r.publish(STT_OUTPUT_EVENTS, jdumps(quality_event))
+
+                        # Track costs
+                        audio_duration = len(session["accumulated_audio"]) / (16000 * 2)
+                        cost_event = {
+                            "timestamp": time.time(),
+                            "service": "stt",
+                            "provider": session["provider"],
+                            "mode": "final",
+                            "units": audio_duration,
+                            "unit_type": "seconds"
+                        }
+                        await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
+                        print(f"[STT Router] 💰 Cost tracked: {audio_duration:.1f}s ({session['provider']})")
+
+                    # Reset finalized text for next sentence (even within same segment)
+                    if streaming_conn and hasattr(streaming_conn, 'finalized_text'):
+                        print(f"[STT Router] 🔄 Resetting finalized text for next utterance")
+                        streaming_conn.finalized_text = ""
+                        streaming_conn.accumulated_text = ""
+                        streaming_conn.revision = 0
+
+                    elif session["accumulated_audio"] and len(session["accumulated_audio"]) > 0:
+                        # Fallback: use batch API for non-streaming providers
                         audio_duration = len(session["accumulated_audio"]) / (16000 * 2)
 
                         # Send instant result

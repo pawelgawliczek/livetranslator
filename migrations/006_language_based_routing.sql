@@ -155,7 +155,7 @@ INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, 
     ('pl-PL', 'partial', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('pl-PL', 'final', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "operating_point": "enhanced"}');
+     '{"diarization": true, "operating_point": "enhanced", "max_delay": 4.0, "max_delay_mode": "flexible", "enable_entities": true, "punctuation_overrides": {"sensitivity": 0.7}, "speaker_diarization_config": {"max_speakers": 10}}');
 
 -- Arabic (ar-EG) - Google v2 primary, Azure fallback
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES
@@ -169,14 +169,14 @@ INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, 
     ('en-US', 'partial', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('en-US', 'final', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "operating_point": "enhanced"}');
+     '{"diarization": true, "operating_point": "enhanced", "max_delay": 4.0, "max_delay_mode": "flexible", "enable_entities": true, "punctuation_overrides": {"sensitivity": 0.7}, "speaker_diarization_config": {"max_speakers": 10}}');
 
 -- English (GB) - Speechmatics
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES
     ('en-GB', 'partial', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('en-GB', 'final', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "operating_point": "enhanced"}');
+     '{"diarization": true, "operating_point": "enhanced", "max_delay": 4.0, "max_delay_mode": "flexible", "enable_entities": true, "punctuation_overrides": {"sensitivity": 0.7}, "speaker_diarization_config": {"max_speakers": 10}}');
 
 -- Generic fallback for other languages (*)
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES

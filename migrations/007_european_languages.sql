@@ -14,7 +14,7 @@ INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, 
     ('es-ES', 'partial', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('es-ES', 'final', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "operating_point": "enhanced"}'),
+     '{"diarization": true, "operating_point": "enhanced", "max_delay": 4.0, "max_delay_mode": "flexible", "enable_entities": true, "punctuation_overrides": {"sensitivity": 0.7}, "speaker_diarization_config": {"max_speakers": 10}}'),
 
     -- Budget Tier
     ('es-ES', 'partial', 'budget', 'soniox', 'google_v2',
@@ -36,7 +36,7 @@ INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, 
     ('fr-FR', 'partial', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('fr-FR', 'final', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "operating_point": "enhanced"}'),
+     '{"diarization": true, "operating_point": "enhanced", "max_delay": 4.0, "max_delay_mode": "flexible", "enable_entities": true, "punctuation_overrides": {"sensitivity": 0.7}, "speaker_diarization_config": {"max_speakers": 10}}'),
 
     -- Budget Tier
     ('fr-FR', 'partial', 'budget', 'soniox', 'google_v2',
@@ -58,7 +58,7 @@ INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, 
     ('de-DE', 'partial', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('de-DE', 'final', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "operating_point": "enhanced"}'),
+     '{"diarization": true, "operating_point": "enhanced", "max_delay": 4.0, "max_delay_mode": "flexible", "enable_entities": true, "punctuation_overrides": {"sensitivity": 0.7}, "speaker_diarization_config": {"max_speakers": 10}}'),
 
     -- Budget Tier
     ('de-DE', 'partial', 'budget', 'soniox', 'google_v2',
@@ -80,7 +80,7 @@ INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, 
     ('it-IT', 'partial', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('it-IT', 'final', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "operating_point": "enhanced"}'),
+     '{"diarization": true, "operating_point": "enhanced", "max_delay": 4.0, "max_delay_mode": "flexible", "enable_entities": true, "punctuation_overrides": {"sensitivity": 0.7}, "speaker_diarization_config": {"max_speakers": 10}}'),
 
     -- Budget Tier
     ('it-IT', 'partial', 'budget', 'soniox', 'google_v2',
@@ -102,7 +102,7 @@ INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, 
     ('pt-PT', 'partial', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('pt-PT', 'final', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "operating_point": "enhanced"}'),
+     '{"diarization": true, "operating_point": "enhanced", "max_delay": 4.0, "max_delay_mode": "flexible", "enable_entities": true, "punctuation_overrides": {"sensitivity": 0.7}, "speaker_diarization_config": {"max_speakers": 10}}'),
 
     -- Budget Tier
     ('pt-PT', 'partial', 'budget', 'soniox', 'google_v2',
@@ -124,7 +124,7 @@ INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, 
     ('pt-BR', 'partial', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('pt-BR', 'final', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "operating_point": "enhanced"}'),
+     '{"diarization": true, "operating_point": "enhanced", "max_delay": 4.0, "max_delay_mode": "flexible", "enable_entities": true, "punctuation_overrides": {"sensitivity": 0.7}, "speaker_diarization_config": {"max_speakers": 10}}'),
 
     -- Budget Tier
     ('pt-BR', 'partial', 'budget', 'soniox', 'google_v2',
@@ -146,7 +146,7 @@ INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, 
     ('ru-RU', 'partial', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('ru-RU', 'final', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "operating_point": "enhanced"}'),
+     '{"diarization": true, "operating_point": "enhanced", "max_delay": 4.0, "max_delay_mode": "flexible", "enable_entities": true, "punctuation_overrides": {"sensitivity": 0.7}, "speaker_diarization_config": {"max_speakers": 10}}'),
 
     -- Budget Tier
     ('ru-RU', 'partial', 'budget', 'soniox', 'google_v2',
