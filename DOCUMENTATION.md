@@ -32,7 +32,7 @@
 - **Visual Feedback** - Spinning indicators with 28-language localization
 
 ### Technology Stack
-- **Frontend**: React 18 + Vite + React Router
+- **Frontend**: React 18 + Vite + React Router + i18next (internationalization)
 - **Backend**: FastAPI (Python 3.11+)
 - **Database**: PostgreSQL 16
 - **Cache/Queue**: Redis 7
@@ -40,6 +40,7 @@
 - **STT**: OpenAI Whisper API
 - **MT**: Local translation workers + OpenAI GPT-4o-mini
 - **Deployment**: Docker Compose
+- **i18n**: 12 languages (EN, PL, ES, FR, DE, AR, IT, PT, RU, ZH, JA, KR)
 
 ---
 
@@ -858,12 +859,127 @@ Final translation.
 
 ---
 
+## 🌍 Internationalization (i18n)
+
+### Overview
+LiveTranslator supports **12 languages** with complete UI translations using i18next. All pages and components are fully translated, providing a native experience for users worldwide.
+
+### Supported Languages
+1. 🇬🇧 **English (en)** - English
+2. 🇵🇱 **Polski (pl)** - Polish
+3. 🇪🇸 **Español (es)** - Spanish
+4. 🇫🇷 **Français (fr)** - French
+5. 🇩🇪 **Deutsch (de)** - German
+6. 🇸🇦 **العربية (ar)** - Arabic (with RTL support)
+7. 🇮🇹 **Italiano (it)** - Italian
+8. 🇵🇹 **Português (pt)** - Portuguese
+9. 🇷🇺 **Русский (ru)** - Russian
+10. 🇨🇳 **中文 (zh)** - Chinese (Simplified)
+11. 🇯🇵 **日本語 (ja)** - Japanese
+12. 🇰🇷 **한국어 (ko)** - Korean
+
+### Translation System Architecture
+
+```
+web/src/
+├── i18n.js                    # i18next configuration
+├── locales/                   # Translation files
+│   ├── en.json               # English (source)
+│   ├── pl.json               # Polish
+│   ├── es.json               # Spanish
+│   ├── fr.json               # French
+│   ├── de.json               # German
+│   ├── ar.json               # Arabic
+│   ├── it.json               # Italian
+│   ├── pt.json               # Portuguese
+│   ├── ru.json               # Russian
+│   ├── zh.json               # Chinese
+│   ├── ja.json               # Japanese
+│   └── ko.json               # Korean
+├── utils/
+│   └── languageSync.js       # Language synchronization utilities
+└── components/
+    └── LanguageSelector.jsx  # Language selector dropdown
+```
+
+### Translation Coverage
+
+**All pages are fully translated:**
+- Landing Page
+- Login/Signup Pages
+- Rooms Management Page
+- Profile Page (all tabs: Settings, Account, Subscription, Billing, History)
+- Room Chat Interface
+
+**Translation sections:**
+- `common` - Common UI elements (buttons, labels, states)
+- `nav` - Navigation items
+- `auth` - Authentication pages
+- `rooms` - Room management
+- `room` - Live chat interface
+- `profile` - User profile settings
+- `billing` - Billing and costs
+- `settings` - Application settings
+- `errors` - Error messages
+- `languages` - Language names
+- `landing` - Landing page
+- `joinPage` - Join room via invite
+- `profileTabs` - Profile tab sections
+
+### Language Synchronization
+
+The application uses a unified language system that syncs across:
+1. **UI Language**: Controls all interface text
+2. **User Profile**: Stores preferred language in database
+3. **LocalStorage**: Persists language selection
+4. **Translation Language**: Auto-sets target language for real-time translation
+
+**Key Features:**
+- Language changes are immediate (no page reload)
+- Language preference synced with user profile (if logged in)
+- Falls back to browser language on first visit
+- Maintains language selection across sessions
+
+### Usage in Components
+
+```jsx
+import { useTranslation } from "react-i18next";
+
+function MyComponent() {
+  const { t } = useTranslation();
+
+  return (
+    <div>
+      <h1>{t('common.title')}</h1>
+      <button>{t('common.submit')}</button>
+    </div>
+  );
+}
+```
+
+### Adding New Translations
+
+1. Add translation key to `/web/src/locales/en.json`
+2. Copy the key to all other language files
+3. Translate the values for each language
+4. Use in component: `{t('section.key')}`
+5. Rebuild web container: `docker compose build web`
+
+### Language Detection
+
+i18next automatically detects language from:
+1. LocalStorage (`lt_user_language` key)
+2. Browser language settings
+3. Falls back to English if not found
+
 ## 🎨 Frontend Structure
 
 ### Technology Stack
 - React 18
 - Vite (build tool)
 - React Router v6
+- i18next + react-i18next (internationalization)
+- i18next-browser-languagedetector (language detection)
 - @ricky0123/vad-web (Voice Activity Detection)
 
 ### File Structure
@@ -1227,5 +1343,5 @@ curl https://livetranslator.../readyz
 
 ---
 
-**Last Updated:** 2025-10-21
-**Version:** 1.0.0
+**Last Updated:** 2025-10-22
+**Version:** 1.1.0 - Added full internationalization support for 12 languages

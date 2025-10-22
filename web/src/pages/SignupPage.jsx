@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Footer from "../components/Footer";
 
 export default function SignupPage({ onSignup }) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -69,10 +71,10 @@ export default function SignupPage({ onSignup }) {
           fontSize: "clamp(1.75rem, 5vw, 2rem)",
           marginBottom: "0.5rem"
         }}>
-          Create Account
+          {t('auth.createAccount')}
         </h1>
         <p style={{color: "#999", marginBottom: "2rem", fontSize: "0.95rem"}}>
-          Join LiveTranslator to start collaborating
+          {t('auth.joinSubtitle')}
         </p>
         
         <form onSubmit={handleSubmit}>
@@ -83,7 +85,7 @@ export default function SignupPage({ onSignup }) {
               marginBottom: "0.5rem",
               fontSize: "0.95rem"
             }}>
-              Email
+              {t('auth.email')}
             </label>
             <input
               type="email"
@@ -112,11 +114,11 @@ export default function SignupPage({ onSignup }) {
               marginBottom: "0.5rem",
               fontSize: "0.95rem"
             }}>
-              Display Name (optional)
+              {t('auth.displayNameOptional')}
             </label>
             <input
               type="text"
-              placeholder="Your Name"
+              placeholder={t('auth.yourName')}
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
               autoComplete="name"
@@ -140,7 +142,7 @@ export default function SignupPage({ onSignup }) {
               marginBottom: "0.5rem",
               fontSize: "0.95rem"
             }}>
-              Password
+              {t('auth.password')}
             </label>
             <input
               type="password"
@@ -193,7 +195,7 @@ export default function SignupPage({ onSignup }) {
               WebkitAppearance: "none"
             }}
           >
-            {loading ? "Creating account..." : "Create Account"}
+            {loading ? t('auth.creatingAccount') : t('auth.createAccount')}
           </button>
         </form>
         
@@ -203,7 +205,7 @@ export default function SignupPage({ onSignup }) {
           marginTop: "1.5rem",
           fontSize: "0.9rem"
         }}>
-          Already have an account?{" "}
+          {t('auth.hasAccount')}{" "}
           <span
             onClick={() => navigate("/login")}
             style={{
@@ -212,7 +214,7 @@ export default function SignupPage({ onSignup }) {
               textDecoration: "underline"
             }}
           >
-            Sign in
+            {t('auth.signIn')}
           </span>
         </p>
         </div>

@@ -23,6 +23,375 @@ LiveTranslator will evolve from a proof-of-concept into a production-ready SaaS 
 
 ---
 
+## 🚀 Phase 0: STT/MT Provider Testing & Admin Controls (TOP PRIORITY)
+
+### 🔥 0.1 Admin User & Database Setup
+
+**Status:** Not Started
+**Priority:** CRITICAL
+**Estimated Time:** 30 minutes
+
+**📋 Current State Review:**
+- ✅ `rooms` table already has `is_public`, `requires_login`, `max_participants` (from migration 001)
+- ❌ `users` table does NOT have `is_admin` field yet
+- ❌ `rooms` table does NOT have STT provider override fields yet
+- ✅ `room_costs` table already has `pipeline`, `mode` fields for tracking different providers
+- ✅ Current STT modes: LT_STT_PARTIAL_MODE supports "local" or "openai_chunked"
+
+**Tasks:**
+- [ ] Create migration `005_add_admin_and_stt_settings.sql` (combines admin + STT settings)
+- [ ] Run migration on database
+- [ ] Update `api/models.py` - Add `is_admin` to User, `stt_*_provider` to Room, create SystemSettings model
+- [ ] Update `api/auth.py` - Add `require_admin()` dependency
+- [ ] Test admin check works
+
+**Migration SQL:**
+```sql
+-- File: migrations/005_add_admin_and_stt_settings.sql
+
+-- Add is_admin to users table
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE NOT NULL;
+
+-- Add STT provider overrides to rooms table (NULL = use global default)
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS stt_partial_provider VARCHAR(50) DEFAULT NULL;
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS stt_final_provider VARCHAR(50) DEFAULT NULL;
+
+-- Create system_settings table for global configuration
+CREATE TABLE IF NOT EXISTS system_settings (
+    id SERIAL PRIMARY KEY,
+    key VARCHAR(100) UNIQUE NOT NULL,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+-- Insert default STT settings
+INSERT INTO system_settings (key, value) VALUES
+    ('stt_partial_provider_default', 'openai_chunked'),
+    ('stt_final_provider_default', 'openai')
+ON CONFLICT (key) DO NOTHING;
+
+-- Grant admin to YOU@example.com
+UPDATE users SET is_admin = TRUE WHERE email = 'YOU@example.com';
+```
+
+**Files to Create:**
+- `migrations/005_add_admin_and_stt_settings.sql`
+
+**Files to Modify:**
+- `api/models.py` - Add fields to User/Room models, create SystemSettings model
+- `api/auth.py` - Add `require_admin()` dependency
+
+---
+
+### 🔥 0.2 Admin Settings UI
+
+**Status:** Not Started
+**Priority:** CRITICAL
+**Estimated Time:** 1-2 days
+
+**📋 Current Frontend Structure:**
+- Routes defined in `web/src/main.jsx`: /, /login, /signup, /join/:code, /rooms, /room/:id, /profile
+- No shared navigation component yet (each page has its own header)
+- Need to add `/admin` route and navigation link
+
+**Tasks:**
+- [ ] Add `/admin` route to `main.jsx`
+- [ ] Create `AdminSettingsPage.jsx` with tabs:
+  - **STT Settings** - Choose provider for partials/finals
+  - **MT Settings** - List available translation providers
+  - **Global Defaults** - Set default models for new rooms
+- [ ] Add "Admin" navigation link (visible only if `user.is_admin`)
+  - Add to RoomsPage header
+  - Add to RoomPage header
+  - Add to ProfilePage header
+- [ ] Create backend API endpoints for admin settings
+- [ ] Fetch user profile to check `is_admin` status
+
+**API Endpoints:**
+```
+GET  /api/admin/settings/stt          - Get current STT configuration
+POST /api/admin/settings/stt          - Update STT defaults
+GET  /api/admin/settings/mt           - Get current MT configuration
+POST /api/admin/settings/mt           - Update MT defaults
+GET  /api/admin/providers             - List all available providers
+```
+
+**Files to Create/Modify:**
+- `web/src/pages/AdminSettingsPage.jsx` (new)
+- `web/src/components/AdminMenu.jsx` (new)
+- `api/routers/admin_api.py` (new)
+- `api/models.py` - Add SystemSettings model
+
+---
+
+### 🔥 0.3 Per-Room STT Override (Admin Only)
+
+**Status:** Not Started
+**Priority:** CRITICAL
+**Estimated Time:** 1 day
+
+**Tasks:**
+- [ ] Add STT settings panel to RoomPage (visible only to room owner or admin)
+- [ ] Allow admin to override STT provider for specific room:
+  - Partials: OpenAI / Deepgram / Local
+  - Finals: OpenAI / ElevenLabs / None
+- [ ] Store room-specific settings in `rooms` table
+- [ ] Update STT router to check room settings before processing
+
+**Database Changes:**
+```sql
+ALTER TABLE rooms ADD COLUMN stt_partial_provider VARCHAR(50) DEFAULT NULL;
+ALTER TABLE rooms ADD COLUMN stt_final_provider VARCHAR(50) DEFAULT NULL;
+-- NULL means use global default
+```
+
+**Files to Create/Modify:**
+- `web/src/components/RoomSTTSettings.jsx` (new)
+- `web/src/pages/RoomPage.jsx` - Add settings panel
+- `api/routers/stt/router.py` - Check room settings
+- `api/rooms_api.py` - Add endpoints to update room STT config
+
+---
+
+### 🔥 0.4 Implement Deepgram Streaming for Partials
+
+**Status:** Not Started
+**Priority:** CRITICAL
+**Estimated Time:** 2-3 days
+
+**Tasks:**
+- [ ] Install Deepgram SDK: `pip install deepgram-sdk`
+- [ ] Create `api/routers/stt/deepgram_backend.py`
+- [ ] Implement WebSocket streaming handler
+- [ ] Add speaker diarization support (real-time)
+- [ ] Update router to support Deepgram mode: `LT_STT_PARTIAL_MODE=deepgram`
+- [ ] Add Deepgram API key to environment variables
+- [ ] Keep OpenAI as fallback option
+
+**Environment Variables:**
+```bash
+DEEPGRAM_API_KEY=your_key_here
+LT_STT_PARTIAL_MODE=deepgram  # or openai_chunked or local
+```
+
+**Files to Create/Modify:**
+- `api/routers/stt/deepgram_backend.py` (new)
+- `api/routers/stt/router.py` - Add Deepgram integration
+- `workers/stt/requirements.txt` - Add deepgram-sdk
+- `docker-compose.yml` - Add DEEPGRAM_API_KEY
+
+**Testing Checklist:**
+- [ ] Test single speaker transcription
+- [ ] Test real-time speaker diarization (2+ speakers)
+- [ ] Test language auto-detection
+- [ ] Compare latency: OpenAI vs Deepgram
+- [ ] Compare accuracy: OpenAI vs Deepgram
+- [ ] Test interim results (partials)
+- [ ] Test final results with speaker labels
+- [ ] **Update cost tracking system** - Add Deepgram pricing ($0.0065/min streaming)
+- [ ] Verify cost events published correctly for Deepgram usage
+
+---
+
+### 🔥 0.5 Implement ElevenLabs Batch for Finals
+
+**Status:** Not Started
+**Priority:** CRITICAL
+**Estimated Time:** 1-2 days
+
+**Tasks:**
+- [ ] Install httpx (already installed)
+- [ ] Create `api/routers/stt/elevenlabs_backend.py`
+- [ ] Implement batch transcription API call
+- [ ] Add speaker diarization parsing (up to 32 speakers)
+- [ ] Add audio event detection parsing (laughter, music, etc.)
+- [ ] Update `audio_end` handler to support ElevenLabs
+- [ ] Add ElevenLabs API key to environment variables
+- [ ] Keep OpenAI as fallback option
+
+**Environment Variables:**
+```bash
+ELEVENLABS_API_KEY=your_key_here
+LT_STT_FINAL_MODE=elevenlabs  # or openai or none
+```
+
+**Files to Create/Modify:**
+- `api/routers/stt/elevenlabs_backend.py` (new)
+- `api/routers/stt/router.py` - Add ElevenLabs integration in audio_end handler
+- `docker-compose.yml` - Add ELEVENLABS_API_KEY
+
+**Testing Checklist:**
+- [ ] Test batch transcription quality vs OpenAI
+- [ ] Test speaker diarization (2-5 speakers)
+- [ ] Test audio event detection (background noise, music, laughter)
+- [ ] Test word-level timestamps
+- [ ] Compare accuracy: OpenAI vs ElevenLabs
+- [ ] **Update cost tracking system** - Add ElevenLabs pricing ($0.40/hour)
+- [ ] Verify cost events published correctly for ElevenLabs usage
+- [ ] Test cost calculation with diarization enabled (same price)
+
+---
+
+### 🔥 0.6 Multi-Speaker Single-Room Scenario
+
+**Status:** Not Started
+**Priority:** CRITICAL
+**Estimated Time:** 2-3 days
+
+**📋 Current State:**
+- ✅ `segments` table already has `speaker_id VARCHAR(64)` field
+- Currently `speaker_id` stores device/client identifier (e.g., "web", "mobile")
+- Need to use STT provider's speaker labels instead (e.g., "1", "2", "3")
+
+**💡 NEW FEATURE: "Quick Multi-User Room" with Speaker Calibration**
+
+This feature allows users to:
+1. Create a room and enter "Speaker Detection" mode
+2. Everyone speaks for 10-30 seconds
+3. System detects unique speakers via STT diarization
+4. Admin assigns names + languages to each detected speaker
+5. Start session with proper speaker identification
+
+**User Flow:**
+```
+[Create Room] → [Detect Speakers] → [Configure Speakers] → [Start Session]
+                 (10-30s audio)      (name + language)      (live chat)
+```
+
+**Tasks:**
+
+**A. Speaker Detection/Calibration Phase:**
+- [ ] Add "Quick Multi-User Room" option to room creation
+- [ ] Create `SpeakerCalibrationPage.jsx`:
+  - Recording UI with countdown timer (10-30 seconds)
+  - "Everyone please speak now" instructions
+  - Visual indicator of audio activity
+- [ ] Send calibration audio to STT with diarization enabled
+- [ ] Parse speaker count and sample text per speaker
+- [ ] Create `SpeakerConfigurationPage.jsx`:
+  - Show detected speakers with sample text
+  - Input fields for name + language per speaker
+  - Color preview for each speaker
+  - "Start Room" button
+
+**B. Active Session with Configured Speakers:**
+- [ ] Update frontend to show speaker labels (with custom names)
+- [ ] Add speaker color coding in chat UI (per configured colors)
+- [ ] Display speaker language badges
+- [ ] Test Deepgram real-time speaker diarization
+- [ ] Test ElevenLabs batch speaker diarization
+- [ ] Handle speaker switching mid-sentence
+
+**Frontend Changes:**
+- [ ] Create `SpeakerCalibrationPage.jsx` (new) - Detection phase
+- [ ] Create `SpeakerConfigurationPage.jsx` (new) - Setup phase
+- [ ] Update `MessageBubble.jsx` to show configured speaker names
+- [ ] Add speaker color palette (8 distinct colors)
+- [ ] Add speaker legend/list in room sidebar showing names + languages
+- [ ] Add real-time translation per speaker's target language
+
+**Backend Changes:**
+- [ ] Update `speaker_id` field usage: change from device ID to STT provider's speaker ID
+- [ ] Update WebSocket events to include speaker_id from STT provider
+- [ ] Create speaker mapping table:
+  ```sql
+  CREATE TABLE room_speakers (
+      id SERIAL PRIMARY KEY,
+      room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE,
+      speaker_id INTEGER NOT NULL,  -- From STT provider (1, 2, 3...)
+      display_name VARCHAR(120) NOT NULL,  -- Custom name from calibration
+      target_language VARCHAR(10) NOT NULL,  -- Language per speaker (en, pl, ar...)
+      color VARCHAR(7) NOT NULL,  -- Hex color code (#FF5733)
+      sample_text TEXT,  -- Sample from calibration phase
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      UNIQUE(room_id, speaker_id)  -- One mapping per speaker per room
+  );
+
+  CREATE INDEX idx_room_speakers_room_id ON room_speakers(room_id);
+  ```
+- [ ] Add API endpoints:
+  ```
+  POST /api/rooms/{room_id}/speakers/detect   - Send calibration audio, get speaker list
+  POST /api/rooms/{room_id}/speakers/configure - Save speaker mappings
+  GET  /api/rooms/{room_id}/speakers           - Get configured speakers
+  PUT  /api/rooms/{room_id}/speakers/{id}      - Update speaker name/language
+  ```
+- [ ] Update STT router to use speaker mappings for display
+- [ ] Update MT router to translate per speaker's target language
+
+**Testing Scenarios:**
+- [ ] Calibration phase: 2 speakers speaking simultaneously
+- [ ] Calibration phase: 3-5 speakers in group
+- [ ] Calibration phase: Different languages (en, pl, ar)
+- [ ] Active session: Speaker switching (turn-taking)
+- [ ] Active session: Overlapping speech detection
+- [ ] Active session: Background speaker vs foreground speaker
+- [ ] Active session: Translation to each speaker's target language
+
+**Files to Create/Modify:**
+- `migrations/006_add_room_speakers.sql` (new) - Speaker mapping table
+- `web/src/pages/SpeakerCalibrationPage.jsx` (new) - Detection phase
+- `web/src/pages/SpeakerConfigurationPage.jsx` (new) - Configuration UI
+- `web/src/components/MessageBubble.jsx` - Add speaker name + color
+- `web/src/components/SpeakerLegend.jsx` (new) - Sidebar speaker list
+- `web/src/pages/RoomPage.jsx` - Integrate speaker info
+- `web/src/pages/RoomsPage.jsx` - Add "Quick Multi-User Room" option
+- `api/models.py` - Add RoomSpeaker model
+- `api/routers/speakers_api.py` (new) - Speaker detection/config endpoints
+- `api/routers/stt/router.py` - Use speaker mappings
+- `api/routers/mt/router.py` - Translate per speaker's language
+
+---
+
+### 🔥 0.7 Comprehensive Testing & Documentation
+
+**Status:** Not Started
+**Priority:** HIGH
+**Estimated Time:** 1-2 days
+
+**Tasks:**
+- [ ] Create testing matrix spreadsheet
+- [ ] Test all provider combinations:
+  - Partials: OpenAI + Finals: OpenAI (baseline)
+  - Partials: Deepgram + Finals: OpenAI
+  - Partials: Deepgram + Finals: ElevenLabs
+  - Partials: OpenAI + Finals: ElevenLabs
+- [ ] Document accuracy, latency, cost for each combination
+- [ ] Test edge cases:
+  - Very noisy environment
+  - Multiple languages in same session
+  - Silent periods (VAD behavior)
+  - Very fast speech
+  - Accented speech
+- [ ] Create admin documentation for provider selection
+- [ ] Update DOCUMENTATION.md with new architecture
+
+**Testing Metrics to Track:**
+| Provider Combo | Latency (ms) | WER (%) | Cost/hour | Speaker Accuracy | Notes |
+|----------------|--------------|---------|-----------|------------------|-------|
+| OpenAI + OpenAI | ? | ? | $0.40 | N/A | Baseline |
+| Deepgram + OpenAI | ? | ? | $0.39 | ? | ? |
+| Deepgram + ElevenLabs | ? | ? | $0.79 | ? | ? |
+| OpenAI + ElevenLabs | ? | ? | $0.80 | ? | ? |
+
+**Files to Create/Modify:**
+- `TESTING_RESULTS.md` (new)
+- `DOCUMENTATION.md` - Update STT architecture section
+- `ADMIN_GUIDE.md` (new)
+- `api/services/cost_tracker_service.py` - Add Deepgram/ElevenLabs pricing
+- `api/cost_tracker.py` - Update cost calculation logic
+
+**Cost Tracking Updates Needed:**
+- [ ] Add Deepgram pricing model: $0.0065/min streaming, $0.0043/min batch
+- [ ] Add ElevenLabs pricing model: $0.40/hour ($0.00667/min)
+- [ ] Update cost_tracker to handle multiple STT providers
+- [ ] Add provider field to cost_events: `{"pipeline": "stt", "mode": "deepgram", ...}`
+- [ ] Update cost calculation queries to aggregate by provider
+- [ ] Update frontend cost display to show breakdown by provider
+- [ ] Test cost tracking accuracy with mixed provider usage
+
+---
+
 ## Phase 1: Core Invitation & Multi-Language Matrix (2-3 weeks)
 
 ### 🔥 1.1 Database Schema Changes

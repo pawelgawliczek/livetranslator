@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import QuickRoomModal from "../components/QuickRoomModal";
+import LanguageSelector from "../components/LanguageSelector";
 import Footer from "../components/Footer";
 
 export default function RoomsPage({ token, onLogout, onLogin }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const [newRoomName, setNewRoomName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [rooms, setRooms] = useState([]);
@@ -100,10 +103,11 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
           marginBottom: "2rem"
         }}>
           <div>
-            <h1 style={{fontSize: "2rem", marginBottom: "0.5rem"}}>Rooms</h1>
-            <p style={{color: "#999", fontSize: "0.9rem"}}>Logged in as {userEmail}</p>
+            <h1 style={{fontSize: "2rem", marginBottom: "0.5rem"}}>{t('rooms.title')}</h1>
+            <p style={{color: "#999", fontSize: "0.9rem"}}>{t('common.login')} {userEmail}</p>
           </div>
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <LanguageSelector token={token} />
             <button
               onClick={() => navigate("/profile")}
               style={{
@@ -116,7 +120,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
                 fontWeight: "600"
               }}
             >
-              Profile
+              {t('common.profile')}
             </button>
             <button
               onClick={onLogout}
@@ -130,7 +134,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
                 fontWeight: "600"
               }}
             >
-              Logout
+              {t('common.logout')}
             </button>
           </div>
         </div>
@@ -142,7 +146,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
           marginBottom: "2rem",
           border: "1px solid #333"
         }}>
-          <h2 style={{fontSize: "1.25rem", marginBottom: "1rem"}}>Create New Room</h2>
+          <h2 style={{fontSize: "1.25rem", marginBottom: "1rem"}}>{t('rooms.createRoom')}</h2>
 
           {/* Quick Room Button */}
           <div style={{marginBottom: "1rem"}}>
@@ -175,7 +179,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
               }}
             >
               <span style={{fontSize: "1.5rem"}}>⚡</span>
-              Quick Room (Instant QR Code)
+              {t('rooms.quickRoom')} ({t('quickRoom.createButton')})
             </button>
           </div>
 
@@ -185,13 +189,13 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
             fontSize: "0.85rem",
             margin: "1rem 0"
           }}>
-            or create a named room
+            {t('common.or')} {t('rooms.createRoom').toLowerCase()}
           </div>
 
           <div style={{display: "flex", gap: "1rem"}}>
             <input
               type="text"
-              placeholder="Room name..."
+              placeholder={t('rooms.roomName') + "..."}
               value={newRoomName}
               onChange={e => setNewRoomName(e.target.value)}
               onKeyDown={e => e.key === "Enter" && createRoom()}
@@ -217,20 +221,20 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
                 fontWeight: "600"
               }}
             >
-              Create
+              {t('rooms.createRoom')}
             </button>
           </div>
         </div>
         
         <div>
-          <h2 style={{fontSize: "1.25rem", marginBottom: "1rem"}}>Available Rooms</h2>
+          <h2 style={{fontSize: "1.25rem", marginBottom: "1rem"}}>{t('nav.rooms')}</h2>
           {loading ? (
             <div style={{textAlign: "center", color: "#666", padding: "2rem"}}>
-              Loading rooms...
+              {t('common.loading')}
             </div>
           ) : rooms.length === 0 ? (
             <div style={{textAlign: "center", color: "#666", padding: "2rem"}}>
-              No rooms yet. Create one above!
+              {t('rooms.noRooms')}. {t('rooms.createFirst')}
             </div>
           ) : (
             <div style={{display: "flex", flexDirection: "column", gap: "1rem"}}>
@@ -278,7 +282,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
                           gap: "0.25rem"
                         }}>
                           <span>🌍</span>
-                          Public
+                          {t('rooms.public')}
                         </span>
                       )}
                       {!room.is_public && (
@@ -294,7 +298,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
                           gap: "0.25rem"
                         }}>
                           <span>🔒</span>
-                          Private
+                          {t('rooms.private')}
                         </span>
                       )}
                       {!room.is_owner && (
@@ -310,13 +314,13 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
                           gap: "0.25rem"
                         }}>
                           <span>👥</span>
-                          Shared
+                          {t('rooms.shared')}
                         </span>
                       )}
                     </div>
                   </div>
                   <div style={{color: "#999", fontSize: "0.85rem"}}>
-                    Created {new Date(room.created_at).toLocaleDateString()}
+                    {t('rooms.created')} {new Date(room.created_at).toLocaleDateString()}
                   </div>
                 </div>
               ))}

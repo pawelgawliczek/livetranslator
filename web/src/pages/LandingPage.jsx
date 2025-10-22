@@ -1,10 +1,12 @@
 import React, { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Footer from "../components/Footer";
 
 export default function LandingPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   
   // Check for token in URL (from Google OAuth redirect)
   useEffect(() => {
@@ -39,7 +41,7 @@ export default function LandingPage() {
           marginBottom: "1rem",
           textAlign: "center"
         }}>
-          LiveTranslator
+          {t('landing.title')}
         </h1>
 
         <p style={{
@@ -48,7 +50,7 @@ export default function LandingPage() {
           textAlign: "center",
           maxWidth: "600px"
         }}>
-          Real-time multilingual speech collaboration platform
+          {t('landing.subtitle')}
         </p>
 
         <div style={{display: "flex", gap: "1rem", flexWrap: "wrap", justifyContent: "center"}}>
@@ -66,7 +68,7 @@ export default function LandingPage() {
               minWidth: "150px"
             }}
           >
-            Sign In
+            {t('landing.signIn')}
           </button>
 
           <button
@@ -83,7 +85,7 @@ export default function LandingPage() {
               minWidth: "150px"
             }}
           >
-            Create Account
+            {t('landing.createAccount')}
           </button>
         </div>
       </div>

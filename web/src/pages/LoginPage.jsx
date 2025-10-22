@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Footer from "../components/Footer";
 
 export default function LoginPage({ onLogin }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -78,10 +80,10 @@ export default function LoginPage({ onLogin }) {
           fontSize: "clamp(1.75rem, 5vw, 2rem)",
           marginBottom: "0.5rem"
         }}>
-          Welcome Back
+          {t('auth.welcomeBack')}
         </h1>
         <p style={{color: "#999", marginBottom: "2rem", fontSize: "0.95rem"}}>
-          Sign in to your LiveTranslator account
+          {t('auth.signInSubtitle')}
         </p>
         
         {/* Google Sign In Button */}
@@ -111,7 +113,7 @@ export default function LoginPage({ onLogin }) {
             <path d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71 0-.593.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
             <path d="M9.003 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.464.891 11.426 0 9.003 0 5.485 0 2.44 2.017.96 4.958L3.967 7.29c.708-2.127 2.692-3.71 5.036-3.71z" fill="#EA4335"/>
           </svg>
-          Continue with Google
+          {t('auth.continueWithGoogle')}
         </button>
         
         {/* Divider */}
@@ -133,7 +135,7 @@ export default function LoginPage({ onLogin }) {
               marginBottom: "0.5rem",
               fontSize: "0.95rem"
             }}>
-              Email
+              {t('auth.email')}
             </label>
             <input
               type="email"
@@ -162,7 +164,7 @@ export default function LoginPage({ onLogin }) {
               marginBottom: "0.5rem",
               fontSize: "0.95rem"
             }}>
-              Password
+              {t('auth.password')}
             </label>
             <input
               type="password"
@@ -214,7 +216,7 @@ export default function LoginPage({ onLogin }) {
               WebkitAppearance: "none"
             }}
           >
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? t('auth.signingIn') : t('auth.signInButton')}
           </button>
         </form>
         
@@ -224,7 +226,7 @@ export default function LoginPage({ onLogin }) {
           marginTop: "1.5rem",
           fontSize: "0.9rem"
         }}>
-          Don't have an account?{" "}
+          {t('auth.noAccount')}{" "}
           <span
             onClick={() => navigate("/signup")}
             style={{
@@ -233,7 +235,7 @@ export default function LoginPage({ onLogin }) {
               textDecoration: "underline"
             }}
           >
-            Sign up
+            {t('auth.signUp')}
           </span>
         </p>
         </div>

@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { loadLanguageFromProfile, getUserLanguage } from "../utils/languageSync";
+import LanguageSelector from "../components/LanguageSelector";
 import Footer from "../components/Footer";
 
 const LANGUAGES = [
@@ -19,6 +22,7 @@ const LANGUAGES = [
 
 export default function ProfilePage({ token, onLogout }) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("settings");
   const [profile, setProfile] = useState(null);
   const [subscription, setSubscription] = useState(null);
@@ -28,7 +32,6 @@ export default function ProfilePage({ token, onLogout }) {
 
   // Form states
   const [displayName, setDisplayName] = useState("");
-  const [preferredLang, setPreferredLang] = useState("en");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -41,6 +44,8 @@ export default function ProfilePage({ token, onLogout }) {
       return;
     }
     fetchProfileData();
+    // Load language from profile on mount
+    loadLanguageFromProfile(token);
   }, [token]);
 
   async function fetchProfileData() {
@@ -54,7 +59,7 @@ export default function ProfilePage({ token, onLogout }) {
         const profileData = await profileRes.json();
         setProfile(profileData);
         setDisplayName(profileData.display_name);
-        setPreferredLang(profileData.preferred_lang);
+        // Language is now handled by unified system, no need to set state
       }
 
       // Fetch subscription
@@ -104,20 +109,20 @@ export default function ProfilePage({ token, onLogout }) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          display_name: displayName,
-          preferred_lang: preferredLang
+          display_name: displayName
+          // Language is handled by unified system via LanguageSelector
         })
       });
 
       if (res.ok) {
         const data = await res.json();
         setProfile(data);
-        setMessage("Profile updated successfully!");
+        setMessage(t('profile.profileUpdated'));
       } else {
-        setError("Failed to update profile");
+        setError(t('profile.updateFailed'));
       }
     } catch (e) {
-      setError("Failed to update profile");
+      setError(t('profile.updateFailed'));
     }
   }
 
@@ -127,12 +132,12 @@ export default function ProfilePage({ token, onLogout }) {
     setError("");
 
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match");
+      setError(t('profile.passwordsDoNotMatch'));
       return;
     }
 
     if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters");
+      setError(t('profile.passwordTooShort'));
       return;
     }
 
@@ -194,7 +199,7 @@ export default function ProfilePage({ token, onLogout }) {
   if (loading) {
     return (
       <div style={styles.container}>
-        <div style={styles.loading}>Loading...</div>
+        <div style={styles.loading}>{t('common.loading')}</div>
       </div>
     );
   }
@@ -203,13 +208,13 @@ export default function ProfilePage({ token, onLogout }) {
     <div style={styles.container}>
       <div style={{ flex: 1 }}>
         <div style={styles.header}>
-        <h1 style={styles.title}>Profile Settings</h1>
+        <h1 style={styles.title}>{t('profile.title')}</h1>
         <div style={styles.headerButtons}>
           <button onClick={() => navigate("/rooms")} style={styles.backButton}>
-            ← Back to Rooms
+            ← {t('profile.backToRooms')}
           </button>
           <button onClick={onLogout} style={styles.logoutButton}>
-            Sign Out
+            {t('profile.signOut')}
           </button>
         </div>
       </div>
@@ -222,41 +227,41 @@ export default function ProfilePage({ token, onLogout }) {
           onClick={() => setActiveTab("settings")}
           style={activeTab === "settings" ? styles.tabActive : styles.tab}
         >
-          Settings
+          {t('profileTabs.settings')}
         </button>
         <button
           onClick={() => setActiveTab("account")}
           style={activeTab === "account" ? styles.tabActive : styles.tab}
         >
-          Account
+          {t('common.account')}
         </button>
         <button
           onClick={() => setActiveTab("subscription")}
           style={activeTab === "subscription" ? styles.tabActive : styles.tab}
         >
-          Subscription
+          {t('common.subscription')}
         </button>
         <button
           onClick={() => setActiveTab("billing")}
           style={activeTab === "billing" ? styles.tabActive : styles.tab}
         >
-          Billing
+          {t('common.billing')}
         </button>
         <button
           onClick={() => setActiveTab("history")}
           style={activeTab === "history" ? styles.tabActive : styles.tab}
         >
-          History
+          {t('common.history')}
         </button>
       </div>
 
       <div style={styles.content}>
         {activeTab === "settings" && (
           <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>Settings</h2>
+            <h2 style={styles.sectionTitle}>{t('profileTabs.settings')}</h2>
             <form onSubmit={handleUpdateProfile} style={styles.form}>
               <div style={styles.formGroup}>
-                <label style={styles.label}>Display Name</label>
+                <label style={styles.label}>{t('auth.displayName')}</label>
                 <input
                   type="text"
                   value={displayName}
@@ -267,25 +272,17 @@ export default function ProfilePage({ token, onLogout }) {
               </div>
 
               <div style={styles.formGroup}>
-                <label style={styles.label}>Preferred Language</label>
-                <select
-                  value={preferredLang}
-                  onChange={(e) => setPreferredLang(e.target.value)}
-                  style={styles.select}
-                >
-                  {LANGUAGES.map((lang) => (
-                    <option key={lang.code} value={lang.code}>
-                      {lang.name}
-                    </option>
-                  ))}
-                </select>
+                <label style={styles.label}>{t('profile.preferredLanguage')}</label>
+                <div style={{marginTop: "0.5rem"}}>
+                  <LanguageSelector token={token} />
+                </div>
                 <div style={styles.helpText}>
-                  This is your default language for translations
+                  {t('common.language')} controls both UI and translation language
                 </div>
               </div>
 
               <button type="submit" style={styles.button}>
-                Save Changes
+                {t('profile.saveChanges')}
               </button>
             </form>
           </div>
@@ -293,22 +290,22 @@ export default function ProfilePage({ token, onLogout }) {
 
         {activeTab === "account" && (
           <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>Account</h2>
+            <h2 style={styles.sectionTitle}>{t('common.account')}</h2>
 
             <div style={styles.infoGroup}>
-              <div style={styles.infoLabel}>Email</div>
+              <div style={styles.infoLabel}>{t('auth.email')}</div>
               <div style={styles.infoValue}>{profile?.email}</div>
             </div>
 
             <div style={styles.infoGroup}>
-              <div style={styles.infoLabel}>Account Type</div>
+              <div style={styles.infoLabel}>{t('profile.accountType')}</div>
               <div style={styles.infoValue}>
-                {profile?.google_id ? "Google OAuth" : "Email/Password"}
+                {profile?.google_id ? t('profile.googleOAuth') : t('profile.emailPassword')}
               </div>
             </div>
 
             <div style={styles.infoGroup}>
-              <div style={styles.infoLabel}>Member Since</div>
+              <div style={styles.infoLabel}>{t('profile.memberSince')}</div>
               <div style={styles.infoValue}>
                 {new Date(profile?.created_at).toLocaleDateString()}
               </div>
@@ -316,11 +313,11 @@ export default function ProfilePage({ token, onLogout }) {
 
             <div style={styles.divider}></div>
 
-            <h3 style={styles.subsectionTitle}>Change Password</h3>
+            <h3 style={styles.subsectionTitle}>{t('profile.changePassword')}</h3>
             <form onSubmit={handleChangePassword} style={styles.form}>
               {profile?.has_password && (
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>Current Password</label>
+                  <label style={styles.label}>{t('profile.currentPassword')}</label>
                   <input
                     type="password"
                     value={currentPassword}
@@ -332,7 +329,7 @@ export default function ProfilePage({ token, onLogout }) {
               )}
 
               <div style={styles.formGroup}>
-                <label style={styles.label}>New Password</label>
+                <label style={styles.label}>{t('profile.newPassword')}</label>
                 <input
                   type="password"
                   value={newPassword}
@@ -343,7 +340,7 @@ export default function ProfilePage({ token, onLogout }) {
               </div>
 
               <div style={styles.formGroup}>
-                <label style={styles.label}>Confirm New Password</label>
+                <label style={styles.label}>{t('profile.confirmNewPassword')}</label>
                 <input
                   type="password"
                   value={confirmPassword}
@@ -354,7 +351,7 @@ export default function ProfilePage({ token, onLogout }) {
               </div>
 
               <button type="submit" style={styles.button}>
-                Change Password
+                {t('profile.changePassword')}
               </button>
             </form>
           </div>
