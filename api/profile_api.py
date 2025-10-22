@@ -23,6 +23,7 @@ class ProfileOut(BaseModel):
     preferred_lang: str
     google_id: Optional[str]
     has_password: bool
+    is_admin: bool
     created_at: datetime
 
 class ProfileUpdateIn(BaseModel):
@@ -48,6 +49,7 @@ def get_profile(user: dict = Depends(get_current_user), db: Session = Depends(ge
         preferred_lang=user.preferred_lang,
         google_id=user.google_id,
         has_password=user.password_hash is not None,
+        is_admin=user.is_admin,
         created_at=user.created_at
     )
 
@@ -79,6 +81,7 @@ def update_profile(
         preferred_lang=user.preferred_lang,
         google_id=user.google_id,
         has_password=user.password_hash is not None,
+        is_admin=user.is_admin,
         created_at=user.created_at
     )
 

@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse
 from passlib.hash import bcrypt_sha256 as bcrypt
-from jose import jwt
+from jose import jwt, JWTError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from google.oauth2 import id_token
@@ -133,3 +133,35 @@ def _issue(u: User) -> TokenOut:
         "exp": datetime.utcnow() + timedelta(hours=12)
     }
     return TokenOut(access_token=jwt.encode(claims, JWT_SECRET, algorithm=ALGO))
+
+def get_current_user(authorization: str = Header(None), db: Session = Depends(get_db)) -> User:
+    """Dependency to get the current authenticated user from JWT token"""
+    if not authorization:
+        raise HTTPException(401, "Not authenticated")
+
+    # Extract token from "Bearer <token>" format
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(401, "Invalid authorization header")
+
+    token = parts[1]
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGO])
+        user_id = int(payload.get("sub"))
+        if not user_id:
+            raise HTTPException(401, "Invalid token")
+    except JWTError:
+        raise HTTPException(401, "Invalid token")
+
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(401, "User not found")
+
+    return user
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency to require admin privileges"""
+    if not current_user.is_admin:
+        raise HTTPException(403, "Admin access required")
+    return current_user

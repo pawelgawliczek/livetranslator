@@ -13,7 +13,7 @@ except Exception:
 from faster_whisper import WhisperModel
 
 # ---- config
-REDIS_URL   = os.getenv("REDIS_URL", "redis://redis:6379/0")
+REDIS_URL   = os.getenv("REDIS_URL", "redis://redis:6379/5")
 MODEL_NAME  = os.getenv("WHISPER_MODEL", "base")
 COMPUTE_TY  = os.getenv("COMPUTE_TYPE", "int8")
 NUM_THREADS = int(os.getenv("NUM_THREADS", "2"))
@@ -25,9 +25,28 @@ COND_PREV   = os.getenv("CONDITION_ON_PREVIOUS_TEXT", "true").lower() == "true"
 model = WhisperModel(MODEL_NAME, device="cpu", compute_type=COMPUTE_TY, num_workers=NUM_THREADS)
 
 # per stream buffers (room+device) of float32 mono @16k
-buffers = {}
+buffers = {}  # Rolling 3-second buffer for partials
+full_buffers = {}  # Full audio accumulation for finals
+# track if current segment has been finalized (to avoid double-increment)
+segment_finalized = {}
 
 def _key(room, device): return f"{room}::{device}"
+
+async def get_or_create_segment_id(room, redis_client):
+    """Get current segment ID for room from Redis (synchronized with OpenAI router)"""
+    key = f"room:{room}:segment_counter"
+    segment_id = await redis_client.get(key)
+    if segment_id is None:
+        # Initialize counter
+        await redis_client.set(key, "1")
+        return 1
+    return int(segment_id)
+
+async def increment_segment_id(room, redis_client):
+    """Increment segment ID for next segment in Redis"""
+    key = f"room:{room}:segment_counter"
+    new_id = await redis_client.incr(key)
+    return new_id
 
 def pcm16_b64_to_float32(b64: str) -> np.ndarray:
     if not b64: return np.zeros(0, dtype=np.float32)
@@ -56,24 +75,32 @@ async def stt_loop():
             audio = pcm16_b64_to_float32(data.get("pcm16_base64", ""))  # expected 16k mono
 
             k = _key(room, dev)
-            buf = buffers.get(k, np.zeros(0, dtype=np.float32))
-            # append
+
+            # Always use full accumulated audio for incremental transcription
+            # This way partials build up the complete text progressively
+            is_final_message = msg_type == "audio_chunk" or msg_type == "audio_end"
+
+            # Accumulate all audio in full buffer
+            full_buf = full_buffers.get(k, np.zeros(0, dtype=np.float32))
             if audio.size:
-                buf = np.concatenate([buf, audio])
-                # keep only last N seconds to cap compute
-                keep = int(MAX_TAIL_S * 16000)
-                if buf.size > keep:
-                    buf = buf[-keep:]
-                buffers[k] = buf
-                print(f"[STT Worker] Buffer size: {buf.size} samples ({buf.size/16000:.1f}s)")
+                full_buf = np.concatenate([full_buf, audio])
+                full_buffers[k] = full_buf
+
+            # Use full buffer for BOTH partials and finals (incremental transcription)
+            buf = full_buf
+            transcription_type = "Final" if is_final_message else "Partial"
+            print(f"[STT Worker] {transcription_type} - Full buffer: {buf.size} samples ({buf.size/16000:.1f}s)")
 
             # no audio → nothing to do
+            # Special case: audio_end with empty buffer means final was already sent
             if buf.size < 12800:  # need at least 1s
                 print(f"[STT Worker] Buffer too small ({buf.size} < 12800), skipping transcription")
+                # Don't increment segment here - only increment when we actually publish a final
+                # This avoids double-increment when multiple audio_end messages arrive
                 continue
 
             print(f"[STT Worker] Starting transcription of {buf.size/16000:.1f}s buffer...")
-            # transcribe last window; beam_size=3 for better quality (vs beam_size=1)
+            # transcribe; beam_size=3 for better quality (vs beam_size=1)
             segments, _ = model.transcribe(
                 buf,
                 language=None,  # auto
@@ -87,25 +114,59 @@ async def stt_loop():
             )
 
             print(f"[STT Worker] Transcription complete, processing segments...")
-            # pick the last segment text if any
-            last_text = None
+            # Combine ALL segments into complete text
+            all_segments = []
             for seg in segments:
-                last_text = seg.text.strip()
-                print(f"[STT Worker] Segment: {seg.text.strip()}")
+                seg_text = seg.text.strip()
+                if seg_text:
+                    all_segments.append(seg_text)
+                    print(f"[STT Worker] Segment: {seg_text}")
 
-            if last_text:
-                print(f"[STT Worker] Publishing result: {last_text}")
+            full_text = " ".join(all_segments) if all_segments else None
+
+            if full_text:
+                print(f"[STT Worker] Publishing result: {full_text}")
+
+                # Determine if this is a partial or final based on message type
+                is_final = msg_type == "audio_chunk" or msg_type == "audio_end"
+                event_type = "stt_final" if is_final else "stt_partial"
+
+                # Get current segment ID from Redis (synchronized with OpenAI router)
+                segment_id = await get_or_create_segment_id(room, r)
+
+                # Reset finalized flag when publishing partials (new utterance started)
+                if not is_final and segment_finalized.get(room, False):
+                    segment_finalized[room] = False
+                    print(f"[STT Worker] → New utterance started, reset finalized flag")
+
                 payload = {
-                    "type": "partial",
+                    "type": event_type,
                     "room_id": room,
-                    "segment_id": seq,         # simple mapping for demo
-                    "revision": 1,
+                    "segment_id": segment_id,
+                    "revision": seq,  # Use seq as revision number
                     "ts_iso": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "text": last_text,
-                    "lang": "auto"
+                    "text": full_text,
+                    "lang": "auto",
+                    "final": is_final,
+                    "speaker": data.get("speaker", "system"),
+                    "target_lang": data.get("target_lang", "en"),
+                    "device": dev
                 }
                 await r.publish("stt_events", jdumps(payload).decode())
-                print(f"[STT Worker] ✓ Published to stt_events")
+                print(f"[STT Worker] ✓ Published {event_type} to stt_events (segment={segment_id}, rev={seq})")
+
+                # Increment segment ID for next utterance when we finalize
+                # Only increment ONCE per segment (multiple audio_end messages can arrive)
+                if is_final:
+                    if not segment_finalized.get(room, False):
+                        segment_finalized[room] = True
+                        next_segment_id = await increment_segment_id(room, r)
+                        # Clear full buffer for next utterance
+                        if k in full_buffers:
+                            del full_buffers[k]
+                        print(f"[STT Worker] → Finalized segment {segment_id}, next will be {next_segment_id}")
+                    else:
+                        print(f"[STT Worker] → Segment already finalized, skipping increment")
             else:
                 print(f"[STT Worker] No text detected in audio")
 

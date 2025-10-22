@@ -9,6 +9,7 @@ import RoomsPage from "./pages/RoomsPage";
 import RoomPage from "./pages/RoomPage";
 import JoinPage from "./pages/JoinPage";
 import ProfilePage from "./pages/ProfilePage";
+import AdminSettingsPage from "./pages/AdminSettingsPage";
 
 function App() {
   const [token, setToken] = React.useState(localStorage.getItem("token") || "");
@@ -41,6 +42,10 @@ function App() {
         <Route
           path="/profile"
           element={token ? <ProfilePage token={token} onLogout={logout} /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/admin"
+          element={token ? <AdminSettingsPage token={token} onLogout={logout} /> : <Navigate to="/login" />}
         />
       </Routes>
     </BrowserRouter>

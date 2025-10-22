@@ -11,6 +11,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
   const { t } = useTranslation();
   const [newRoomName, setNewRoomName] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showQuickRoom, setShowQuickRoom] = useState(false);
@@ -36,7 +37,22 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
   
   useEffect(() => {
     fetchRooms();
+    fetchProfile();
   }, []);
+
+  async function fetchProfile() {
+    try {
+      const response = await fetch("/api/profile", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setIsAdmin(data.is_admin || false);
+      }
+    } catch (e) {
+      console.error("Failed to fetch profile:", e);
+    }
+  }
   
   async function fetchRooms() {
     try {
@@ -108,6 +124,22 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <LanguageSelector token={token} />
+            {isAdmin && (
+              <button
+                onClick={() => navigate("/admin")}
+                style={{
+                  padding: "0.75rem 1.5rem",
+                  background: "#f59e0b",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "600"
+                }}
+              >
+                🛠️ Admin
+              </button>
+            )}
             <button
               onClick={() => navigate("/profile")}
               style={{

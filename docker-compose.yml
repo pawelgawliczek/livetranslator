@@ -176,6 +176,7 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: redis://redis:6379/5
+      POSTGRES_DSN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       STT_INPUT_CHANNEL: stt_input
       STT_OUTPUT_CHANNEL: stt_local_in
       LT_STT_PARTIAL_MODE: ${LT_STT_PARTIAL_MODE:-local}
@@ -185,6 +186,7 @@ services:
       OPENAI_STT_MODEL: ${OPENAI_STT_MODEL:-whisper-1}
     depends_on:
       redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
     networks: [stack_appnet]
 
   mt_router:

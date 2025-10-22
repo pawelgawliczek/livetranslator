@@ -13,6 +13,7 @@ class User(Base):
     google_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True, index=True)
     display_name: Mapped[str] = mapped_column(String(120), default="", nullable=False)
     preferred_lang: Mapped[str] = mapped_column(String(16), default="en", nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 class Room(Base):
@@ -28,6 +29,10 @@ class Room(Base):
     is_public: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     requires_login: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     max_participants: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+
+    # STT provider overrides (NULL = use global default)
+    stt_partial_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    stt_final_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     owner = relationship("User")
 
@@ -135,3 +140,11 @@ class RoomArchive(Base):
     archive_reason: Mapped[str] = mapped_column(String(50), default="cleanup", nullable=False)
 
     owner = relationship("User")
+
+class SystemSettings(Base):
+    __tablename__ = "system_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

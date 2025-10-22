@@ -29,6 +29,7 @@ export default function ProfilePage({ token, onLogout }) {
   const [billing, setBilling] = useState(null);
   const [history, setHistory] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Form states
   const [displayName, setDisplayName] = useState("");
@@ -59,6 +60,7 @@ export default function ProfilePage({ token, onLogout }) {
         const profileData = await profileRes.json();
         setProfile(profileData);
         setDisplayName(profileData.display_name);
+        setIsAdmin(profileData.is_admin || false);
         // Language is now handled by unified system, no need to set state
       }
 
@@ -210,6 +212,11 @@ export default function ProfilePage({ token, onLogout }) {
         <div style={styles.header}>
         <h1 style={styles.title}>{t('profile.title')}</h1>
         <div style={styles.headerButtons}>
+          {isAdmin && (
+            <button onClick={() => navigate("/admin")} style={{...styles.backButton, background: "#f59e0b"}}>
+              🛠️ Admin
+            </button>
+          )}
           <button onClick={() => navigate("/rooms")} style={styles.backButton}>
             ← {t('profile.backToRooms')}
           </button>

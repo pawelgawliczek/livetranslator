@@ -16,7 +16,8 @@ export default function SettingsMenu({
   onTogglePersistence,
   isRoomAdmin = false,
   isPublic = false,
-  onTogglePublic
+  onTogglePublic,
+  onShowRoomAdminSettings
 }) {
   if (!isOpen) return null;
 
@@ -73,6 +74,12 @@ export default function SettingsMenu({
       onClick: onTogglePublic,
       isToggle: true,
       toggleValue: isPublic
+    }] : []),
+    // Only show Room Admin Settings for room admins (and not guests)
+    ...(!isGuest && isRoomAdmin && onShowRoomAdminSettings ? [{
+      icon: "⚙️",
+      label: "Room Admin Settings",
+      onClick: onShowRoomAdminSettings
     }] : []),
     {
       icon: isGuest ? "🔑" : "🚪",

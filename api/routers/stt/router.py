@@ -12,19 +12,21 @@ except:
     def jloads(b): return json.loads(b if isinstance(b, str) else b.decode())
 
 from openai_backend import transcribe_audio_chunk
+from settings_fetcher import get_room_stt_settings, init_db_pool, clear_cache, CACHE_CLEAR_CHANNEL
 
 # Config
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/5")
 INPUT_CHANNEL = os.getenv("STT_INPUT_CHANNEL", "stt_input")
 OUTPUT_CHANNEL = os.getenv("STT_OUTPUT_CHANNEL", "stt_local_in")
-STT_MODE = os.getenv("LT_STT_PARTIAL_MODE", "local")
+DEFAULT_STT_MODE = os.getenv("LT_STT_PARTIAL_MODE", "local")  # Renamed to DEFAULT
 STT_OUTPUT_EVENTS = os.getenv("STT_OUTPUT_EVENTS", "stt_events")
 COST_TRACKING_CHANNEL = os.getenv("COST_TRACKING_CHANNEL", "cost_events")
 
 print(f"[STT Router] Starting...")
-print(f"  Mode:   {STT_MODE}")
+print(f"  Default Mode: {DEFAULT_STT_MODE}")
 print(f"  Input:  {INPUT_CHANNEL}")
-print(f"  Output: {OUTPUT_CHANNEL if STT_MODE == 'local' else STT_OUTPUT_EVENTS}")
+print(f"  Output: {OUTPUT_CHANNEL if DEFAULT_STT_MODE == 'local' else STT_OUTPUT_EVENTS}")
+print(f"  Settings: Room-specific settings will be fetched from database")
 
 # Track current partial accumulation per room
 partial_sessions = {}  # room -> {segment_id, accumulated_text, speaker, target_lang}
@@ -35,11 +37,39 @@ async def get_next_segment_id(r: redis.Redis, room: str) -> int:
     segment_id = await r.incr(key)
     return segment_id
 
+async def cache_invalidation_listener():
+    """Listen for cache invalidation messages from Redis."""
+    r = redis.from_url(REDIS_URL, decode_responses=True)
+    pubsub = r.pubsub()
+    await pubsub.subscribe(CACHE_CLEAR_CHANNEL)
+
+    print(f"[STT Router] Cache invalidation listener started on {CACHE_CLEAR_CHANNEL}")
+
+    async for msg in pubsub.listen():
+        if not msg or msg.get("type") != "message":
+            continue
+
+        try:
+            data = jloads(msg["data"]) if isinstance(msg["data"], (str, bytes)) else msg["data"]
+            room_code = data.get("room_code") if isinstance(data, dict) else None
+
+            if room_code:
+                clear_cache(room_code)
+                print(f"[STT Router] 🔄 Cache cleared for room: {room_code}")
+            else:
+                clear_cache()  # Clear all caches
+                print(f"[STT Router] 🔄 All caches cleared (global settings updated)")
+        except Exception as e:
+            print(f"[STT Router] Cache clear error: {e}")
+
 async def router_loop():
     r = redis.from_url(REDIS_URL, decode_responses=True)
     pubsub = r.pubsub()
     await pubsub.subscribe(INPUT_CHANNEL)
-    
+
+    # Initialize database pool for settings
+    await init_db_pool()
+
     print(f"[STT Router] Listening on {INPUT_CHANNEL}")
     
     async for msg in pubsub.listen():
@@ -53,13 +83,16 @@ async def router_loop():
             speaker = data.get("speaker", "system")
             target_lang = data.get("target_lang", "en")
 
+            # Fetch room-specific STT settings
+            partial_mode, final_mode = await get_room_stt_settings(room)
+
             # LOCAL MODE: Forward all messages directly to local STT worker
-            if STT_MODE == "local":
-                print(f"[STT Router] Forwarding {msg_type} to {OUTPUT_CHANNEL} for room={room}")
+            if partial_mode == "local":
+                print(f"[STT Router] Forwarding {msg_type} to {OUTPUT_CHANNEL} for room={room} (mode=local)")
                 await r.publish(OUTPUT_CHANNEL, jdumps(data))
                 continue
 
-            if msg_type == "audio_chunk_partial" and STT_MODE == "openai_chunked":
+            if msg_type == "audio_chunk_partial" and partial_mode == "openai_chunked":
                 # Handle partial transcription - accumulate in same segment
                 seq = data.get("seq", 0)
                 audio_b64 = data.get("pcm16_base64", "")
@@ -240,8 +273,24 @@ async def router_loop():
                 except Exception as e:
                     print(f"[STT Router] ✗ Partial transcription failed: {e}")
                     
-            elif msg_type == "audio_chunk" and STT_MODE == "openai_chunked":
-                # Handle final transcription (from VAD) - clears partial session
+            elif msg_type == "audio_chunk":
+                # Handle final transcription (from VAD) - uses final_mode
+                # Check if final transcription is disabled
+                if final_mode == "none":
+                    print(f"[STT Router] Skipping final transcription (mode=none) for room={room}")
+                    if room in partial_sessions:
+                        del partial_sessions[room]
+                    continue
+
+                # If final mode is "local", forward to local worker
+                if final_mode == "local":
+                    print(f"[STT Router] Forwarding final to local worker for room={room}")
+                    await r.publish(OUTPUT_CHANNEL, jdumps(data))
+                    if room in partial_sessions:
+                        del partial_sessions[room]
+                    continue
+
+                # Otherwise use OpenAI for finals (openai_chunked mode or openai final mode)
                 seq = data.get("seq", 0)
                 audio_b64 = data.get("pcm16_base64", "")
                 device = data.get("device", "web")
@@ -260,13 +309,13 @@ async def router_loop():
                     stored_speaker = partial_sessions[room]["speaker"]
                     stored_target_lang = partial_sessions[room]["target_lang"]
                     stored_language_hint = partial_sessions[room].get("language_hint", language_hint)
-                    print(f"[STT Router] Processing FINAL (finalizing partial): room={room} speaker={stored_speaker} segment={segment_id} lang_hint={stored_language_hint} target={stored_target_lang}")
+                    print(f"[STT Router] Processing FINAL with {final_mode} (finalizing partial): room={room} speaker={stored_speaker} segment={segment_id}")
                 else:
                     segment_id = await get_next_segment_id(r, room)
                     stored_speaker = speaker
                     stored_target_lang = target_lang
                     stored_language_hint = language_hint
-                    print(f"[STT Router] Processing FINAL (no partials): room={room} speaker={speaker} segment={segment_id} lang_hint={language_hint} target={target_lang}")
+                    print(f"[STT Router] Processing FINAL with {final_mode} (no partials): room={room} speaker={speaker} segment={segment_id}")
 
                 try:
                     result = await transcribe_audio_chunk(audio_b64, language=stored_language_hint)
@@ -288,16 +337,17 @@ async def router_loop():
                     await r.publish(STT_OUTPUT_EVENTS, jdumps(stt_event))
                     print(f"[STT Router] ✓ Final segment {segment_id}: {result['text'][:80]}...")
                     
-                    # Track cost
-                    cost_event = {
-                        "room_id": room,
-                        "pipeline": "stt",
-                        "mode": "openai",
-                        "units": duration_sec,
-                        "unit_type": "seconds"
-                    }
-                    await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
-                    print(f"[STT Router] 💰 Cost tracked: {duration_sec:.1f}s audio")
+                    # Track cost (only for paid services)
+                    if final_mode in ["openai", "openai_chunked", "elevenlabs"]:
+                        cost_event = {
+                            "room_id": room,
+                            "pipeline": "stt",
+                            "mode": final_mode,
+                            "units": duration_sec,
+                            "unit_type": "seconds"
+                        }
+                        await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
+                        print(f"[STT Router] 💰 Cost tracked: {duration_sec:.1f}s audio ({final_mode})")
                     
                     # Clear partial session
                     if room in partial_sessions:
@@ -336,7 +386,48 @@ async def router_loop():
                             await r.publish(STT_OUTPUT_EVENTS, jdumps(instant_event))
 
                         # Step 2: Re-transcribe in background for quality (NON-BLOCKING)
-                        print(f"[STT Router] 🎯 Background re-transcribing full {audio_duration:.1f}s for quality...")
+                        # Check final_mode to decide which backend to use
+                        if final_mode == "none":
+                            print(f"[STT Router] ⏭ Skipping background refinement (mode=none)")
+                            # Just send completion event
+                            complete_event = {
+                                "type": "stt_final",
+                                "room_id": room,
+                                "segment_id": session["segment_id"],
+                                "revision": session["chunk_count"] + 1,
+                                "text": instant_text,
+                                "lang": session.get("detected_lang", "auto"),
+                                "final": True,
+                                "processing": False,
+                                "ts_iso": None,
+                                "device": "web",
+                                "speaker": session["speaker"],
+                                "target_lang": session["target_lang"]
+                            }
+                            await r.publish(STT_OUTPUT_EVENTS, jdumps(complete_event))
+                            del partial_sessions[room]
+                            continue
+
+                        if final_mode == "local":
+                            print(f"[STT Router] 🎯 Forwarding to local worker for background quality refinement...")
+                            # Forward accumulated audio to local worker for processing
+                            full_audio_b64 = base64.b64encode(session["accumulated_audio"]).decode('utf-8')
+                            local_event = {
+                                "type": "audio_chunk",
+                                "room_id": room,
+                                "seq": session["chunk_count"],
+                                "pcm16_base64": full_audio_b64,
+                                "speaker": session["speaker"],
+                                "target_lang": session["target_lang"],
+                                "device": "web",
+                                "language": session.get("language_hint", "auto")
+                            }
+                            await r.publish(OUTPUT_CHANNEL, jdumps(local_event))
+                            del partial_sessions[room]
+                            continue
+
+                        # Otherwise use OpenAI for background refinement
+                        print(f"[STT Router] 🎯 Background re-transcribing with {final_mode} for quality...")
 
                         try:
                             full_audio_b64 = base64.b64encode(session["accumulated_audio"]).decode('utf-8')
@@ -385,16 +476,17 @@ async def router_loop():
                                 await r.publish(STT_OUTPUT_EVENTS, jdumps(complete_event))
                                 final_text = instant_text  # Use instant for history
 
-                            # Track cost for the accumulated audio
-                            cost_event = {
-                                "room_id": room,
-                                "pipeline": "stt",
-                                "mode": "openai",
-                                "units": audio_duration,
-                                "unit_type": "seconds"
-                            }
-                            await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
-                            print(f"[STT Router] 💰 Cost tracked: {audio_duration:.1f}s audio")
+                            # Track cost for the accumulated audio (only for paid services)
+                            if final_mode in ["openai", "openai_chunked", "elevenlabs"]:
+                                cost_event = {
+                                    "room_id": room,
+                                    "pipeline": "stt",
+                                    "mode": final_mode,
+                                    "units": audio_duration,
+                                    "unit_type": "seconds"
+                                }
+                                await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
+                                print(f"[STT Router] 💰 Cost tracked: {audio_duration:.1f}s audio ({final_mode})")
 
                             # ADD TO CONVERSATION HISTORY for context in next sentences
                             if final_text and len(final_text) > 10:  # Only meaningful sentences
@@ -417,5 +509,12 @@ async def router_loop():
         except Exception as e:
             print(f"[STT Router] Error processing message: {e}")
 
+async def main():
+    """Run router loop and cache invalidation listener concurrently."""
+    await asyncio.gather(
+        router_loop(),
+        cache_invalidation_listener()
+    )
+
 if __name__ == "__main__":
-    asyncio.run(router_loop())
+    asyncio.run(main())
