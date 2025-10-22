@@ -99,9 +99,8 @@ export default function RoomPage({ token, onLogout }) {
   const [pushToTalk, setPushToTalk] = useState(() => {
     return localStorage.getItem('lt_push_to_talk') === 'true';
   });
-  const [persistenceEnabled, setPersistenceEnabled] = useState(() => {
-    return localStorage.getItem('lt_persistence_enabled') === 'true';
-  });
+  const [persistenceEnabled, setPersistenceEnabled] = useState(false); // Will be loaded from database
+  const [persistenceInitialized, setPersistenceInitialized] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [isPublicInitialized, setIsPublicInitialized] = useState(false);
   const [isRoomOwner, setIsRoomOwner] = useState(false);
@@ -185,9 +184,8 @@ export default function RoomPage({ token, onLogout }) {
   }, [pushToTalk]);
 
   useEffect(() => {
-    if (!isGuest && token) {
-      localStorage.setItem('lt_persistence_enabled', persistenceEnabled.toString());
-
+    // Only update server if persistenceEnabled has been initialized from database
+    if (!isGuest && token && persistenceInitialized) {
       // Call API to update persistence setting on server
       fetch(`/api/rooms/${roomId}/recording`, {
         method: 'PATCH',
@@ -210,7 +208,7 @@ export default function RoomPage({ token, onLogout }) {
           console.error('[Persistence] Failed to update server:', error);
         });
     }
-  }, [persistenceEnabled, isGuest, token, roomId]);
+  }, [persistenceEnabled, isGuest, token, roomId, persistenceInitialized]);
 
   // Handle public/private toggle
   useEffect(() => {
@@ -264,6 +262,7 @@ export default function RoomPage({ token, onLogout }) {
             setIsPublic(data.is_public || false);
             setIsPublicInitialized(true); // Mark as initialized after first fetch
             setPersistenceEnabled(data.recording || false);
+            setPersistenceInitialized(true); // Mark as initialized after first fetch
           } catch (e) {
             console.error('Failed to check admin status:', e);
           }

@@ -13,12 +13,19 @@ from pydantic import BaseModel
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from datetime import datetime
+import redis
+import json
+import os
 
 from .db import SessionLocal
 from .models import Room
 from .jwt_tools import verify_token
 
 router = APIRouter(prefix="/api/rooms", tags=["rooms"])
+
+# Redis for cache invalidation
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/5")
+CACHE_CLEAR_CHANNEL = "stt_cache_clear"
 
 
 class CreateRoomRequest(BaseModel):
@@ -35,6 +42,7 @@ class RoomResponse(BaseModel):
     code: str
     owner_id: int
     is_public: bool
+    recording: bool
     requires_login: bool
     max_participants: int
     created_at: datetime
@@ -139,6 +147,7 @@ async def create_room(
         code=room.code,
         owner_id=room.owner_id,
         is_public=room.is_public,
+        recording=room.recording,
         requires_login=room.requires_login,
         max_participants=room.max_participants,
         created_at=room.created_at,
@@ -173,6 +182,7 @@ async def get_room(
         code=room.code,
         owner_id=room.owner_id,
         is_public=room.is_public,
+        recording=room.recording,
         requires_login=room.requires_login,
         max_participants=room.max_participants,
         created_at=room.created_at,
@@ -297,6 +307,7 @@ async def update_room_recording(
         code=room.code,
         owner_id=room.owner_id,
         is_public=room.is_public,
+        recording=room.recording,
         requires_login=room.requires_login,
         max_participants=room.max_participants,
         created_at=room.created_at,
@@ -352,6 +363,7 @@ async def update_room_public(
         code=room.code,
         owner_id=room.owner_id,
         is_public=room.is_public,
+        recording=room.recording,
         requires_login=room.requires_login,
         max_participants=room.max_participants,
         created_at=room.created_at,
@@ -414,4 +426,127 @@ async def get_room_status(
         admin_present=admin_present,
         admin_left_at=room.admin_left_at,
         expires_at=expires_at
+    )
+
+
+class STTSettingsResponse(BaseModel):
+    """Response with room STT settings."""
+    stt_partial_provider: str | None
+    stt_final_provider: str | None
+    is_using_defaults: bool
+
+
+class UpdateSTTSettingsRequest(BaseModel):
+    """Request to update room STT settings."""
+    stt_partial_provider: Optional[str] = None
+    stt_final_provider: Optional[str] = None
+
+
+@router.get("/{room_code}/stt-settings", response_model=STTSettingsResponse)
+async def get_room_stt_settings(
+    room_code: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Get STT provider settings for a specific room.
+
+    Args:
+        room_code: The room code
+        db: Database session
+        user: Authenticated user
+
+    Returns:
+        STTSettingsResponse with current STT provider settings
+
+    Raises:
+        HTTPException: 404 if room not found
+    """
+    # Get room
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # Check if using defaults (both NULL)
+    is_using_defaults = room.stt_partial_provider is None and room.stt_final_provider is None
+
+    return STTSettingsResponse(
+        stt_partial_provider=room.stt_partial_provider,
+        stt_final_provider=room.stt_final_provider,
+        is_using_defaults=is_using_defaults
+    )
+
+
+@router.patch("/{room_code}/stt-settings", response_model=STTSettingsResponse)
+async def update_room_stt_settings(
+    room_code: str,
+    request: UpdateSTTSettingsRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Update STT provider settings for a specific room.
+    Only room owner or admin can update settings.
+
+    Args:
+        room_code: The room code
+        request: STT settings update
+        db: Database session
+        user: Authenticated user (must be room owner or admin)
+
+    Returns:
+        STTSettingsResponse with updated STT provider settings
+
+    Raises:
+        HTTPException: 404 if room not found, 403 if not authorized
+    """
+    from sqlalchemy import select
+    from .models import User
+
+    user_id = int(user.get("sub"))
+
+    # Get room
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # Get user to check if admin
+    db_user = db.scalar(select(User).where(User.id == user_id))
+    if not db_user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    # Verify user is room owner or admin
+    if room.owner_id != user_id and not db_user.is_admin:
+        raise HTTPException(status_code=403, detail="Only room owner or admin can modify STT settings")
+
+    # Update STT settings
+    # Check if field was provided in request (even if None)
+    request_dict = request.model_dump(exclude_unset=True)
+
+    if "stt_partial_provider" in request_dict:
+        # Empty string or None means use default
+        room.stt_partial_provider = request.stt_partial_provider if request.stt_partial_provider else None
+
+    if "stt_final_provider" in request_dict:
+        # Empty string or None means use default
+        room.stt_final_provider = request.stt_final_provider if request.stt_final_provider else None
+
+    db.commit()
+    db.refresh(room)
+
+    # Invalidate cache in STT router for this specific room
+    try:
+        r = redis.from_url(REDIS_URL)
+        r.publish(CACHE_CLEAR_CHANNEL, json.dumps({"room_code": room_code}))
+        print(f"[Rooms API] Published cache clear for room: {room_code}")
+    except Exception as e:
+        print(f"[Rooms API] Failed to publish cache clear: {e}")
+
+    # Check if using defaults
+    is_using_defaults = room.stt_partial_provider is None and room.stt_final_provider is None
+
+    return STTSettingsResponse(
+        stt_partial_provider=room.stt_partial_provider,
+        stt_final_provider=room.stt_final_provider,
+        is_using_defaults=is_using_defaults
     )
