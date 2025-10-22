@@ -6,6 +6,33 @@
 
 ## 🎉 Recent Progress (2025-10-22)
 
+### ✅ Audio Quality Fix: Eliminated Duplications in Streaming STT
+**🎯 Root Cause Fixed + Audio Quality Enhanced**
+
+#### What Was Fixed:
+- ✅ **Browser Overlapping Audio Windows** - Removed 0.3s audio retention causing duplications
+- ✅ **Backend Buffer Trimming** - Disabled trimming for streaming providers (kept full audio)
+- ✅ **Enhanced Audio Capture** - 48kHz sample rate, no noise suppression, auto gain control
+- ✅ **Late Partial Filtering** - Ignore partials after audio_end to prevent overwrites
+
+#### Impact:
+- **Before:** Word repetitions in Polish transcriptions ("zrobiłem, zrobiłem")
+- **After:** Clean, accurate transcriptions with no duplications
+- **Quality:** Enhanced from 16kHz → 48kHz capture (preserves speech nuances)
+- **Testing:** Verified with 30+ second continuous Polish speech
+
+#### Technical Details:
+The audio duplication bug was caused by overlapping audio windows where the browser kept the last 0.3s of each audio chunk before sending the next one. This resulted in audio sections being sent multiple times and accumulated by the backend, creating phantom repetitions in the raw audio itself (not a transcription issue).
+
+**Files Modified:**
+- `web/src/pages/RoomPage.jsx` - Removed overlapping windows, enhanced capture quality
+- `api/routers/stt/router.py` - Disabled buffer trimming for streaming providers
+- `api/routers/stt/streaming_manager.py` - Added finalized text tracking
+
+---
+
+## 🎉 Recent Progress (2025-10-22)
+
 ### ✅ MAJOR BREAKTHROUGH: Real-Time STT Streaming Implementation
 **🚀 80% Latency Reduction + 50-80% Cost Savings**
 
@@ -499,6 +526,91 @@ This feature allows users to:
 - [ ] Update cost calculation queries to aggregate by provider
 - [ ] Update frontend cost display to show breakdown by provider
 - [ ] Test cost tracking accuracy with mixed provider usage
+
+---
+
+### 🔥 0.8 Network Optimization & Adaptive Quality
+
+**Status:** Not Started (Pending EN/AR-EG language enablement)
+**Priority:** HIGH
+**Estimated Time:** 3-4 days
+
+**Context:**
+After enabling English (en-US, en-GB) and Arabic (ar-EG) languages for production use, implement adaptive audio quality to handle poor user network connections. Current bandwidth usage (~256 Kbps PCM16) exceeds industry standards (Zoom: 50-96 Kbps, Google Meet: similar with Opus).
+
+**Prerequisites:**
+- [ ] EN (en-US, en-GB) languages fully tested and enabled
+- [ ] AR-EG (Arabic Egyptian) language fully tested and enabled
+- [ ] Production traffic validates current audio quality
+
+**Phase A: Network Quality Monitoring**
+- [ ] Implement WebSocket ping-pong for RTT measurement
+  - Send ping every 2 seconds
+  - Track moving average of latency (last 5 measurements)
+  - Classify network: High (< 150ms), Medium (150-400ms), Low (> 400ms)
+- [ ] Add backend ping-pong handler in WebSocket (`api/main.py` or `api/ws_manager.py`)
+- [ ] Monitor WebSocket bufferedAmount for backpressure detection
+- [ ] Add network quality indicator to UI (🟢🟡🔴)
+- [ ] Show user warnings for poor connections
+
+**Phase B: Adaptive Send Rate (Easy Win - No Audio Restart)**
+- [ ] Implement dynamic send intervals based on network quality:
+  - High quality (< 150ms): 300ms intervals (~256 Kbps)
+  - Medium quality (150-400ms): 600ms intervals (~128 Kbps)
+  - Low quality (> 400ms): 1000ms intervals (~77 Kbps)
+- [ ] Update `sendPartialIfReady()` to respect dynamic interval
+- [ ] Test bandwidth reduction on simulated slow networks
+- [ ] Verify transcription quality remains acceptable
+
+**Phase C: Opus Audio Encoding (60-75% Bandwidth Reduction)**
+- [ ] Research browser Opus encoding libraries:
+  - opus-media-recorder
+  - MediaRecorder API with Opus codec
+- [ ] Implement Opus encoding in browser before sending
+- [ ] Add backend Opus decoding (if needed for Speechmatics/providers)
+- [ ] Implement adaptive bitrate for Opus:
+  - High quality: 96 Kbps (matches Zoom high fidelity)
+  - Medium quality: 64 Kbps
+  - Low quality: 32 Kbps
+- [ ] Test audio quality vs bandwidth tradeoff
+- [ ] Verify compatibility with all STT providers
+- [ ] Measure actual bandwidth savings in production
+
+**Industry Benchmarks:**
+| Platform | Sample Rate | Codec | Bitrate | Adaptive |
+|----------|-------------|-------|---------|----------|
+| Zoom Standard | 32kHz | Opus | 50-70 Kbps | Yes |
+| Zoom High Fidelity | 48kHz | Opus | 96/192 Kbps | Yes |
+| Google Meet | 48kHz | Opus + FEC | Similar | Yes |
+| **Current (PCM16)** | 48→16kHz | Raw PCM | ~256 Kbps | No |
+| **Target (Opus)** | 48kHz | Opus | 32-96 Kbps | Yes |
+
+**Expected Benefits:**
+- ✅ 60-75% bandwidth reduction with Opus
+- ✅ Better support for mobile/3G/4G users
+- ✅ Graceful degradation on poor connections
+- ✅ Reduced server bandwidth costs
+- ✅ Matches industry standards (Zoom/Meet)
+
+**Files to Create/Modify:**
+- `web/src/pages/RoomPage.jsx` - Network monitoring, adaptive send rate
+- `web/src/utils/OpusEncoder.js` (new) - Opus encoding wrapper
+- `api/main.py` or `api/ws_manager.py` - Ping-pong handler
+- `web/src/components/NetworkQualityIndicator.jsx` (new) - UI indicator
+
+**Testing:**
+- [ ] Test with network throttling (Chrome DevTools)
+- [ ] Simulate 3G/4G connections (150ms, 400ms, 1000ms latency)
+- [ ] Verify smooth degradation without audio dropouts
+- [ ] Measure actual bandwidth usage per quality level
+- [ ] Test with EN and AR-EG languages
+- [ ] Compare transcription accuracy across quality levels
+
+**Success Metrics:**
+- Network quality classification accuracy > 95%
+- Bandwidth reduction: 50-75% with Opus
+- No increase in transcription errors
+- User satisfaction with adaptive quality
 
 ---
 
