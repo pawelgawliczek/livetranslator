@@ -580,8 +580,8 @@ async def router_loop():
                         # Track costs
                         audio_duration = len(session["accumulated_audio"]) / (16000 * 2)
                         cost_event = {
-                            "timestamp": time.time(),
-                            "service": "stt",
+                            "room_id": room,
+                            "pipeline": "stt",
                             "provider": session["provider"],
                             "mode": "final",
                             "units": audio_duration,
