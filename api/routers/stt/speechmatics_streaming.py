@@ -124,7 +124,7 @@ class SpeechmaticsStreamingClient:
             "transcription_config": {
                 "language": session.language,
                 "operating_point": session.config.get("operating_point", "enhanced"),
-                "max_delay": session.config.get("max_delay", 0.4),  # 400ms latency
+                "max_delay": session.config.get("max_delay", 1.5),  # 1.5s for ultra-fast response
                 "enable_partials": True,  # Enable partial results
             },
             "audio_format": {

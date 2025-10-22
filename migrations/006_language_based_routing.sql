@@ -42,7 +42,7 @@ COMMENT ON TABLE stt_routing_config IS 'Global STT provider routing configuratio
 COMMENT ON COLUMN stt_routing_config.language IS 'ISO language code (pl-PL, ar-EG, en-US, etc.) or * for wildcard fallback';
 COMMENT ON COLUMN stt_routing_config.mode IS 'partial (real-time streaming) or final (post-speech quality)';
 COMMENT ON COLUMN stt_routing_config.quality_tier IS 'standard (best quality) or budget (cost-optimized)';
-COMMENT ON COLUMN stt_routing_config.config IS 'JSON config: {diarization: true, max_delay: 0.4, stability_threshold: 0.8, etc.}';
+COMMENT ON COLUMN stt_routing_config.config IS 'JSON config: {diarization: true, max_delay: 1.5, stability_threshold: 0.8, etc.}';
 
 -- ============================================================================
 -- STEP 3: Create language-pair-based MT routing configuration
@@ -153,7 +153,7 @@ COMMENT ON COLUMN quality_metrics.wer IS 'Word Error Rate compared to reference 
 -- Polish (pl-PL) - Speechmatics best for Polish accuracy
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES
     ('pl-PL', 'partial', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "max_delay": 0.4, "operating_point": "enhanced"}'),
+     '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('pl-PL', 'final', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "operating_point": "enhanced"}');
 
@@ -167,14 +167,14 @@ INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, 
 -- English (US) - Speechmatics to reduce vendor spread
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES
     ('en-US', 'partial', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "max_delay": 0.4, "operating_point": "enhanced"}'),
+     '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('en-US', 'final', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "operating_point": "enhanced"}');
 
 -- English (GB) - Speechmatics
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES
     ('en-GB', 'partial', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "max_delay": 0.4, "operating_point": "enhanced"}'),
+     '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('en-GB', 'final', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "operating_point": "enhanced"}');
 

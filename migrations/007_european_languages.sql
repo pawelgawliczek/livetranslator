@@ -12,7 +12,7 @@ BEGIN;
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES
     -- Standard Tier
     ('es-ES', 'partial', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "max_delay": 0.4, "operating_point": "enhanced"}'),
+     '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('es-ES', 'final', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "operating_point": "enhanced"}'),
 
@@ -34,7 +34,7 @@ ON CONFLICT (language, mode, quality_tier) DO UPDATE SET
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES
     -- Standard Tier
     ('fr-FR', 'partial', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "max_delay": 0.4, "operating_point": "enhanced"}'),
+     '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('fr-FR', 'final', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "operating_point": "enhanced"}'),
 
@@ -56,7 +56,7 @@ ON CONFLICT (language, mode, quality_tier) DO UPDATE SET
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES
     -- Standard Tier
     ('de-DE', 'partial', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "max_delay": 0.4, "operating_point": "enhanced"}'),
+     '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('de-DE', 'final', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "operating_point": "enhanced"}'),
 
@@ -78,7 +78,7 @@ ON CONFLICT (language, mode, quality_tier) DO UPDATE SET
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES
     -- Standard Tier
     ('it-IT', 'partial', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "max_delay": 0.4, "operating_point": "enhanced"}'),
+     '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('it-IT', 'final', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "operating_point": "enhanced"}'),
 
@@ -100,7 +100,7 @@ ON CONFLICT (language, mode, quality_tier) DO UPDATE SET
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES
     -- Standard Tier
     ('pt-PT', 'partial', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "max_delay": 0.4, "operating_point": "enhanced"}'),
+     '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('pt-PT', 'final', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "operating_point": "enhanced"}'),
 
@@ -122,7 +122,7 @@ ON CONFLICT (language, mode, quality_tier) DO UPDATE SET
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES
     -- Standard Tier
     ('pt-BR', 'partial', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "max_delay": 0.4, "operating_point": "enhanced"}'),
+     '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('pt-BR', 'final', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "operating_point": "enhanced"}'),
 
@@ -144,7 +144,7 @@ ON CONFLICT (language, mode, quality_tier) DO UPDATE SET
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES
     -- Standard Tier
     ('ru-RU', 'partial', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "max_delay": 0.4, "operating_point": "enhanced"}'),
+     '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('ru-RU', 'final', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "operating_point": "enhanced"}'),
 

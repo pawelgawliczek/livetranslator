@@ -243,7 +243,7 @@ async def get_stt_provider_for_language(
         'fallback': 'google_v2',
         'config': {
             'diarization': True,
-            'max_delay': 0.4,
+            'max_delay': 1.5,
             'operating_point': 'enhanced'
         },
         'language': 'pl-PL'  # Normalized language code

@@ -58,7 +58,7 @@ async def transcribe_audio_chunk(
         config: Optional config with diarization settings
             {
                 "diarization": true,
-                "max_delay": 0.4,  # seconds for low latency
+                "max_delay": 1.5,  # seconds for ultra-fast response (0.7-1.5 range)
                 "operating_point": "enhanced"  # standard, enhanced
             }
 

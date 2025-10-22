@@ -36,7 +36,7 @@
 #### **Polish (pl-PL)**
 | Mode | Quality Tier | Primary | Fallback | Config |
 |------|-------------|---------|----------|--------|
-| Partial | Standard | Speechmatics | Google v2 | `diarization=true, max_delay=400ms` |
+| Partial | Standard | Speechmatics | Google v2 | `diarization=true, max_delay=1500ms` |
 | Final | Standard | Speechmatics | Google v2 | `diarization=true` |
 | Partial | Budget | Soniox | Google v2 | `diarization=true` |
 | Final | Budget | Soniox | Google v2 | `diarization=true` |
@@ -52,7 +52,7 @@
 #### **English (en-US, en-GB)**
 | Mode | Quality Tier | Primary | Fallback | Config |
 |------|-------------|---------|----------|--------|
-| Partial | Standard | Speechmatics | Google v2 | `diarization=true, max_delay=400ms` |
+| Partial | Standard | Speechmatics | Google v2 | `diarization=true, max_delay=1500ms` |
 | Final | Standard | Speechmatics | Google v2 | `diarization=true` |
 | Partial | Budget | Soniox | Google v2 | `diarization=true` |
 | Final | Budget | Soniox | Google v2 | `diarization=true` |
@@ -126,7 +126,7 @@ CREATE INDEX idx_provider_health_status ON provider_health(provider, status);
 INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, provider_fallback, config) VALUES
     -- Polish
     ('pl-PL', 'partial', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "max_delay": 0.4, "operating_point": "enhanced"}'),
+     '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('pl-PL', 'final', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "operating_point": "enhanced"}'),
 
@@ -138,13 +138,13 @@ INSERT INTO stt_routing_config (language, mode, quality_tier, provider_primary, 
 
     -- English (US)
     ('en-US', 'partial', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "max_delay": 0.4, "operating_point": "enhanced"}'),
+     '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('en-US', 'final', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "operating_point": "enhanced"}'),
 
     -- English (GB)
     ('en-GB', 'partial', 'standard', 'speechmatics', 'google_v2',
-     '{"diarization": true, "max_delay": 0.4, "operating_point": "enhanced"}'),
+     '{"diarization": true, "max_delay": 1.5, "operating_point": "enhanced"}'),
     ('en-GB', 'final', 'standard', 'speechmatics', 'google_v2',
      '{"diarization": true, "operating_point": "enhanced"}'),
 
@@ -453,7 +453,7 @@ Admin Panel → STT Routing Configuration
 │ ├───────────────────────────────────────────────────────────┤   │
 │ │ Standard Tier:                                            │   │
 │ │   Primary:  [Speechmatics ▼] Fallback: [Google v2 ▼]    │   │
-│ │   Config:   ☑ Diarization  Max Delay: [400ms]           │   │
+│ │   Config:   ☑ Diarization  Max Delay: [1500ms]           │   │
 │ │   Status:   🟢 Healthy                                    │   │
 │ │                                                           │   │
 │ │ Budget Tier:                                              │   │
@@ -546,7 +546,7 @@ Get all STT routing configurations.
       "provider_fallback": "google_v2",
       "config": {
         "diarization": true,
-        "max_delay": 0.4,
+        "max_delay": 1.5,
         "operating_point": "enhanced"
       },
       "enabled": true,
@@ -582,7 +582,7 @@ Create or update STT routing configuration.
   "provider_fallback": "google_v2",
   "config": {
     "diarization": true,
-    "max_delay": 0.4
+    "max_delay": 1.5
   }
 }
 ```

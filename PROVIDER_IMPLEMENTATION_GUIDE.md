@@ -109,7 +109,7 @@ stt_router:
 - **WebSocket Protocol**: Native WebSocket (not SDK)
 - **Partials**: Sends word-by-word updates (accumulate on our side)
 - **Quality**: `operating_point: "enhanced"` for best accuracy
-- **Latency Control**: `max_delay` (0.4s - 2.0s)
+- **Latency Control**: `max_delay` (0.7s - 4.0s, recommended: 1.5s for ultra-fast, 2.0s for balanced)
 
 ### Google Cloud Speech v2 (TODO)
 

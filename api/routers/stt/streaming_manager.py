@@ -155,7 +155,7 @@ class StreamingConnection:
         # Transcription config
         diarization = self.config.get("diarization", True)
         operating_point = self.config.get("operating_point", "enhanced")
-        max_delay = self.config.get("max_delay", 0.4)
+        max_delay = self.config.get("max_delay", 1.5)
 
         # WebSocket URL
         url = f"wss://{SPEECHMATICS_REGION}.rt.speechmatics.com/v2"
