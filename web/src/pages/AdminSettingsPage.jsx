@@ -6,16 +6,15 @@ import Footer from "../components/Footer";
 export default function AdminSettingsPage({ token, onLogout }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState("stt");
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  // STT Settings state
-  const [providers, setProviders] = useState(null);
-  const [currentSettings, setCurrentSettings] = useState(null);
-  const [sttPartialProvider, setSttPartialProvider] = useState("");
-  const [sttFinalProvider, setSttFinalProvider] = useState("");
+  // Language Configuration state
+  const [languages, setLanguages] = useState([]);
+  const [providerHealth, setProviderHealth] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [selectedLanguage, setSelectedLanguage] = useState(null);
+  const [languageDetail, setLanguageDetail] = useState(null);
 
   useEffect(() => {
     if (!token) {
@@ -38,30 +37,34 @@ export default function AdminSettingsPage({ token, onLogout }) {
         return;
       }
 
-      // Fetch providers
-      const providersRes = await fetch("/api/admin/providers", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (providersRes.ok) {
-        const providersData = await providersRes.json();
-        setProviders(providersData);
-      }
+      // Fetch language configuration data
+      try {
+        const [langsRes, healthRes, statsRes] = await Promise.all([
+          fetch("/api/admin/languages", { headers: { "Authorization": `Bearer ${token}` } }),
+          fetch("/api/admin/providers/health", { headers: { "Authorization": `Bearer ${token}` } }),
+          fetch("/api/admin/stats", { headers: { "Authorization": `Bearer ${token}` } })
+        ]);
 
-      // Fetch current settings
-      const settingsRes = await fetch("/api/admin/settings/stt", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (settingsRes.ok) {
-        const settingsData = await settingsRes.json();
-        setCurrentSettings(settingsData);
-
-        // Set initial form values
-        const settingsMap = settingsData.settings.reduce((acc, s) => {
-          acc[s.key] = s.value;
-          return acc;
-        }, {});
-        setSttPartialProvider(settingsMap["stt_partial_provider_default"] || "");
-        setSttFinalProvider(settingsMap["stt_final_provider_default"] || "");
+        if (langsRes.ok) {
+          const langsData = await langsRes.json();
+          console.log('[Admin] Languages data:', langsData);
+          setLanguages(langsData.languages || []);
+        } else {
+          console.error('[Admin] Languages fetch failed:', langsRes.status);
+        }
+        if (healthRes.ok) {
+          const healthData = await healthRes.json();
+          console.log('[Admin] Provider health:', healthData);
+          setProviderHealth(healthData.providers || []);
+        }
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          console.log('[Admin] Stats:', statsData);
+          setStats(statsData);
+        }
+      } catch (e) {
+        console.error("Language config error:", e);
+        setError("Failed to load language configuration");
       }
     } catch (e) {
       console.error("Failed to fetch admin data:", e);
@@ -71,35 +74,18 @@ export default function AdminSettingsPage({ token, onLogout }) {
     }
   }
 
-  async function handleUpdateSTTSettings(e) {
-    e.preventDefault();
-    setMessage("");
-    setError("");
-
+  async function fetchLanguageDetail(language) {
     try {
-      const res = await fetch("/api/admin/settings/stt", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          stt_partial_provider_default: sttPartialProvider,
-          stt_final_provider_default: sttFinalProvider
-        })
+      const res = await fetch(`/api/admin/languages/${language}/config`, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
-
       if (res.ok) {
         const data = await res.json();
-        setMessage(data.message);
-        fetchAdminData(); // Refresh data
-      } else {
-        const errData = await res.json();
-        setError(errData.detail || "Failed to update settings");
+        setLanguageDetail(data);
+        setSelectedLanguage(language);
       }
     } catch (e) {
-      console.error("Failed to update STT settings:", e);
-      setError("Failed to update settings");
+      console.error("Failed to fetch language detail:", e);
     }
   }
 
@@ -136,8 +122,8 @@ export default function AdminSettingsPage({ token, onLogout }) {
             marginBottom: "2rem"
           }}>
             <div>
-              <h1 style={{fontSize: "2rem", marginBottom: "0.5rem"}}>🛠️ Admin Settings</h1>
-              <p style={{color: "#999", fontSize: "0.9rem"}}>Configure STT/MT providers and system defaults</p>
+              <h1 style={{fontSize: "2rem", marginBottom: "0.5rem"}}>🌍 Language Configuration</h1>
+              <p style={{color: "#999", fontSize: "0.9rem"}}>Manage STT and MT provider settings for all languages</p>
             </div>
             <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
               <button
@@ -172,56 +158,7 @@ export default function AdminSettingsPage({ token, onLogout }) {
           </div>
 
         <div style={{ marginBottom: "2rem" }}>
-        {/* Tabs */}
-        <div style={{ display: "flex", gap: "10px", borderBottom: "2px solid #333", marginBottom: "20px" }}>
-          <button
-            onClick={() => setActiveTab("stt")}
-            style={{
-              background: activeTab === "stt" ? "#6366f1" : "transparent",
-              color: "white",
-              border: "none",
-              padding: "10px 20px",
-              borderRadius: "8px 8px 0 0",
-              cursor: "pointer",
-              fontSize: "16px",
-              fontWeight: activeTab === "stt" ? "600" : "normal",
-              opacity: activeTab === "stt" ? "1" : "0.6"
-            }}
-          >
-            STT Settings
-          </button>
-          <button
-            onClick={() => setActiveTab("mt")}
-            style={{
-              background: activeTab === "mt" ? "#6366f1" : "transparent",
-              color: "white",
-              border: "none",
-              padding: "10px 20px",
-              borderRadius: "8px 8px 0 0",
-              cursor: "pointer",
-              fontSize: "16px",
-              fontWeight: activeTab === "mt" ? "600" : "normal",
-              opacity: activeTab === "mt" ? "1" : "0.6"
-            }}
-          >
-            MT Settings
-          </button>
-        </div>
-
-        {/* Messages */}
-        {message && (
-          <div style={{
-            background: "#1a1a1a",
-            border: "1px solid #10b981",
-            color: "#10b981",
-            padding: "12px",
-            borderRadius: "8px",
-            marginBottom: "20px"
-          }}>
-            {message}
-          </div>
-        )}
-
+        {/* Error Messages */}
         {error && (
           <div style={{
             background: "#1a1a1a",
@@ -235,142 +172,176 @@ export default function AdminSettingsPage({ token, onLogout }) {
           </div>
         )}
 
-        {/* STT Settings Tab */}
-        {activeTab === "stt" && providers && (
-          <div style={{
-            background: "#1a1a1a",
-            borderRadius: "12px",
-            padding: "1.5rem",
-            border: "1px solid #333"
-          }}>
-            <h2 style={{ fontSize: "1.25rem", marginBottom: "1.5rem" }}>Speech-to-Text Provider Settings</h2>
+        {/* Languages Content */}
+        <div>
+            {/* Stats Overview */}
+            {stats && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
+                <div style={{ background: "#1a1a1a", padding: "1.5rem", borderRadius: "12px", border: "1px solid #333" }}>
+                  <div style={{ fontSize: "0.85rem", color: "#999", marginBottom: "0.5rem" }}>Languages</div>
+                  <div style={{ fontSize: "2rem", fontWeight: "bold" }}>{stats.languages_configured}</div>
+                </div>
+                <div style={{ background: "#1a1a1a", padding: "1.5rem", borderRadius: "12px", border: "1px solid #333" }}>
+                  <div style={{ fontSize: "0.85rem", color: "#999", marginBottom: "0.5rem" }}>STT Configs</div>
+                  <div style={{ fontSize: "2rem", fontWeight: "bold" }}>{stats.stt_configs}</div>
+                </div>
+                <div style={{ background: "#1a1a1a", padding: "1.5rem", borderRadius: "12px", border: "1px solid #333" }}>
+                  <div style={{ fontSize: "0.85rem", color: "#999", marginBottom: "0.5rem" }}>MT Configs</div>
+                  <div style={{ fontSize: "2rem", fontWeight: "bold" }}>{stats.mt_configs}</div>
+                </div>
+                <div style={{ background: "#1a1a1a", padding: "1.5rem", borderRadius: "12px", border: "1px solid #333" }}>
+                  <div style={{ fontSize: "0.85rem", color: "#999", marginBottom: "0.5rem" }}>Healthy Providers</div>
+                  <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#10b981" }}>{stats.healthy_providers}/{stats.total_providers}</div>
+                </div>
+              </div>
+            )}
 
-            <form onSubmit={handleUpdateSTTSettings}>
-              {/* Partial Provider */}
-              <div style={{ marginBottom: "24px" }}>
-                <label style={{ display: "block", fontWeight: "600", marginBottom: "8px", color: "#ddd" }}>
-                  Partial Transcription Provider (Real-time)
-                </label>
-                <select
-                  value={sttPartialProvider}
-                  onChange={(e) => setSttPartialProvider(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    background: "#0a0a0a",
-                    color: "white",
-                    border: "1px solid #333",
-                    borderRadius: "8px",
-                    fontSize: "14px"
-                  }}
-                >
-                  {providers.stt_partial.map((p) => (
-                    <option key={p.id} value={p.id} style={{background: "#0a0a0a"}}>
-                      {p.name} - {p.description}
-                    </option>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "2rem" }}>
+              {/* Languages List */}
+              <div style={{ background: "#1a1a1a", borderRadius: "12px", border: "1px solid #333" }}>
+                <div style={{ padding: "1.5rem", borderBottom: "1px solid #333" }}>
+                  <h2 style={{ margin: 0, fontSize: "1.25rem" }}>Configured Languages ({languages.length})</h2>
+                </div>
+                <div style={{ maxHeight: "600px", overflowY: "auto" }}>
+                  {languages.map((lang) => (
+                    <div
+                      key={lang.language}
+                      onClick={() => fetchLanguageDetail(lang.language)}
+                      style={{
+                        padding: "1rem 1.5rem",
+                        borderBottom: "1px solid #2a2a2a",
+                        cursor: "pointer",
+                        background: selectedLanguage === lang.language ? "#2a2a2a" : "transparent",
+                        transition: "background 0.2s"
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "#2a2a2a"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = selectedLanguage === lang.language ? "#2a2a2a" : "transparent"}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <div style={{ fontSize: "1rem", fontWeight: "600", marginBottom: "0.25rem" }}>
+                            {lang.language_name} <span style={{ color: "#666", fontSize: "0.85rem" }}>({lang.language})</span>
+                          </div>
+                          <div style={{ fontSize: "0.8rem", color: "#999" }}>
+                            STT: {lang.stt_standard?.partial?.provider_primary || 'N/A'} • MT: {lang.mt_pairs} pairs
+                          </div>
+                        </div>
+                        <div style={{ padding: "0.25rem 0.75rem", borderRadius: "6px", fontSize: "0.75rem", fontWeight: "600", background: lang.status === 'active' ? "#10b98122" : "#66666622", color: lang.status === 'active' ? "#10b981" : "#666" }}>
+                          {lang.status.toUpperCase()}
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </select>
+                </div>
               </div>
 
-              {/* Final Provider */}
-              <div style={{ marginBottom: "24px" }}>
-                <label style={{ display: "block", fontWeight: "600", marginBottom: "8px", color: "#ddd" }}>
-                  Final Transcription Provider (High Quality)
-                </label>
-                <select
-                  value={sttFinalProvider}
-                  onChange={(e) => setSttFinalProvider(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    background: "#0a0a0a",
-                    color: "white",
-                    border: "1px solid #333",
-                    borderRadius: "8px",
-                    fontSize: "14px"
-                  }}
-                >
-                  {providers.stt_final.map((p) => (
-                    <option key={p.id} value={p.id} style={{background: "#0a0a0a"}}>
-                      {p.name} - {p.description}
-                    </option>
+              {/* Provider Health */}
+              <div style={{ background: "#1a1a1a", borderRadius: "12px", border: "1px solid #333" }}>
+                <div style={{ padding: "1.5rem", borderBottom: "1px solid #333" }}>
+                  <h2 style={{ margin: 0, fontSize: "1.25rem" }}>Provider Health</h2>
+                </div>
+                <div style={{ maxHeight: "600px", overflowY: "auto" }}>
+                  {providerHealth.map((provider, idx) => (
+                    <div key={idx} style={{ padding: "1rem 1.5rem", borderBottom: "1px solid #2a2a2a" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                        <div>
+                          <div style={{ fontSize: "0.95rem", fontWeight: "600" }}>{provider.provider}</div>
+                          <div style={{ fontSize: "0.75rem", color: "#666", textTransform: "uppercase" }}>{provider.service_type}</div>
+                        </div>
+                        <div style={{ padding: "0.25rem 0.75rem", borderRadius: "6px", fontSize: "0.7rem", fontWeight: "600", background: provider.status === 'healthy' ? "#10b98122" : provider.status === 'degraded' ? "#f59e0b22" : "#dc262622", color: provider.status === 'healthy' ? "#10b981" : provider.status === 'degraded' ? "#f59e0b" : "#dc2626" }}>
+                          {provider.status.toUpperCase()}
+                        </div>
+                      </div>
+                      {provider.consecutive_failures > 0 && (
+                        <div style={{ fontSize: "0.75rem", color: "#dc2626" }}>
+                          {provider.consecutive_failures} failures
+                        </div>
+                      )}
+                      {provider.response_time_ms && (
+                        <div style={{ fontSize: "0.75rem", color: "#666" }}>
+                          {provider.response_time_ms}ms avg
+                        </div>
+                      )}
+                    </div>
                   ))}
-                </select>
+                </div>
               </div>
+            </div>
 
-              <button
-                type="submit"
-                style={{
-                  background: "#6366f1",
-                  color: "white",
-                  border: "none",
-                  padding: "0.75rem 1.5rem",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "16px",
-                  fontWeight: "600"
-                }}
-              >
-                Save STT Settings
-              </button>
-            </form>
+            {/* Language Detail */}
+            {languageDetail && selectedLanguage && (
+              <div style={{ marginTop: "2rem", background: "#1a1a1a", borderRadius: "12px", padding: "1.5rem", border: "1px solid #333" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+                  <h2 style={{ margin: 0, fontSize: "1.25rem" }}>
+                    {languages.find(l => l.language === selectedLanguage)?.language_name || selectedLanguage}
+                  </h2>
+                  <button
+                    onClick={() => { setSelectedLanguage(null); setLanguageDetail(null); }}
+                    style={{ background: "transparent", border: "none", color: "#666", fontSize: "1.5rem", cursor: "pointer" }}
+                  >
+                    ×
+                  </button>
+                </div>
 
-            {/* Current Settings Info */}
-            {currentSettings && (
-              <div style={{
-                marginTop: "40px",
-                padding: "20px",
-                background: "#0a0a0a",
-                borderRadius: "8px",
-                border: "1px solid #333"
-              }}>
-                <h3 style={{ fontSize: "16px", marginBottom: "12px", color: "#ddd" }}>Current Settings</h3>
-                {currentSettings.settings.map((s) => (
-                  <div key={s.key} style={{ marginBottom: "8px", fontSize: "14px" }}>
-                    <strong style={{color: "#10b981"}}>{s.key}:</strong> <span style={{color: "#ddd"}}>{s.value}</span>
-                    <br />
-                    <span style={{ color: "#666", fontSize: "12px" }}>
-                      Updated: {new Date(s.updated_at).toLocaleString()}
-                    </span>
+                {/* STT Configuration */}
+                <div style={{ marginBottom: "2rem" }}>
+                  <h3 style={{ fontSize: "1.1rem", marginBottom: "1rem" }}>STT Configuration</h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1rem" }}>
+                    {languageDetail.stt_configs.map((config, idx) => (
+                      <div key={idx} style={{ background: "#0a0a0a", border: "1px solid #333", borderRadius: "8px", padding: "1rem" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.75rem" }}>
+                          <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: "600" }}>{config.mode} / {config.quality_tier}</h4>
+                          <span style={{ padding: "0.25rem 0.5rem", borderRadius: "4px", fontSize: "0.7rem", fontWeight: "600", background: config.enabled ? "#10b98122" : "#66666622", color: config.enabled ? "#10b981" : "#666" }}>
+                            {config.enabled ? 'ACTIVE' : 'DISABLED'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "0.85rem" }}>
+                          <div style={{ marginBottom: "0.5rem" }}>
+                            <span style={{ color: "#999" }}>Primary:</span> <span style={{ fontWeight: "600" }}>{config.provider_primary}</span>
+                          </div>
+                          <div>
+                            <span style={{ color: "#999" }}>Fallback:</span> <span style={{ fontWeight: "600" }}>{config.provider_fallback}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+
+                {/* MT Configuration */}
+                <div>
+                  <h3 style={{ fontSize: "1.1rem", marginBottom: "1rem" }}>MT Configuration ({languageDetail.mt_configs.length} pairs)</h3>
+                  <div style={{ maxHeight: "300px", overflowY: "auto", background: "#0a0a0a", border: "1px solid #333", borderRadius: "8px" }}>
+                    <table style={{ width: "100%", fontSize: "0.85rem" }}>
+                      <thead style={{ background: "#1a1a1a", position: "sticky", top: 0 }}>
+                        <tr>
+                          <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#999" }}>Direction</th>
+                          <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#999" }}>Tier</th>
+                          <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#999" }}>Primary</th>
+                          <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#999" }}>Fallback</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {languageDetail.mt_configs.slice(0, 20).map((config, idx) => (
+                          <tr key={idx} style={{ borderBottom: "1px solid #2a2a2a" }}>
+                            <td style={{ padding: "0.75rem" }}>{config.src_lang} → {config.tgt_lang}</td>
+                            <td style={{ padding: "0.75rem", fontSize: "0.75rem", color: "#999" }}>{config.quality_tier}</td>
+                            <td style={{ padding: "0.75rem", fontWeight: "600" }}>{config.provider_primary}</td>
+                            <td style={{ padding: "0.75rem", color: "#999" }}>{config.provider_fallback}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {languageDetail.mt_configs.length > 20 && (
+                      <div style={{ padding: "0.75rem", textAlign: "center", fontSize: "0.85rem", color: "#666" }}>
+                        ... and {languageDetail.mt_configs.length - 20} more pairs
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
-        )}
-
-        {/* MT Settings Tab */}
-        {activeTab === "mt" && providers && (
-          <div style={{
-            background: "#1a1a1a",
-            borderRadius: "12px",
-            padding: "1.5rem",
-            border: "1px solid #333"
-          }}>
-            <h2 style={{ fontSize: "1.25rem", marginBottom: "1.5rem" }}>Machine Translation Provider Settings</h2>
-
-            <div style={{
-              padding: "20px",
-              background: "#0a0a0a",
-              border: "1px solid #f59e0b",
-              borderRadius: "8px",
-              marginBottom: "20px"
-            }}>
-              <p style={{ margin: 0, color: "#ddd" }}>
-                <strong style={{color: "#f59e0b"}}>Available MT Providers:</strong>
-              </p>
-              {providers.mt.map((p) => (
-                <div key={p.id} style={{ marginTop: "10px", color: "#ddd" }}>
-                  <strong style={{color: "#10b981"}}>{p.name}</strong> - {p.description}
-                </div>
-              ))}
-            </div>
-
-            <p style={{ color: "#666", fontSize: "14px" }}>
-              MT provider selection coming in future phases. Currently using OpenAI GPT-4o-mini for all translations.
-            </p>
-          </div>
-        )}
         </div>
         </div>
       </div>

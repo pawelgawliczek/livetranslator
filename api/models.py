@@ -30,10 +30,6 @@ class Room(Base):
     requires_login: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     max_participants: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
 
-    # STT provider overrides (NULL = use global default)
-    stt_partial_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    stt_final_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-
     owner = relationship("User")
 
 class Device(Base):

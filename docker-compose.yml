@@ -182,8 +182,19 @@ services:
       LT_STT_PARTIAL_MODE: ${LT_STT_PARTIAL_MODE:-local}
       LT_STT_FINAL_MODE: ${LT_STT_FINAL_MODE:-openai_chunked}
       STT_OUTPUT_EVENTS: stt_events
+      # Multi-provider STT API keys
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_STT_MODEL: ${OPENAI_STT_MODEL:-whisper-1}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
+      DEEPGRAM_MODEL: ${DEEPGRAM_MODEL:-nova-3}
+      SPEECHMATICS_API_KEY: ${SPEECHMATICS_API_KEY:-}
+      SPEECHMATICS_REGION: ${SPEECHMATICS_REGION:-eu2}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us}
+      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
+      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-eastus}
+      SONIOX_API_KEY: ${SONIOX_API_KEY:-}
     depends_on:
       redis: { condition: service_healthy }
       postgres: { condition: service_healthy }
@@ -197,6 +208,7 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: redis://redis:6379/5
+      POSTGRES_DSN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       MT_INPUT_CHANNEL: mt_requests
       MT_OUTPUT_CHANNEL: mt_events
       LT_MT_MODE: ${LT_MT_MODE:-openai}
@@ -205,10 +217,16 @@ services:
       LT_DEFAULT_TGT: ${LT_DEFAULT_TGT:-en}
       LT_MT_BASE_URL: http://mt_worker:8081
       STT_EVENTS_CHANNEL: stt_events
+      # Multi-provider MT API keys
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MT_MODEL: ${OPENAI_MT_MODEL:-gpt-4o-mini}
+      DEEPL_API_KEY: ${DEEPL_API_KEY:-}
+      AZURE_TRANSLATOR_KEY: ${AZURE_TRANSLATOR_KEY:-}
+      AZURE_TRANSLATOR_REGION: ${AZURE_TRANSLATOR_REGION:-eastus}
+      AZURE_TRANSLATOR_ENDPOINT: ${AZURE_TRANSLATOR_ENDPOINT:-https://api.cognitive.microsofttranslator.com}
     depends_on:
       redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
       mt_worker: { condition: service_started }
     networks: [stack_appnet]
 

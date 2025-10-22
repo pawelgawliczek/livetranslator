@@ -3,7 +3,6 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import InviteModal from "../components/InviteModal";
 import ParticipantsModal from "../components/ParticipantsModal";
 import SettingsMenu from "../components/SettingsMenu";
-import RoomSTTSettings from "../components/RoomSTTSettings";
 
 export default function RoomPage({ token, onLogout }) {
   const { roomId } = useParams();
@@ -89,7 +88,6 @@ export default function RoomPage({ token, onLogout }) {
   const [showInvite, setShowInvite] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showRoomAdminSettings, setShowRoomAdminSettings] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [myLanguage, setMyLanguage] = useState(() => {
     const stored = isGuest ? guestLang : localStorage.getItem('lt_my_language');
@@ -280,6 +278,9 @@ export default function RoomPage({ token, onLogout }) {
         .catch(err => console.error('Failed to fetch user profile:', err));
     }
   }, [roomId, token, isGuest]);
+
+  // Fetch STT settings for the room on mount
+  // NOTE: STT settings removed - now using language-based routing (Migration 006)
 
   // Poll room status every 5 seconds to check admin presence
   useEffect(() => {
@@ -581,10 +582,25 @@ export default function RoomPage({ token, onLogout }) {
     try {
       const m = JSON.parse(ev.data);
       console.log('[WS] Received:', m);
-      if (!m.text) {
+
+      // Silently ignore non-STT/translation messages (they're handled by presenceWs)
+      const messageTypes = ["translation_partial", "translation_final", "partial", "stt_partial", "final", "stt_final"];
+      if (!messageTypes.includes(m.type)) {
+        return;
+      }
+
+      // Check if text field exists (not undefined)
+      if (!('text' in m)) {
         console.log('[WS] Rejected: no text field');
         return;
       }
+
+      // Skip messages with empty text (but log them)
+      if (!m.text || m.text.trim() === '') {
+        console.log('[WS] Skipping empty text message:', m.type, 'segment:', m.segment_id);
+        return;
+      }
+
       m.segment_id = m.segment_id || Date.now();
       m.ts_iso = m.ts_iso || new Date().toISOString();
       const id = m.segment_id | 0;
@@ -602,9 +618,6 @@ export default function RoomPage({ token, onLogout }) {
         segsRef.current.set(`t-${id}`, m);
       } else if (m.type === "partial" || m.type === "stt_partial" || m.type === "final" || m.type === "stt_final") {
         segsRef.current.set(`s-${id}`, m);
-      } else {
-        console.log('[WS] Unknown type:', m.type);
-        return;
       }
       scheduleRender();
     } catch (e) {
@@ -891,13 +904,13 @@ export default function RoomPage({ token, onLogout }) {
       return;
     }
   }
-  
+
   function stop() {
     isRecordingRef.current = false;
     isSpeakingRef.current = false;
     setVadReady(false);
 
-    // Stop VAD and clean up audio resources
+    // Stop custom VAD and clean up audio resources
     console.log('[VAD] Stopping voice activity detection...');
 
     if (scriptProcessorRef.current) {
@@ -922,6 +935,12 @@ export default function RoomPage({ token, onLogout }) {
         wsRef.current.send(JSON.stringify({ type: "audio_end", roomId: roomId, device: "web" }));
       }
     } catch {}
+
+    // Close WebSocket
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
 
     setStatus("idle");
     setVadStatus("idle");
@@ -1861,17 +1880,7 @@ export default function RoomPage({ token, onLogout }) {
         </div>
       )}
 
-      {/* Room Admin Settings Modal */}
-      {!isGuest && showRoomAdminSettings && (
-        <RoomSTTSettings
-          token={token}
-          roomCode={roomId}
-          isOwner={isRoomOwner}
-          isAdmin={isAdmin}
-          isOpen={showRoomAdminSettings}
-          onClose={() => setShowRoomAdminSettings(false)}
-        />
-      )}
+      {/* NOTE: Room Admin Settings removed - using language-based routing (Migration 006) */}
     </div>
   );
 }

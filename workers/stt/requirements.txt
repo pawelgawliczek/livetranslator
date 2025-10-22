@@ -4,3 +4,13 @@ numpy==1.26.4
 soundfile==0.12.1
 av==16.0.1
 faster-whisper==1.2.0
+
+# Multi-provider STT backends
+speechmatics-python==1.5.1
+google-cloud-speech==2.26.0
+azure-cognitiveservices-speech==1.38.0
+# Soniox uses REST API (httpx already in api requirements)
+
+# Multi-provider MT backends
+deepl==1.18.0
+azure-ai-translation-text==1.0.0
