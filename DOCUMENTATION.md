@@ -19,32 +19,41 @@
 **LiveTranslator** is a real-time multi-language translation platform that enables live conversations between people speaking different languages.
 
 ### Key Features
-- **Real-time STT** with OpenAI Whisper + Local Whisper + conversation context for improved accuracy
-- **Dual STT Modes** - Configurable local/OpenAI for partial and final transcriptions independently
+- **Real-time STT Streaming** with persistent WebSocket connections to multiple providers
+- **Multi-Provider Support** - Speechmatics, Google Cloud Speech v2, Azure, Soniox, OpenAI Whisper
+- **Language-Based Routing** - Intelligent provider selection per language for optimal quality
+- **Dual STT Modes** - Separate providers for partial (real-time) and final (quality) transcriptions
+- **Persistent WebSocket Streaming** - One connection per room for true low-latency streaming
+- **Word-by-Word Accumulation** - Real-time incremental transcription display
 - **Parallel Processing** - Instant transcription + background quality refinement
 - **Smart Deduplication** - Context-aware duplicate prevention
-- **Segment Tracking** - Redis-based synchronized counter across STT modes with double-increment prevention
+- **Segment Tracking** - Redis-based synchronized counter with double-increment prevention
 - **Machine Translation** using local models (pl↔en) or OpenAI GPT-4o-mini
 - **WebSocket-based** live updates with processing indicators
 - **Google OAuth** + email/password authentication
-- **Smart caching** for translations and transcriptions
+- **Smart caching** for translations and transcriptions with Redis pub/sub invalidation
 - **Cost tracking** per room with detailed breakdowns
 - **Progressive Web App** (PWA) support with mobile optimization
 - **History** with on-demand translation and export capabilities
 - **Visual Feedback** - Real-time speaking indicators, spinning icons, 28-language localization
-- **Admin Panel** - Per-room and global STT provider configuration with instant cache invalidation
+- **Admin Panel** - Language-based STT provider configuration with instant cache invalidation
 - **Comprehensive Testing** - 93% test coverage for critical segment tracking functionality
 
 ### Technology Stack
 - **Frontend**: React 18 + Vite + React Router + i18next (internationalization)
 - **Backend**: FastAPI (Python 3.11+)
 - **Database**: PostgreSQL 16
-- **Cache/Queue**: Redis 7
+- **Cache/Queue**: Redis 7 with Pub/Sub
 - **Reverse Proxy**: Caddy 2
-- **STT**: OpenAI Whisper API
+- **STT Providers**:
+  - Speechmatics (persistent WebSocket streaming) ✅
+  - Google Cloud Speech v2 (TODO)
+  - Azure Speech SDK (TODO)
+  - Soniox (TODO)
+  - OpenAI Whisper (fallback)
 - **MT**: Local translation workers + OpenAI GPT-4o-mini
 - **Deployment**: Docker Compose
-- **i18n**: 12 languages (EN, PL, ES, FR, DE, AR, IT, PT, RU, ZH, JA, KR)
+- **i18n**: 28 languages with full UI localization
 
 ---
 
@@ -106,10 +115,61 @@
        │    STT     │   │     MT     │  │Persistence │  │    Cost    │
        │   Router   │   │   Router   │  │  Service   │  │  Tracker   │
        │            │   │            │  │            │  │  Service   │
-       │ Whisper    │   │ Routes to: │  │ Redis →    │  │ Redis →    │
-       │ API calls  │   │ - Local    │  │ Postgres   │  │ Postgres   │
-       │            │   │ - OpenAI   │  │            │  │            │
+       │ Language-  │   │ Routes to: │  │ Redis →    │  │ Redis →    │
+       │ based      │   │ - Local    │  │ Postgres   │  │ Postgres   │
+       │ routing    │   │ - OpenAI   │  │            │  │            │
+       │ Streaming  │   │            │  │            │  │            │
+       │ WebSocket  │   │            │  │            │  │            │
+       │ Manager    │   │            │  │            │  │            │
        └────────────┘   └────────────┘  └────────────┘  └────────────┘
+            │
+            ▼
+       ┌────────────────────────────────────────┐
+       │   Streaming Manager (Connection Pool)  │
+       │   ┌──────────┐  ┌──────────┐          │
+       │   │ Room A   │  │ Room B   │   ...    │
+       │   │ WS conn  │  │ WS conn  │          │
+       │   └────┬─────┘  └────┬─────┘          │
+       └────────┼─────────────┼─────────────────┘
+                │             │
+                ▼             ▼
+       ┌────────────────────────────────────────┐
+       │      Provider WebSocket Endpoints      │
+       │  Speechmatics │ Google │ Azure │ ...   │
+       └────────────────────────────────────────┘
+```
+
+### STT Streaming Architecture
+
+**Persistent WebSocket Connections:**
+
+```
+Audio Chunk → Router → Language-Based Routing
+                             ↓
+                      Streaming Manager
+                             ↓
+                  ┌──────────┼──────────┐
+                  ▼          ▼          ▼
+              Room A     Room B     Room C
+              WS conn    WS conn    WS conn
+                  │          │          │
+                  ▼          ▼          ▼
+              Speechmatics WebSocket Server
+                  │
+                  ├─→ AddPartialTranscript (word by word)
+                  ├─→ AddTranscript (final)
+                  └─→ Router accumulates & publishes
+```
+
+**Key Features:**
+- **One WebSocket per room** - Persistent connection for entire conversation
+- **Word-by-word streaming** - Real-time accumulation as user speaks
+- **Language-based routing** - Database-driven provider selection per language
+- **Quality tiers** - Standard vs Budget providers
+- **Automatic fallback** - OpenAI Whisper if streaming provider fails
+- **Connection pooling** - Efficient resource management
+- **Clean lifecycle** - Proper connection close with EndOfStream
+
 ```
 
 ### Message Flow
