@@ -128,6 +128,7 @@ export default function RoomPage({ token, onLogout }) {
   const lastPartialSentRef = useRef(0);
   const currentSegmentHintRef = useRef(null);
   const chatEndRef = useRef(null);
+  const placeholderSegmentKeyRef = useRef(null); // Track current placeholder for removal
 
   const segsRef = useRef(new Map());
   const dirtyRef = useRef(false);
@@ -453,6 +454,42 @@ export default function RoomPage({ token, onLogout }) {
             segsRef.current.set(`system-${systemMessage.segment_id}`, { source: systemMessage });
             scheduleRender();
           }
+          // Handle speech_started events
+          else if (data.type === 'speech_started') {
+            console.log('[RoomPage] Speech started from:', data.speaker);
+
+            // Create placeholder segment for this speaker
+            const placeholderSegmentId = 'placeholder-' + data.timestamp;
+            const placeholderKey = `s-${placeholderSegmentId}`;
+
+            // Only track our own placeholder for removal
+            if (data.speaker === (userEmail || 'Guest')) {
+              placeholderSegmentKeyRef.current = placeholderKey;
+            }
+
+            segsRef.current.set(placeholderKey, {
+              segment_id: placeholderSegmentId,
+              type: 'stt_partial',
+              text: '___SPEAKING___',
+              speaker: data.speaker,
+              final: false,
+              ts_iso: new Date().toISOString(),
+              is_placeholder: true
+            });
+            scheduleRender();
+
+            // Auto-remove placeholder after 5 seconds if no text arrives
+            setTimeout(() => {
+              if (segsRef.current.has(placeholderKey)) {
+                segsRef.current.delete(placeholderKey);
+                if (placeholderSegmentKeyRef.current === placeholderKey) {
+                  placeholderSegmentKeyRef.current = null;
+                }
+                scheduleRender();
+                console.log('[VAD] Removed stale placeholder after timeout for:', data.speaker);
+              }
+            }, 5000);
+          }
           // Process translation and STT messages
           else if (data.type && (data.type.includes('translation') || data.type.includes('stt') || data.type.includes('partial') || data.type.includes('final'))) {
             onMsg(event);
@@ -522,13 +559,20 @@ export default function RoomPage({ token, onLogout }) {
       }
       
       const arr = Array.from(segments.entries())
+        .filter(([segId, seg]) => {
+          // Filter out empty segments, but keep speaking placeholders
+          const hasSourceText = seg.source && seg.source.text && seg.source.text.trim().length > 0;
+          const hasTranslationText = seg.translation && seg.translation.text && seg.translation.text.trim().length > 0;
+          const isPlaceholder = seg.source?.text === '___SPEAKING___' || seg.translation?.text === '___SPEAKING___';
+          return hasSourceText || hasTranslationText || isPlaceholder;
+        })
         .sort((a, b) => {
           const tsA = a[1].source?.ts_iso || a[1].translation?.ts_iso || "";
           const tsB = b[1].source?.ts_iso || b[1].translation?.ts_iso || "";
           return tsA.localeCompare(tsB) || (a[0] - b[0]);
         })
         .slice(-100);
-      
+
       setLines(arr);
       dirtyRef.current = false;
     }, 200);
@@ -547,6 +591,13 @@ export default function RoomPage({ token, onLogout }) {
       const id = m.segment_id | 0;
 
       console.log('[WS] Processing:', m.type, 'segment:', id, 'speaker:', m.speaker);
+
+      // Remove placeholder segment when real text arrives
+      if (placeholderSegmentKeyRef.current) {
+        segsRef.current.delete(placeholderSegmentKeyRef.current);
+        console.log('[WS] Removed placeholder segment:', placeholderSegmentKeyRef.current);
+        placeholderSegmentKeyRef.current = null;
+      }
 
       if (m.type === "translation_partial" || m.type === "translation_final") {
         segsRef.current.set(`t-${id}`, m);
@@ -588,8 +639,8 @@ export default function RoomPage({ token, onLogout }) {
   function sendPartialIfReady() {
     const now = Date.now();
     if (!isSpeakingRef.current) return;
-    if (now - lastPartialSentRef.current < 800) return;  // Send every 800ms for faster updates
-    if (partialBufferRef.current.length < 8000) return;  // Minimum 0.5s of audio
+    if (now - lastPartialSentRef.current < 300) return;  // Send every 300ms for fast updates
+    if (partialBufferRef.current.length < 3200) return;  // Minimum 0.2s of audio (3200 samples @ 16kHz)
 
     try {
       const pcm16 = floatTo16(partialBufferRef.current);
@@ -608,7 +659,7 @@ export default function RoomPage({ token, onLogout }) {
       }
 
       lastPartialSentRef.current = now;
-      const keepSamples = 8000;
+      const keepSamples = 4800;  // Keep 0.3s of context for overlapping windows
       if (partialBufferRef.current.length > keepSamples) {
         partialBufferRef.current = partialBufferRef.current.slice(-keepSamples);
       }
@@ -747,6 +798,18 @@ export default function RoomPage({ token, onLogout }) {
             partialBufferRef.current = new Float32Array(0);
             lastPartialSentRef.current = 0;
             currentSegmentHintRef.current = Date.now();
+
+            // Broadcast speech_started to all clients in the room
+            const speaker = userEmail || 'Guest';
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({
+                type: "speech_started",
+                room_id: roomId,
+                speaker: speaker,
+                timestamp: Date.now()
+              }));
+              console.log('[VAD] Sent speech_started event for:', speaker);
+            }
           }
         } else {
           silenceFramesRef.current++;
@@ -1348,11 +1411,23 @@ export default function RoomPage({ token, onLogout }) {
                     fontSize: "1rem",
                     fontWeight: "500",
                     marginBottom: "0.4rem",
-                    lineHeight: "1.45"
+                    lineHeight: "1.45",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem"
                   }}>
-                    {seg.translation.text}
-                    {!seg.translation.final && (
-                      <span className="processing-spinner" style={{marginLeft: "0.5rem", color: "#3b82f6"}}>⋯</span>
+                    {seg.translation.text === '___SPEAKING___' ? (
+                      <>
+                        <span className="processing-spinner" style={{ color: "#3b82f6" }}>🎤</span>
+                        <span style={{ fontStyle: "italic" }}>Speaking...</span>
+                      </>
+                    ) : (
+                      <>
+                        {seg.translation.text}
+                        {!seg.translation.final && (
+                          <span className="processing-spinner" style={{marginLeft: "0.5rem", color: "#3b82f6"}}>⋯</span>
+                        )}
+                      </>
                     )}
                   </div>
                   {seg.translation.final && seg.translation.processing && (
@@ -1389,11 +1464,23 @@ export default function RoomPage({ token, onLogout }) {
                         color: seg.source.final ? "#fff" : "#bbb",
                         fontSize: "1rem",
                         fontWeight: "500",
-                        lineHeight: "1.45"
+                        lineHeight: "1.45",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem"
                       }}>
-                        {seg.source.text}
-                        {!seg.source.final && (
-                          <span className="processing-spinner" style={{marginLeft: "0.5rem", color: "#3b82f6"}}>⋯</span>
+                        {seg.source.text === '___SPEAKING___' ? (
+                          <>
+                            <span className="processing-spinner" style={{ color: "#3b82f6" }}>🎤</span>
+                            <span style={{ fontStyle: "italic" }}>Speaking...</span>
+                          </>
+                        ) : (
+                          <>
+                            {seg.source.text}
+                            {!seg.source.final && (
+                              <span className="processing-spinner" style={{marginLeft: "0.5rem", color: "#3b82f6"}}>⋯</span>
+                            )}
+                          </>
                         )}
                       </div>
                       {seg.source.final && seg.source.processing && (

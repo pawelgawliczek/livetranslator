@@ -22,6 +22,7 @@ from .profile_api import router as profile_router
 from .subscription_api import router as subscription_router
 from .billing_api import router as billing_router
 from .user_history_api import router as user_history_router
+from .routers.admin_api import router as admin_router
 
 app = FastAPI(title="LiveTranslator API")
 app.include_router(events_router)
@@ -35,6 +36,7 @@ app.include_router(profile_router)
 app.include_router(subscription_router)
 app.include_router(billing_router)
 app.include_router(user_history_router)
+app.include_router(admin_router)
 
 structlog.configure(
     processors=[
@@ -123,6 +125,16 @@ async def ws_room(ws: WebSocket, room_id: str):
                     "room_id": room_id,
                     "user_email": user_email,
                     "preferred_lang": new_lang
+                })
+                continue
+
+            # Handle speech_started event - broadcast to all room participants
+            if msg.get("type") == "speech_started":
+                await wsman.broadcast(room_id, {
+                    "type": "speech_started",
+                    "room_id": room_id,
+                    "speaker": msg.get("speaker", user_email),
+                    "timestamp": msg.get("timestamp", 0)
                 })
                 continue
 
