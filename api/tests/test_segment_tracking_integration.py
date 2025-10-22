@@ -318,14 +318,16 @@ async def test_double_audio_end_prevention(redis_client, clean_room):
     # Second audio_end (duplicate) - should NOT increment
     seg, next_seg, action = await handle_audio_end(is_final=True)
     assert action == "skipped"
-    assert seg == 1
+    assert seg == 2  # Reads current counter value (already incremented to 2)
     assert next_seg is None
 
     # Third audio_end (another duplicate) - should NOT increment
     seg, next_seg, action = await handle_audio_end(is_final=True)
     assert action == "skipped"
+    assert seg == 2  # Still reads current counter value
+    assert next_seg is None
 
-    # Counter should still be 2
+    # Counter should still be 2 (only incremented once)
     final_counter = await redis_client.get(f"room:{room}:segment_counter")
     assert final_counter == "2"
 

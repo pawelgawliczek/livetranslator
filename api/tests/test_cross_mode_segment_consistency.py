@@ -394,10 +394,10 @@ async def test_segment_alignment_with_persistence(redis_client, clean_room):
         pubsub = redis_client.pubsub()
         await pubsub.subscribe(STT_EVENTS_CHANNEL)
 
-        timeout = asyncio.create_task(asyncio.sleep(2))
-        listen = asyncio.create_task(pubsub.get_message(timeout=2))
+        # Listen for messages for 2 seconds
+        end_time = asyncio.get_event_loop().time() + 2.0
 
-        while not timeout.done():
+        while asyncio.get_event_loop().time() < end_time:
             try:
                 msg = await asyncio.wait_for(pubsub.get_message(ignore_subscribe_messages=True), timeout=0.5)
                 if msg and msg["type"] == "message":
@@ -409,7 +409,7 @@ async def test_segment_alignment_with_persistence(redis_client, clean_room):
                             "final": data["final"]
                         })
             except asyncio.TimeoutError:
-                break
+                continue  # Keep listening until end_time
 
         await pubsub.close()
 
