@@ -13,9 +13,15 @@ export default function SettingsMenu({
   onLogout,
   canChangeLanguage = true,
   persistenceEnabled = false,
-  onTogglePersistence
+  onTogglePersistence,
+  isRoomAdmin = false,
+  isPublic = false,
+  onTogglePublic
 }) {
   if (!isOpen) return null;
+
+  // Debug logging
+  console.log('[SettingsMenu] Props:', { isGuest, isRoomAdmin, isPublic, persistenceEnabled });
 
   // Don't allow closing if no language is selected
   const canClose = !!myLanguage;
@@ -59,6 +65,14 @@ export default function SettingsMenu({
       onClick: onTogglePersistence,
       isToggle: true,
       toggleValue: persistenceEnabled
+    }] : []),
+    // Only show public/private toggle for room admins
+    ...(isRoomAdmin ? [{
+      icon: isPublic ? "🌍" : "🔒",
+      label: isPublic ? "Public Room" : "Private Room",
+      onClick: onTogglePublic,
+      isToggle: true,
+      toggleValue: isPublic
     }] : []),
     {
       icon: isGuest ? "🔑" : "🚪",

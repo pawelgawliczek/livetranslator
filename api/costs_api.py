@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from .db import SessionLocal
 from .models import RoomCost
 
-router = APIRouter(prefix="/costs", tags=["costs"])
+router = APIRouter(prefix="/api/costs", tags=["costs"])
 
 def get_db():
     db = SessionLocal()

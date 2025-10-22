@@ -39,7 +39,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
     try {
       setLoading(true);
       // Fetch list of available rooms from backend
-      const response = await fetch("/history/rooms", {
+      const response = await fetch("/api/history/rooms", {
         headers: { "Authorization": `Bearer ${token}` }
       });
       
@@ -58,7 +58,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
     if (!newRoomName.trim()) return;
     
     try {
-      const response = await fetch("/rooms", {
+      const response = await fetch("/api/rooms", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -255,8 +255,65 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
                     e.currentTarget.style.borderColor = "#333";
                   }}
                 >
-                  <div style={{fontSize: "1.1rem", fontWeight: "600", marginBottom: "0.5rem"}}>
-                    {room.code}
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: "0.5rem"
+                  }}>
+                    <div style={{fontSize: "1.1rem", fontWeight: "600"}}>
+                      {room.code}
+                    </div>
+                    <div style={{display: "flex", gap: "0.5rem", alignItems: "center"}}>
+                      {room.is_public && (
+                        <span style={{
+                          fontSize: "0.75rem",
+                          padding: "0.25rem 0.5rem",
+                          background: "#22c55e20",
+                          color: "#22c55e",
+                          borderRadius: "4px",
+                          fontWeight: "500",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.25rem"
+                        }}>
+                          <span>🌍</span>
+                          Public
+                        </span>
+                      )}
+                      {!room.is_public && (
+                        <span style={{
+                          fontSize: "0.75rem",
+                          padding: "0.25rem 0.5rem",
+                          background: "#64748b20",
+                          color: "#94a3b8",
+                          borderRadius: "4px",
+                          fontWeight: "500",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.25rem"
+                        }}>
+                          <span>🔒</span>
+                          Private
+                        </span>
+                      )}
+                      {!room.is_owner && (
+                        <span style={{
+                          fontSize: "0.75rem",
+                          padding: "0.25rem 0.5rem",
+                          background: "#3b82f620",
+                          color: "#3b82f6",
+                          borderRadius: "4px",
+                          fontWeight: "500",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.25rem"
+                        }}>
+                          <span>👥</span>
+                          Shared
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div style={{color: "#999", fontSize: "0.85rem"}}>
                     Created {new Date(room.created_at).toLocaleDateString()}

@@ -92,7 +92,7 @@ export default function QuickRoomModal({ token, onClose }) {
       const quickRoomCode = `q-${shortCode}`; // e.g., q-mh07s8a (11 chars)
 
       // Create the room
-      const createResp = await fetch("/rooms", {
+      const createResp = await fetch("/api/rooms", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

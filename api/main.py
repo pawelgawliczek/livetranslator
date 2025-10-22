@@ -141,6 +141,14 @@ async def ws_room(ws: WebSocket, room_id: str):
                 # forward control events
                 await stt.push_raw(msg)
     except WebSocketDisconnect:
+        # Broadcast participant left event before disconnecting
+        await wsman.broadcast(room_id, {
+            "type": "participant_left",
+            "room_id": room_id,
+            "user_email": user_email,
+            "user_id": user_id,
+            "preferred_lang": user_lang
+        })
         await wsman.disconnect(room_id, ws)
         MET_WS_CONNS.dec()
 

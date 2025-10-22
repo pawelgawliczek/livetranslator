@@ -18,7 +18,7 @@ from .db import SessionLocal
 from .models import Room
 from .jwt_tools import verify_token
 
-router = APIRouter(tags=["rooms"])
+router = APIRouter(prefix="/api/rooms", tags=["rooms"])
 
 
 class CreateRoomRequest(BaseModel):
@@ -90,7 +90,7 @@ class ParticipantsResponse(BaseModel):
     participants: List[ParticipantInfo]
 
 
-@router.post("/rooms", response_model=RoomResponse)
+@router.post("", response_model=RoomResponse)
 async def create_room(
     request: CreateRoomRequest,
     db: Session = Depends(get_db),
@@ -146,7 +146,7 @@ async def create_room(
     )
 
 
-@router.get("/rooms/{room_code}", response_model=RoomResponse)
+@router.get("/{room_code}", response_model=RoomResponse)
 async def get_room(
     room_code: str,
     db: Session = Depends(get_db)
@@ -180,7 +180,7 @@ async def get_room(
     )
 
 
-@router.get("/api/rooms/{room_code}/participants", response_model=ParticipantsResponse)
+@router.get("/{room_code}/participants", response_model=ParticipantsResponse)
 async def get_room_participants(
     room_code: str,
     request: Request,
@@ -254,7 +254,7 @@ class UpdateRecordingRequest(BaseModel):
     recording: bool
 
 
-@router.patch("/api/rooms/{room_code}/recording", response_model=RoomResponse)
+@router.patch("/{room_code}/recording", response_model=RoomResponse)
 async def update_room_recording(
     room_code: str,
     request: UpdateRecordingRequest,
@@ -304,7 +304,62 @@ async def update_room_recording(
     )
 
 
-@router.get("/api/rooms/{room_code}/status", response_model=RoomStatusResponse)
+class UpdatePublicRequest(BaseModel):
+    """Request to update room public/private setting."""
+    is_public: bool
+
+
+@router.patch("/{room_code}/public", response_model=RoomResponse)
+async def update_room_public(
+    room_code: str,
+    request: UpdatePublicRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Toggle room public/private setting.
+
+    Args:
+        room_code: The room code
+        request: Public setting update
+        db: Database session
+        user: Authenticated user (must be room owner)
+
+    Returns:
+        RoomResponse with updated room details
+
+    Raises:
+        HTTPException: 404 if room not found, 403 if not owner
+    """
+    user_id = int(user.get("sub"))
+
+    # Get room
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # Verify user owns the room
+    if room.owner_id != user_id:
+        raise HTTPException(status_code=403, detail="Only room owner can modify public settings")
+
+    # Update public setting
+    room.is_public = request.is_public
+    db.commit()
+    db.refresh(room)
+
+    return RoomResponse(
+        id=room.id,
+        code=room.code,
+        owner_id=room.owner_id,
+        is_public=room.is_public,
+        requires_login=room.requires_login,
+        max_participants=room.max_participants,
+        created_at=room.created_at,
+        admin_left_at=room.admin_left_at
+    )
+
+
+@router.get("/{room_code}/status", response_model=RoomStatusResponse)
 async def get_room_status(
     room_code: str,
     request: Request,

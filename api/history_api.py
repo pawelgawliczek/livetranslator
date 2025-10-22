@@ -1,9 +1,10 @@
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, text
+from fastapi import APIRouter, Depends, HTTPException, Header
+from sqlalchemy import select, text, or_
 from sqlalchemy.orm import Session
 from .db import SessionLocal
 from .models import Room
+from .jwt_tools import verify_token
 
 # Import working OpenAI translation
 import sys
@@ -11,30 +12,54 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'routers', 'mt'))
 from openai_backend import translate_text as openai_translate
 
-router = APIRouter(prefix="/history", tags=["history"])
+router = APIRouter(prefix="/api/history", tags=["history"])
 
 def get_db():
     db = SessionLocal()
-    try: 
+    try:
         yield db
-    finally: 
+    finally:
         db.close()
 
+def get_current_user(authorization: str = Header(None)) -> dict:
+    """Extract user from JWT token."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+
+    token = authorization[7:]  # Remove "Bearer " prefix
+    try:
+        claims = verify_token(token)
+        return claims
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid authentication token")
+
 @router.get("/rooms")
-def get_rooms_list(db: Session = Depends(get_db)):
-    """Get list of all available rooms"""
-    
+def get_rooms_list(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """Get list of rooms - user's own rooms and public rooms"""
+
+    user_id = int(user.get("sub"))
+
+    # Get rooms that are either:
+    # 1. Owned by the current user, OR
+    # 2. Public (is_public = True)
     rooms = db.execute(
-        select(Room).order_by(Room.created_at.desc())
+        select(Room)
+        .where(or_(Room.owner_id == user_id, Room.is_public == True))
+        .order_by(Room.created_at.desc())
     ).scalars().all()
-    
+
     return {
         "count": len(rooms),
         "rooms": [
             {
                 "id": room.id,
                 "code": room.code,
-                "created_at": room.created_at.isoformat() if room.created_at else None
+                "created_at": room.created_at.isoformat() if room.created_at else None,
+                "is_public": room.is_public,
+                "is_owner": room.owner_id == user_id
             }
             for room in rooms
         ]

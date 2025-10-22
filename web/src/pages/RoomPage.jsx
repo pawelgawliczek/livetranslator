@@ -96,6 +96,8 @@ export default function RoomPage({ token, onLogout }) {
   const [persistenceEnabled, setPersistenceEnabled] = useState(() => {
     return localStorage.getItem('lt_persistence_enabled') === 'true';
   });
+  const [isPublic, setIsPublic] = useState(false);
+  const [isPublicInitialized, setIsPublicInitialized] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
@@ -201,6 +203,33 @@ export default function RoomPage({ token, onLogout }) {
     }
   }, [persistenceEnabled, isGuest, token, roomId]);
 
+  // Handle public/private toggle
+  useEffect(() => {
+    if (!isGuest && token && isRoomAdmin && isPublicInitialized) {
+      // Call API to update public setting on server
+      fetch(`/api/rooms/${roomId}/public`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ is_public: isPublic })
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Failed to update public setting');
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log('[Public] ✓ Public setting updated on server:', isPublic);
+        })
+        .catch(error => {
+          console.error('[Public] Failed to update server:', error);
+        });
+    }
+  }, [isPublic, isGuest, token, roomId, isRoomAdmin, isPublicInitialized]);
+
   // Check if current user is the room admin
   useEffect(() => {
     if (!isGuest && token) {
@@ -212,7 +241,18 @@ export default function RoomPage({ token, onLogout }) {
           try {
             const payload = JSON.parse(atob(token.split('.')[1]));
             const userId = parseInt(payload.sub);
-            setIsRoomAdmin(data.owner_id === userId);
+            const isAdmin = data.owner_id === userId;
+            console.log('[Room Admin Check]', {
+              userId,
+              ownerId: data.owner_id,
+              isAdmin,
+              isPublic: data.is_public,
+              recording: data.recording
+            });
+            setIsRoomAdmin(isAdmin);
+            setIsPublic(data.is_public || false);
+            setIsPublicInitialized(true); // Mark as initialized after first fetch
+            setPersistenceEnabled(data.recording || false);
           } catch (e) {
             console.error('Failed to check admin status:', e);
           }
@@ -356,8 +396,45 @@ export default function RoomPage({ token, onLogout }) {
         // Process STT and translation messages on presence WebSocket too
         try {
           const data = JSON.parse(event.data);
-          // Only process translation and STT messages, ignore other types
-          if (data.type && (data.type.includes('translation') || data.type.includes('stt') || data.type.includes('partial') || data.type.includes('final'))) {
+
+          // Handle participant join/leave events as system messages
+          if (data.type === 'participant_joined' || data.type === 'participant_left') {
+            // Get user's display name from email or user_id
+            let displayName = 'Someone';
+            if (data.user_email && data.user_email !== 'unknown') {
+              displayName = data.user_email.split('@')[0];
+            } else if (data.user_id && String(data.user_id).startsWith('guest:')) {
+              const parts = String(data.user_id).split(':', 2);
+              displayName = parts[1] || 'Guest';
+            }
+
+            // Don't show our own join message
+            try {
+              const ourEmail = authToken ? JSON.parse(atob(authToken.split('.')[1])).email : null;
+              if (data.type === 'participant_joined' && data.user_email === ourEmail) {
+                return;
+              }
+            } catch (e) {
+              // Ignore token parsing errors
+            }
+
+            // Create a system message
+            const systemMessage = {
+              type: 'system',
+              segment_id: Date.now(),
+              ts_iso: new Date().toISOString(),
+              text: data.type === 'participant_joined'
+                ? `${displayName} joined the room`
+                : `${displayName} left the room`,
+              is_system: true
+            };
+
+            // Add to segments
+            segsRef.current.set(`system-${systemMessage.segment_id}`, { source: systemMessage });
+            scheduleRender();
+          }
+          // Process translation and STT messages
+          else if (data.type && (data.type.includes('translation') || data.type.includes('stt') || data.type.includes('partial') || data.type.includes('final'))) {
             onMsg(event);
           } else {
             console.log('[RoomPage] Presence WS received (ignored):', data.type);
@@ -770,7 +847,7 @@ export default function RoomPage({ token, onLogout }) {
   
   async function fetchCosts() {
     try {
-      const r = await fetch(`/costs/room/${encodeURIComponent(roomId)}`, {
+      const r = await fetch(`/api/costs/room/${encodeURIComponent(roomId)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (r.ok) setCosts(await r.json());
@@ -1184,6 +1261,32 @@ export default function RoomPage({ token, onLogout }) {
         
         {lines.map(([segId, seg]) => {
           const timestamp = seg.source?.ts_iso || seg.translation?.ts_iso;
+
+          // Check if this is a system message
+          const isSystemMessage = seg.source?.is_system === true;
+
+          // Render system messages differently
+          if (isSystemMessage) {
+            return (
+              <div key={segId} style={{
+                textAlign: "center",
+                padding: "0.5rem",
+                color: "#888",
+                fontSize: "0.85rem",
+                fontStyle: "italic"
+              }}>
+                <span style={{
+                  background: "#2a2a2a",
+                  padding: "0.4rem 0.8rem",
+                  borderRadius: "12px",
+                  display: "inline-block"
+                }}>
+                  {seg.source.text}
+                </span>
+              </div>
+            );
+          }
+
           return (
             <div key={segId} style={{
               background: "#1a1a1a",
@@ -1398,6 +1501,9 @@ export default function RoomPage({ token, onLogout }) {
         canChangeLanguage={status === "idle"}
         persistenceEnabled={persistenceEnabled}
         onTogglePersistence={() => setPersistenceEnabled(!persistenceEnabled)}
+        isRoomAdmin={isRoomAdmin}
+        isPublic={isPublic}
+        onTogglePublic={() => setIsPublic(!isPublic)}
       />
 
       {/* Invite Modal */}

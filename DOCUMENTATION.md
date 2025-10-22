@@ -345,6 +345,20 @@ CREATE INDEX ix_room_costs_room_ts ON room_costs(room_id, ts DESC);
 - Production: `https://livetranslator.pawelgawliczek.cloud`
 - Local: `http://localhost:9003`
 
+### API Structure
+All API endpoints follow a consistent `/api/{resource}` pattern for better organization and maintainability:
+- **Rooms**: `/api/rooms/*`
+- **History**: `/api/history/*`
+- **Costs**: `/api/costs/*`
+- **Billing**: `/api/billing/*`
+- **Profile**: `/api/profile/*`
+- **Subscriptions**: `/api/subscription/*`
+- **Guests**: `/api/guest/*`
+- **Invites**: `/api/invites/*`
+- **User History**: `/api/user/history/*`
+
+**Note**: Authentication endpoints use `/auth/*` (without `/api/` prefix) as they are not RESTful resources but authentication flows.
+
 ### Authentication Endpoints (`/auth/*`)
 
 #### POST `/auth/signup`
@@ -394,10 +408,10 @@ Google OAuth callback. Exchanges code for user info and returns JWT.
 
 **Response:** Redirects to `/?token=...`
 
-### Room Endpoints (`/rooms`)
+### Room Endpoints (`/api/rooms`)
 
-#### GET `/rooms`
-List all rooms for authenticated user.
+#### POST `/api/rooms`
+Create a new room.
 
 **Headers:**
 ```
@@ -416,8 +430,8 @@ Authorization: Bearer <token>
 ]
 ```
 
-#### POST `/rooms`
-Create a new room.
+#### GET `/api/rooms/{room_code}`
+Get room details by room code.
 
 **Headers:**
 ```
@@ -441,9 +455,9 @@ Authorization: Bearer <token>
 }
 ```
 
-### Cost Endpoints (`/costs/*`)
+### Cost Endpoints (`/api/costs/*`)
 
-#### GET `/costs/room/{room_code}`
+#### GET `/api/costs/room/{room_code}`
 Get total costs for a room.
 
 **Headers:**
@@ -470,9 +484,12 @@ Authorization: Bearer <token>
 }
 ```
 
-### History Endpoints (`/history/*`)
+### History Endpoints (`/api/history/*`)
 
-#### GET `/history/room/{room_code}?target_lang={lang}`
+#### GET `/api/history/rooms`
+Get list of rooms for authenticated user (user's own rooms + public rooms).
+
+#### GET `/api/history/room/{room_code}?target_lang={lang}`
 Get conversation history with on-demand translation.
 
 **Headers:**
