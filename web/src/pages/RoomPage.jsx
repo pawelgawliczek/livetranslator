@@ -3,13 +3,14 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import InviteModal from "../components/InviteModal";
 import ParticipantsModal from "../components/ParticipantsModal";
 import SettingsMenu from "../components/SettingsMenu";
+import RoomSTTSettings from "../components/RoomSTTSettings";
 
 export default function RoomPage({ token, onLogout }) {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Add spinning animation for processing indicator
+  // Add animations for processing indicator and speaking status
   React.useEffect(() => {
     const style = document.createElement('style');
     style.textContent = `
@@ -20,6 +21,10 @@ export default function RoomPage({ token, onLogout }) {
       .processing-spinner {
         display: inline-block;
         animation: spin 1s linear infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
       }
     `;
     document.head.appendChild(style);
@@ -84,6 +89,7 @@ export default function RoomPage({ token, onLogout }) {
   const [showInvite, setShowInvite] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showRoomAdminSettings, setShowRoomAdminSettings] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [myLanguage, setMyLanguage] = useState(() => {
     const stored = isGuest ? guestLang : localStorage.getItem('lt_my_language');
@@ -98,6 +104,8 @@ export default function RoomPage({ token, onLogout }) {
   });
   const [isPublic, setIsPublic] = useState(false);
   const [isPublicInitialized, setIsPublicInitialized] = useState(false);
+  const [isRoomOwner, setIsRoomOwner] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
@@ -230,9 +238,10 @@ export default function RoomPage({ token, onLogout }) {
     }
   }, [isPublic, isGuest, token, roomId, isRoomAdmin, isPublicInitialized]);
 
-  // Check if current user is the room admin
+  // Check if current user is the room admin and fetch user profile
   useEffect(() => {
     if (!isGuest && token) {
+      // Fetch room info
       fetch(`/api/rooms/${roomId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
@@ -241,15 +250,16 @@ export default function RoomPage({ token, onLogout }) {
           try {
             const payload = JSON.parse(atob(token.split('.')[1]));
             const userId = parseInt(payload.sub);
-            const isAdmin = data.owner_id === userId;
+            const isOwner = data.owner_id === userId;
             console.log('[Room Admin Check]', {
               userId,
               ownerId: data.owner_id,
-              isAdmin,
+              isOwner,
               isPublic: data.is_public,
               recording: data.recording
             });
-            setIsRoomAdmin(isAdmin);
+            setIsRoomAdmin(isOwner);
+            setIsRoomOwner(isOwner);
             setIsPublic(data.is_public || false);
             setIsPublicInitialized(true); // Mark as initialized after first fetch
             setPersistenceEnabled(data.recording || false);
@@ -258,6 +268,16 @@ export default function RoomPage({ token, onLogout }) {
           }
         })
         .catch(err => console.error('Failed to fetch room info:', err));
+
+      // Fetch user profile to check if admin
+      fetch('/api/profile', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          setIsAdmin(data.is_admin || false);
+        })
+        .catch(err => console.error('Failed to fetch user profile:', err));
     }
   }, [roomId, token, isGuest]);
 
@@ -525,9 +545,9 @@ export default function RoomPage({ token, onLogout }) {
       m.segment_id = m.segment_id || Date.now();
       m.ts_iso = m.ts_iso || new Date().toISOString();
       const id = m.segment_id | 0;
-      
+
       console.log('[WS] Processing:', m.type, 'segment:', id, 'speaker:', m.speaker);
-      
+
       if (m.type === "translation_partial" || m.type === "translation_final") {
         segsRef.current.set(`t-${id}`, m);
       } else if (m.type === "partial" || m.type === "stt_partial" || m.type === "final" || m.type === "stt_final") {
@@ -1246,7 +1266,7 @@ export default function RoomPage({ token, onLogout }) {
             📜 Loading history...
           </div>
         )}
-        
+
         {!loadingHistory && lines.length === 0 && (
           <div style={{
             textAlign: "center",
@@ -1258,7 +1278,7 @@ export default function RoomPage({ token, onLogout }) {
             Press the microphone to start
           </div>
         )}
-        
+
         {lines.map(([segId, seg]) => {
           const timestamp = seg.source?.ts_iso || seg.translation?.ts_iso;
 
@@ -1331,7 +1351,9 @@ export default function RoomPage({ token, onLogout }) {
                     lineHeight: "1.45"
                   }}>
                     {seg.translation.text}
-                    {!seg.translation.final && <span style={{marginLeft: "0.5rem", color: "#666"}}>⋯</span>}
+                    {!seg.translation.final && (
+                      <span className="processing-spinner" style={{marginLeft: "0.5rem", color: "#3b82f6"}}>⋯</span>
+                    )}
                   </div>
                   {seg.translation.final && seg.translation.processing && (
                     <div style={{
@@ -1370,7 +1392,9 @@ export default function RoomPage({ token, onLogout }) {
                         lineHeight: "1.45"
                       }}>
                         {seg.source.text}
-                        {!seg.source.final && <span style={{marginLeft: "0.5rem", color: "#666"}}>⋯</span>}
+                        {!seg.source.final && (
+                          <span className="processing-spinner" style={{marginLeft: "0.5rem", color: "#3b82f6"}}>⋯</span>
+                        )}
                       </div>
                       {seg.source.final && seg.source.processing && (
                         <div style={{
@@ -1504,6 +1528,10 @@ export default function RoomPage({ token, onLogout }) {
         isRoomAdmin={isRoomAdmin}
         isPublic={isPublic}
         onTogglePublic={() => setIsPublic(!isPublic)}
+        onShowRoomAdminSettings={() => {
+          setShowSettings(false);
+          setShowRoomAdminSettings(true);
+        }}
       />
 
       {/* Invite Modal */}
@@ -1745,6 +1773,18 @@ export default function RoomPage({ token, onLogout }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Room Admin Settings Modal */}
+      {!isGuest && showRoomAdminSettings && (
+        <RoomSTTSettings
+          token={token}
+          roomCode={roomId}
+          isOwner={isRoomOwner}
+          isAdmin={isAdmin}
+          isOpen={showRoomAdminSettings}
+          onClose={() => setShowRoomAdminSettings(false)}
+        />
       )}
     </div>
   );
