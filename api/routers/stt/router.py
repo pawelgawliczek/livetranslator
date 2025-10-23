@@ -579,6 +579,27 @@ async def router_loop():
                         last_partial_text = streaming_conn.accumulated_text.strip()
                         print(f"[STT Router] 📊 [{timestamp:.3f}] Streaming session ended - sending finalization marker for: {last_partial_text[:80]}...")
 
+                        # IMPORTANT: Send stt_final event with accumulated text to trigger final translation
+                        # This ensures any remaining buffered text gets translated when user stops speaking
+                        if last_partial_text:
+                            final_event = {
+                                "type": "stt_final",
+                                "room_id": room,
+                                "segment_id": session["segment_id"],
+                                "revision": session["chunk_count"],
+                                "text": last_partial_text,
+                                "lang": session.get("detected_lang", session.get("language_hint", "auto")),
+                                "speaker": session.get("speaker", "system"),
+                                "target_lang": session.get("target_lang", "en"),
+                                "device": data.get("device", "web"),
+                                "provider": session.get("provider", "unknown"),
+                                "final": True,
+                                "speech_final": True,
+                                "ts_iso": datetime.utcnow().isoformat() + "Z"
+                            }
+                            await r.publish(STT_OUTPUT_EVENTS, jdumps(final_event))
+                            print(f"[STT Router] 🏁 [{timestamp:.3f}] Sent stt_final event to trigger final translation")
+
                         # Send finalization marker event (tells frontend the last partial is now final)
                         finalization_event = {
                             "type": "stt_finalize",
