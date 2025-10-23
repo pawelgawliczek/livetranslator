@@ -1434,62 +1434,68 @@ export default function RoomPage({ token, onLogout }) {
           return (
             <div key={segId} style={{
               background: "#1a1a1a",
-              borderRadius: "14px",
-              padding: "0.85rem",
+              borderRadius: "12px",
+              padding: "0.5rem 0.65rem",
               border: "1px solid #333"
             }}>
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "0.5rem"
-              }}>
-                {seg.source && seg.source.speaker && seg.source.speaker !== "system" && (
-                  <div style={{
-                    fontSize: "0.7rem",
-                    color: "#3b82f6",
-                    fontWeight: "600"
-                  }}>
-                    👤 {seg.source.speaker.split('@')[0]}
-                  </div>
-                )}
-                {timestamp && (
-                  <div style={{
-                    fontSize: "0.65rem",
-                    color: "#666",
-                    marginLeft: "auto"
-                  }}>
-                    {formatTime(timestamp)}
-                  </div>
-                )}
-              </div>
-              
               {seg.translation ? (
                 <>
-                  {/* Translation - large font */}
+                  {/* Translation - large font with username/time on left */}
                   <div style={{
-                    color: seg.translation.final ? "#fff" : "#bbb",
-                    fontSize: "1rem",
-                    fontWeight: "500",
-                    marginBottom: "0.4rem",
-                    lineHeight: "1.45",
                     display: "flex",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     gap: "0.5rem"
                   }}>
-                    {seg.translation.text === '___SPEAKING___' ? (
-                      <>
-                        <span className="processing-spinner" style={{ color: "#3b82f6" }}>🎤</span>
-                        <span style={{ fontStyle: "italic" }}>Speaking...</span>
-                      </>
-                    ) : (
-                      <>
-                        {seg.translation.text}
-                        {!seg.translation.final && (
-                          <span className="processing-spinner" style={{marginLeft: "0.5rem", color: "#3b82f6"}}>⋯</span>
+                    {/* Username and timestamp column */}
+                    {seg.source && seg.source.speaker && seg.source.speaker !== "system" && (
+                      <div style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        flexShrink: 0,
+                        minWidth: "fit-content"
+                      }}>
+                        <span style={{
+                          fontSize: "0.65rem",
+                          color: "#3b82f6",
+                          fontWeight: "600",
+                          lineHeight: "1.2"
+                        }}>
+                          👤 {seg.source.speaker.split('@')[0]}
+                        </span>
+                        {timestamp && (
+                          <span style={{
+                            fontSize: "0.6rem",
+                            color: "#666",
+                            lineHeight: "1.2"
+                          }}>
+                            {formatTime(timestamp)}
+                          </span>
                         )}
-                      </>
+                      </div>
                     )}
+                    {/* Message text */}
+                    <span style={{
+                      color: seg.translation.final ? "#fff" : "#bbb",
+                      fontSize: "1rem",
+                      fontWeight: "500",
+                      lineHeight: "1.45",
+                      flex: 1,
+                      minWidth: 0
+                    }}>
+                      {seg.translation.text === '___SPEAKING___' ? (
+                        <>
+                          <span className="processing-spinner" style={{ color: "#3b82f6" }}>🎤</span>
+                          <span style={{ fontStyle: "italic" }}> Speaking...</span>
+                        </>
+                      ) : (
+                        <>
+                          {seg.translation.text}
+                          {!seg.translation.final && (
+                            <span className="processing-spinner" style={{marginLeft: "0.5rem", color: "#3b82f6"}}>⋯</span>
+                          )}
+                        </>
+                      )}
+                    </span>
                   </div>
                   {seg.translation.final && seg.translation.processing && (
                     <div style={{
@@ -1518,31 +1524,64 @@ export default function RoomPage({ token, onLogout }) {
                 </>
               ) : (
                 <>
-                  {/* No translation - show source in large font (own message) */}
+                  {/* No translation - show source in large font (own message) with username/time on left */}
                   {seg.source && (
                     <>
                       <div style={{
-                        color: seg.source.final ? "#fff" : "#bbb",
-                        fontSize: "1rem",
-                        fontWeight: "500",
-                        lineHeight: "1.45",
                         display: "flex",
-                        alignItems: "center",
+                        alignItems: "flex-start",
                         gap: "0.5rem"
                       }}>
-                        {seg.source.text === '___SPEAKING___' ? (
-                          <>
-                            <span className="processing-spinner" style={{ color: "#3b82f6" }}>🎤</span>
-                            <span style={{ fontStyle: "italic" }}>Speaking...</span>
-                          </>
-                        ) : (
-                          <>
-                            {seg.source.text}
-                            {!seg.source.final && (
-                              <span className="processing-spinner" style={{marginLeft: "0.5rem", color: "#3b82f6"}}>⋯</span>
+                        {/* Username and timestamp column */}
+                        {seg.source.speaker && seg.source.speaker !== "system" && (
+                          <div style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            flexShrink: 0,
+                            minWidth: "fit-content"
+                          }}>
+                            <span style={{
+                              fontSize: "0.65rem",
+                              color: "#3b82f6",
+                              fontWeight: "600",
+                              lineHeight: "1.2"
+                            }}>
+                              👤 {seg.source.speaker.split('@')[0]}
+                            </span>
+                            {timestamp && (
+                              <span style={{
+                                fontSize: "0.6rem",
+                                color: "#666",
+                                lineHeight: "1.2"
+                              }}>
+                                {formatTime(timestamp)}
+                              </span>
                             )}
-                          </>
+                          </div>
                         )}
+                        {/* Message text */}
+                        <span style={{
+                          color: seg.source.final ? "#fff" : "#bbb",
+                          fontSize: "1rem",
+                          fontWeight: "500",
+                          lineHeight: "1.45",
+                          flex: 1,
+                          minWidth: 0
+                        }}>
+                          {seg.source.text === '___SPEAKING___' ? (
+                            <>
+                              <span className="processing-spinner" style={{ color: "#3b82f6" }}>🎤</span>
+                              <span style={{ fontStyle: "italic" }}> Speaking...</span>
+                            </>
+                          ) : (
+                            <>
+                              {seg.source.text}
+                              {!seg.source.final && (
+                                <span className="processing-spinner" style={{marginLeft: "0.5rem", color: "#3b82f6"}}>⋯</span>
+                              )}
+                            </>
+                          )}
+                        </span>
                       </div>
                       {seg.source.final && seg.source.processing && (
                         <div style={{
