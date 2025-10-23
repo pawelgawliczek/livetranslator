@@ -100,6 +100,66 @@ class TestRoomCleanupService:
         assert not mock_session.commit.called  # No changes to commit
 
     @pytest.mark.asyncio
+    async def test_cleanup_deletes_empty_rooms_with_admin_left(self, mock_session):
+        """Test that cleanup deletes rooms where admin left even if room is empty."""
+        now = datetime.utcnow()
+        empty_room = Mock(
+            id=5,
+            code="empty-room",
+            owner_id=999,
+            created_at=now - timedelta(hours=2),
+            recording=False,
+            is_public=False,
+            requires_login=False,
+            max_participants=10,
+            admin_left_at=now - timedelta(minutes=45)  # 45 minutes ago, no users
+        )
+
+        mock_result = Mock()
+        mock_result.all.return_value = [empty_room]
+        mock_result.first.return_value = (0, 0, 0)  # No cost data
+        mock_result.scalar.return_value = 0  # No participants/messages
+        mock_session.execute.return_value = mock_result
+
+        from api.services.room_cleanup_service import cleanup_abandoned_rooms
+
+        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=mock_session):
+            await cleanup_abandoned_rooms()
+
+        # Should delete the room even though it's empty
+        assert mock_session.commit.called
+
+    @pytest.mark.asyncio
+    async def test_cleanup_deletes_rooms_with_only_authenticated_users(self, mock_session):
+        """Test that cleanup deletes rooms where admin left but only authenticated users remain."""
+        now = datetime.utcnow()
+        room_with_auth_users = Mock(
+            id=6,
+            code="auth-users-room",
+            owner_id=888,
+            created_at=now - timedelta(hours=1),
+            recording=False,
+            is_public=True,
+            requires_login=True,
+            max_participants=20,
+            admin_left_at=now - timedelta(minutes=35)  # 35 minutes ago
+        )
+
+        mock_result = Mock()
+        mock_result.all.return_value = [room_with_auth_users]
+        mock_result.first.return_value = (0, 0, 0)
+        mock_result.scalar.return_value = 2  # 2 authenticated users
+        mock_session.execute.return_value = mock_result
+
+        from api.services.room_cleanup_service import cleanup_abandoned_rooms
+
+        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=mock_session):
+            await cleanup_abandoned_rooms()
+
+        # Should delete the room even though authenticated users are present
+        assert mock_session.commit.called
+
+    @pytest.mark.asyncio
     async def test_cleanup_threshold_configuration(self):
         """Test that the cleanup threshold is configurable."""
         import os

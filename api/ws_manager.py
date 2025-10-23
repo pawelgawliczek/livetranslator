@@ -176,17 +176,12 @@ class WSManager:
                     room.admin_left_at = None
                     db.commit()
                     self.log.info("admin_rejoined", room=room_id, owner_id=room.owner_id)
-                elif not admin_present and not room.admin_left_at and len(connected_users) > 0:
-                    # Admin left - set the timestamp
-                    # Only mark as left if there are non-admin users still connected
-                    has_non_admin_users = any(
-                        user_id and str(user_id).startswith('guest:')
-                        for user_id in connected_users
-                    )
-                    if has_non_admin_users:
-                        room.admin_left_at = datetime.utcnow()
-                        db.commit()
-                        self.log.info("admin_left", room=room_id, owner_id=room.owner_id, timestamp=room.admin_left_at)
+                elif not admin_present and not room.admin_left_at:
+                    # Admin left or room is empty - set the timestamp for cleanup
+                    # This marks the room for cleanup after 30 minutes
+                    room.admin_left_at = datetime.utcnow()
+                    db.commit()
+                    self.log.info("admin_left", room=room_id, owner_id=room.owner_id, timestamp=room.admin_left_at, users_remaining=len(connected_users))
             finally:
                 db.close()
         except Exception as e:

@@ -133,6 +133,72 @@ async def archive_room(session, room_id: int, room_code: str, owner_id: int, cre
         print(f"[Room Cleanup]   ✗ Archive failed: {e}")
         return False
 
+async def mark_stale_zombie_rooms():
+    """
+    Mark zombie rooms as abandoned by setting admin_left_at to NOW().
+
+    Zombie rooms are rooms where WebSocket disconnect never fired (browser crash, network drop, etc.)
+    so admin_left_at was never set. After 24 hours with no activity, we assume the admin has left
+    and set admin_left_at = NOW(), giving a 30-minute grace period before deletion.
+
+    Why set admin_left_at to NOW() instead of created_at:
+    - Provides 30-minute grace period in case we made a mistake marking the room as abandoned
+    - Allows time for admin to rejoin if they return
+    - Gives operators time to review/cancel if needed
+
+    This approach:
+    1. Uses the same cleanup logic for all rooms (consistent behavior)
+    2. Follows the same archive/delete flow (data safety)
+    3. Provides safety buffer against false positives (grace period)
+
+    Total time until deletion: 24 hours (detection threshold) + 30 minutes (grace period) = 24.5 hours
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            # Find rooms created > 24 hours ago with no admin_left_at set
+            zombie_cutoff = datetime.utcnow() - timedelta(hours=24)
+
+            # Query for zombie rooms
+            zombie_stmt = select(
+                rooms_table.c.id,
+                rooms_table.c.code,
+                rooms_table.c.created_at
+            ).where(
+                rooms_table.c.admin_left_at.is_(None),  # No admin_left_at set
+                rooms_table.c.created_at < zombie_cutoff  # Older than 24 hours
+            )
+            result = await session.execute(zombie_stmt)
+            zombie_rooms = result.all()
+
+            if zombie_rooms:
+                print(f"[Room Cleanup] Found {len(zombie_rooms)} zombie rooms (no disconnect event, > 24h old)")
+
+                for room in zombie_rooms:
+                    age = datetime.utcnow() - room.created_at
+                    age_hours = int(age.total_seconds() / 3600)
+
+                    print(f"[Room Cleanup] Marking zombie room {room.code} as abandoned (created {age_hours} hours ago)")
+
+                    # Set admin_left_at to NOW() - gives 30 minute grace period before deletion
+                    # This allows time to recover if we made a mistake in marking the room as abandoned
+                    from sqlalchemy import update
+                    update_stmt = update(rooms_table).where(
+                        rooms_table.c.id == room.id
+                    ).values(
+                        admin_left_at=datetime.utcnow()
+                    )
+                    await session.execute(update_stmt)
+                    print(f"[Room Cleanup]   ✓ Set admin_left_at for {room.code} (will be deleted in 30 minutes)")
+
+                await session.commit()
+                print(f"[Room Cleanup] ✓ Marked {len(zombie_rooms)} zombie rooms for cleanup")
+            # Removed the "else" to reduce log noise - only log when action is taken
+
+        except Exception as e:
+            print(f"[Room Cleanup] ✗ Error during zombie room marking: {e}")
+            await session.rollback()
+
+
 async def cleanup_abandoned_rooms():
     """Archive and delete rooms where admin has been absent for more than the threshold"""
     async with AsyncSessionLocal() as session:
@@ -202,6 +268,12 @@ async def cleanup_loop():
     """Run cleanup periodically"""
     while True:
         try:
+            # First, mark zombie rooms as abandoned (set admin_left_at)
+            # Zombie rooms are > 24h old with no disconnect event
+            await mark_stale_zombie_rooms()
+
+            # Then, clean up all abandoned rooms (admin_left_at > 30 minutes ago)
+            # This includes both properly disconnected rooms and marked zombies
             await cleanup_abandoned_rooms()
         except Exception as e:
             print(f"[Room Cleanup] ✗ Unexpected error: {e}")
