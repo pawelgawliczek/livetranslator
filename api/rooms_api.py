@@ -421,6 +421,15 @@ async def get_room_status(
         # This ensures clients get the countdown even during the debounce period
         expires_at = room.admin_left_at + timedelta(minutes=30)
 
+    # Refresh user's language TTL in Redis (keeps them active for translation routing)
+    wsman = getattr(request.app.state, 'wsman', None)
+    if wsman and wsman.redis:
+        user_id = user.get("sub")
+        user_lang = user.get("preferred_lang", "en")
+        key = f"room:{room_code}:active_lang:{user_id}"
+        # Refresh TTL to 15 seconds (3x the 5s poll interval)
+        await wsman.redis.setex(key, 15, user_lang)
+
     return RoomStatusResponse(
         code=room.code,
         admin_present=admin_present,

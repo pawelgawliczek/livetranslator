@@ -50,6 +50,7 @@
 **User Experience:**
 - **WebSocket-based** live updates with processing indicators
 - **Visual Feedback** - Real-time speaking indicators, spinning icons, 28-language localization
+- **Active Language Tracking** - Language flags displayed in room header, system messages for join/leave/language change events
 - **Progressive Web App** (PWA) support with mobile optimization
 - **Google OAuth** + email/password authentication
 - **History** with on-demand translation and export capabilities
@@ -991,6 +992,99 @@ Final translation.
   "ts_iso": "2025-10-20T12:00:01.500000"
 }
 ```
+
+#### Participant Joined
+Sent when a user joins the room.
+
+```json
+{
+  "type": "participant_joined",
+  "room_id": "room-123",
+  "user_email": "john@example.com",
+  "user_id": "456",
+  "preferred_lang": "en"
+}
+```
+
+**Frontend Display:** System message: "🇬🇧 john joined with English"
+
+#### Participant Left
+Sent when a user leaves the room.
+
+```json
+{
+  "type": "participant_left",
+  "room_id": "room-123",
+  "user_email": "john@example.com",
+  "user_id": "456",
+  "preferred_lang": "en"
+}
+```
+
+**Frontend Display:** System message: "john left the room"
+
+#### Participant Language Changed
+Sent when a user changes their language preference.
+
+```json
+{
+  "type": "participant_language_changed",
+  "room_id": "room-123",
+  "user_email": "john@example.com",
+  "preferred_lang": "ar"
+}
+```
+
+**Frontend Display:** System message: "🇪🇬 john changed to Arabic"
+
+#### Set Language (Client → Server)
+Sent when user changes their preferred language.
+
+```json
+{
+  "type": "set_language",
+  "language": "ar"
+}
+```
+
+**Backend Actions:**
+- Registers language with 15s TTL in Redis (`room:{room_id}:active_lang:{user_id}`)
+- Triggers immediate language aggregation
+- Broadcasts `participant_language_changed` to all room participants
+- Updates translation routing to include new language
+
+---
+
+### Active Language Tracking
+
+**Purpose:** Optimize translation costs by only translating to languages of active participants
+
+**Architecture:**
+1. **Language Registration:** User language stored in Redis with 15s TTL
+   - Key: `room:{room_id}:active_lang:{user_id}`
+   - Value: ISO language code (e.g., "en", "pl", "ar")
+   - TTL: 15 seconds (refreshed every 5s by status poll)
+
+2. **Language Aggregation:** Active languages collected into set
+   - Key: `room:{room_id}:target_languages`
+   - Value: Set of active language codes
+   - Updated on: user join, language change, status poll
+   - Expiry: 30 seconds (safety)
+
+3. **Translation Routing:** MT router reads `target_languages` set
+   - Only translates to languages in the active set
+   - Excludes source language from targets
+   - Reduces unnecessary API calls and costs
+
+4. **Automatic Cleanup:**
+   - Language keys expire after 15s of inactivity
+   - Status poll refreshes TTL every 5 seconds
+   - User disconnect = no more polls = automatic removal
+
+**Frontend Display:**
+- **Room Header:** Language flags for all active languages (e.g., "room-123 🇬🇧 🇵🇱 🇪🇬")
+- **System Messages:** Join/leave/language change notifications in chat
+- **Styling:** Smaller, centered, semi-transparent to minimize distraction
 
 ---
 

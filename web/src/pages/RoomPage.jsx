@@ -111,6 +111,7 @@ export default function RoomPage({ token, onLogout }) {
   const [showExpirationModal, setShowExpirationModal] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [showAdminLeftNotification, setShowAdminLeftNotification] = useState(false);
+  const [activeLanguages, setActiveLanguages] = useState(new Set());
 
   const wsRef = useRef(null);
   const presenceWsRef = useRef(null); // Persistent presence WebSocket
@@ -412,6 +413,8 @@ export default function RoomPage({ token, onLogout }) {
             language: myLanguage
           }));
           console.log('[RoomPage] Sent initial language to server:', myLanguage);
+          // Add our own language to active languages
+          setActiveLanguages(prev => new Set([...prev, myLanguage]));
         }
       };
 
@@ -420,25 +423,50 @@ export default function RoomPage({ token, onLogout }) {
         try {
           const data = JSON.parse(event.data);
 
-          // Handle participant join/leave events as system messages
-          if (data.type === 'participant_joined' || data.type === 'participant_left') {
+          // Handle participant join/leave/language change events as system messages
+          if (data.type === 'participant_joined' || data.type === 'participant_left' || data.type === 'participant_language_changed') {
             // Get user's display name from email or user_id
             let displayName = 'Someone';
+            let isGuest = false;
             if (data.user_email && data.user_email !== 'unknown') {
               displayName = data.user_email.split('@')[0];
             } else if (data.user_id && String(data.user_id).startsWith('guest:')) {
               const parts = String(data.user_id).split(':', 2);
               displayName = parts[1] || 'Guest';
+              isGuest = true;
             }
 
             // Don't show our own join message
             try {
               const ourEmail = authToken ? JSON.parse(atob(authToken.split('.')[1])).email : null;
               if (data.type === 'participant_joined' && data.user_email === ourEmail) {
+                // Still update active languages for ourselves
+                if (data.preferred_lang) {
+                  setActiveLanguages(prev => new Set([...prev, data.preferred_lang]));
+                }
                 return;
               }
             } catch (e) {
               // Ignore token parsing errors
+            }
+
+            // Get language info
+            const langCode = data.preferred_lang || 'en';
+            const langInfo = languages.find(l => l.code === langCode);
+            const langFlag = langInfo ? langInfo.flag : '🌐';
+            const langName = langInfo ? langInfo.name : langCode;
+
+            // Create system message text
+            let messageText = '';
+            if (data.type === 'participant_joined') {
+              messageText = `${langFlag} ${displayName}${isGuest ? ' (guest)' : ''} joined with ${langName}`;
+              setActiveLanguages(prev => new Set([...prev, langCode]));
+            } else if (data.type === 'participant_left') {
+              messageText = `${displayName}${isGuest ? ' (guest)' : ''} left the room`;
+              // Don't remove language immediately - let the TTL expire naturally
+            } else if (data.type === 'participant_language_changed') {
+              messageText = `${langFlag} ${displayName}${isGuest ? ' (guest)' : ''} changed to ${langName}`;
+              setActiveLanguages(prev => new Set([...prev, langCode]));
             }
 
             // Create a system message
@@ -446,9 +474,7 @@ export default function RoomPage({ token, onLogout }) {
               type: 'system',
               segment_id: Date.now(),
               ts_iso: new Date().toISOString(),
-              text: data.type === 'participant_joined'
-                ? `${displayName} joined the room`
-                : `${displayName} left the room`,
+              text: messageText,
               is_system: true
             };
 
@@ -1160,7 +1186,7 @@ export default function RoomPage({ token, onLogout }) {
         </button>
         
         {/* Room name and status - center */}
-        <div style={{ 
+        <div style={{
           flex: 1,
           textAlign: "center",
           minWidth: 0
@@ -1170,9 +1196,25 @@ export default function RoomPage({ token, onLogout }) {
             fontWeight: "600",
             overflow: "hidden",
             textOverflow: "ellipsis",
-            whiteSpace: "nowrap"
+            whiteSpace: "nowrap",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.4rem"
           }}>
-            {roomId}
+            <span>{roomId}</span>
+            {activeLanguages.size > 0 && (
+              <span style={{
+                fontSize: "0.85rem",
+                display: "inline-flex",
+                gap: "0.2rem"
+              }}>
+                {Array.from(activeLanguages).map(langCode => {
+                  const lang = languages.find(l => l.code === langCode);
+                  return lang ? lang.flag : null;
+                })}
+              </span>
+            )}
           </div>
           {vadStatus !== "idle" && (
             <div style={{
@@ -1430,21 +1472,22 @@ export default function RoomPage({ token, onLogout }) {
           // Check if this is a system message
           const isSystemMessage = seg.source?.is_system === true;
 
-          // Render system messages differently
+          // Render system messages differently - smaller and less prominent
           if (isSystemMessage) {
             return (
               <div key={segId} style={{
                 textAlign: "center",
-                padding: "0.5rem",
-                color: "#888",
-                fontSize: "0.85rem",
+                padding: "0.25rem",
+                color: "#666",
+                fontSize: "0.7rem",
                 fontStyle: "italic"
               }}>
                 <span style={{
-                  background: "#2a2a2a",
-                  padding: "0.4rem 0.8rem",
-                  borderRadius: "12px",
-                  display: "inline-block"
+                  background: "rgba(42, 42, 42, 0.5)",
+                  padding: "0.25rem 0.6rem",
+                  borderRadius: "10px",
+                  display: "inline-block",
+                  border: "1px solid rgba(255, 255, 255, 0.05)"
                 }}>
                   {seg.source.text}
                 </span>

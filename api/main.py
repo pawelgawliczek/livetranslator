@@ -80,6 +80,39 @@ def healthz():
 def metrics():
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
+async def register_user_language(room_id: str, user_id: str, language: str):
+    """Register user's language with short TTL for immediate availability"""
+    redis = wsman.redis
+    key = f"room:{room_id}:active_lang:{user_id}"
+    await redis.setex(key, 15, language)  # 15s TTL (3x status poll interval)
+    log.info("registered_user_language", room=room_id, user=user_id, lang=language)
+
+async def trigger_room_language_aggregation(room_id: str):
+    """Immediately aggregate languages for this room from active users"""
+    redis = wsman.redis
+    pattern = f"room:{room_id}:active_lang:*"
+    languages = set()
+
+    # Collect all active language keys
+    async for key in redis.scan_iter(match=pattern, count=100):
+        lang = await redis.get(key)
+        if lang:
+            lang_str = lang.decode() if isinstance(lang, bytes) else lang
+            languages.add(lang_str)
+
+    if languages:
+        # Update target languages set with immediate effect
+        target_key = f"room:{room_id}:target_languages"
+        await redis.delete(target_key)
+        await redis.sadd(target_key, *languages)
+        await redis.expire(target_key, 30)  # 30s safety expiry
+        log.info("aggregated_room_languages", room=room_id, languages=list(languages))
+    else:
+        # Clean up empty target set
+        target_key = f"room:{room_id}:target_languages"
+        await redis.delete(target_key)
+        log.info("cleared_room_languages", room=room_id)
+
 @app.websocket("/ws/rooms/{room_id}")
 async def ws_room(ws: WebSocket, room_id: str):
     qtok = getattr(ws, "query_params", {}).get("token") if hasattr(ws, "query_params") else None
@@ -102,6 +135,12 @@ async def ws_room(ws: WebSocket, room_id: str):
     MET_WS_CONNS.inc()
     await wsman.connect(room_id, ws)
 
+    # IMPORTANT: Immediately register user's language in Redis for translation routing
+    print(f"[WebSocket] About to register language for user={user_id}, lang={user_lang}, room={room_id}")
+    await register_user_language(room_id, str(user_id), user_lang)
+    await trigger_room_language_aggregation(room_id)
+    print(f"[WebSocket] Completed language registration")
+
     # Broadcast participant joined event to notify other users in the room
     await wsman.broadcast(room_id, {
         "type": "participant_joined",
@@ -119,6 +158,11 @@ async def ws_room(ws: WebSocket, room_id: str):
             if msg.get("type") == "set_language":
                 new_lang = msg.get("language", "en")
                 ws.state.preferred_lang = new_lang
+
+                # IMPORTANT: Immediately update Redis for translation routing
+                await register_user_language(room_id, str(user_id), new_lang)
+                await trigger_room_language_aggregation(room_id)
+
                 # Notify room about language change
                 await wsman.broadcast(room_id, {
                     "type": "participant_language_changed",
