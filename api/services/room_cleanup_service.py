@@ -138,7 +138,7 @@ async def mark_stale_zombie_rooms():
     Mark zombie rooms as abandoned by setting admin_left_at to NOW().
 
     Zombie rooms are rooms where WebSocket disconnect never fired (browser crash, network drop, etc.)
-    so admin_left_at was never set. After 24 hours with no activity, we assume the admin has left
+    so admin_left_at was never set. After 30 minutes with no activity, we assume the admin has left
     and set admin_left_at = NOW(), giving a 30-minute grace period before deletion.
 
     Why set admin_left_at to NOW() instead of created_at:
@@ -151,12 +151,12 @@ async def mark_stale_zombie_rooms():
     2. Follows the same archive/delete flow (data safety)
     3. Provides safety buffer against false positives (grace period)
 
-    Total time until deletion: 24 hours (detection threshold) + 30 minutes (grace period) = 24.5 hours
+    Total time until deletion: 30 minutes (detection threshold) + 30 minutes (grace period) = 60 minutes (1 hour)
     """
     async with AsyncSessionLocal() as session:
         try:
-            # Find rooms created > 24 hours ago with no admin_left_at set
-            zombie_cutoff = datetime.utcnow() - timedelta(hours=24)
+            # Find rooms created > 30 minutes ago with no admin_left_at set
+            zombie_cutoff = datetime.utcnow() - timedelta(minutes=30)
 
             # Query for zombie rooms
             zombie_stmt = select(
@@ -165,19 +165,19 @@ async def mark_stale_zombie_rooms():
                 rooms_table.c.created_at
             ).where(
                 rooms_table.c.admin_left_at.is_(None),  # No admin_left_at set
-                rooms_table.c.created_at < zombie_cutoff  # Older than 24 hours
+                rooms_table.c.created_at < zombie_cutoff  # Older than 30 minutes
             )
             result = await session.execute(zombie_stmt)
             zombie_rooms = result.all()
 
             if zombie_rooms:
-                print(f"[Room Cleanup] Found {len(zombie_rooms)} zombie rooms (no disconnect event, > 24h old)")
+                print(f"[Room Cleanup] Found {len(zombie_rooms)} zombie rooms (no disconnect event, > 30 min old)")
 
                 for room in zombie_rooms:
                     age = datetime.utcnow() - room.created_at
-                    age_hours = int(age.total_seconds() / 3600)
+                    age_minutes = int(age.total_seconds() / 60)
 
-                    print(f"[Room Cleanup] Marking zombie room {room.code} as abandoned (created {age_hours} hours ago)")
+                    print(f"[Room Cleanup] Marking zombie room {room.code} as abandoned (created {age_minutes} minutes ago)")
 
                     # Set admin_left_at to NOW() - gives 30 minute grace period before deletion
                     # This allows time to recover if we made a mistake in marking the room as abandoned
