@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import InviteModal from "../components/InviteModal";
 import ParticipantsModal from "../components/ParticipantsModal";
 import SettingsMenu from "../components/SettingsMenu";
+import SoundSettingsModal from "../components/SoundSettingsModal";
 
 export default function RoomPage({ token, onLogout }) {
   const { roomId } = useParams();
@@ -88,6 +89,7 @@ export default function RoomPage({ token, onLogout }) {
   const [showInvite, setShowInvite] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSoundSettings, setShowSoundSettings] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [myLanguage, setMyLanguage] = useState(() => {
     const stored = isGuest ? guestLang : localStorage.getItem('lt_my_language');
@@ -112,6 +114,34 @@ export default function RoomPage({ token, onLogout }) {
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [showAdminLeftNotification, setShowAdminLeftNotification] = useState(false);
   const [activeLanguages, setActiveLanguages] = useState(new Set());
+  const recentJoinsRef = useRef(new Map()); // Track recent joins to filter duplicate language change events
+
+  // Network quality monitoring
+  const [networkQuality, setNetworkQuality] = useState('unknown'); // 'high', 'medium', 'low', 'unknown'
+  const [networkRTT, setNetworkRTT] = useState(null); // milliseconds
+  const rttMeasurements = useRef([]); // Store last 5 measurements
+  const networkQualityRef = useRef('unknown'); // Track current quality without closure issues
+  const pingIntervalRef = useRef(null);
+  const pendingPingRef = useRef(null);
+  const pingTimeoutRef = useRef(null);
+
+  // Adaptive send rate
+  const [sendInterval, setSendInterval] = useState(300); // milliseconds
+  const sendIntervalRef = useRef(300);
+  const bytesSentRef = useRef(0);
+  const bandwidthRef = useRef(0);
+  const lastBandwidthCheckRef = useRef(Date.now());
+
+  // Audio level monitoring for Sound Settings
+  const [audioLevel, setAudioLevel] = useState(0); // Current RMS energy (0.0 - 1.0)
+  const [audioThreshold, setAudioThreshold] = useState(0.02); // Adjustable ENERGY_THRESHOLD
+  const audioLevelRef = useRef(0);
+
+  // Test mode for Sound Settings
+  const [testMode, setTestMode] = useState(false);
+  const testAudioContextRef = useRef(null);
+  const testProcessorRef = useRef(null);
+  const testStreamRef = useRef(null);
 
   const wsRef = useRef(null);
   const presenceWsRef = useRef(null); // Persistent presence WebSocket
@@ -142,14 +172,23 @@ export default function RoomPage({ token, onLogout }) {
   const ringBufferRef = useRef(new Float32Array(0));  // Pre-buffer to capture speech onset
   const SILENCE_THRESHOLD = 20;        // 20 frames (~200ms) of silence before stopping
   const SPEECH_THRESHOLD = 5;          // 5 frames (~50ms) of speech to start
-  const ENERGY_THRESHOLD = 0.015;      // Much higher threshold for washing machine noise (was 0.004)
+  const ENERGY_THRESHOLD = 0.02;       // VAD energy threshold (Phase 0.8 default)
   const RING_BUFFER_MS = 500;          // Keep 500ms of audio before speech detection
 
   const languages = [
     { code: "auto", name: "Auto", flag: "🌐" },
     { code: "en", name: "English", flag: "🇬🇧" },
-    { code: "pl", name: "Polish", flag: "🇵🇱" },
-    { code: "ar", name: "Arabic", flag: "🇪🇬" }
+    { code: "pl", name: "Polski", flag: "🇵🇱" },
+    { code: "ar", name: "العربية", flag: "🇸🇦" },
+    { code: "es", name: "Español", flag: "🇪🇸" },
+    { code: "fr", name: "Français", flag: "🇫🇷" },
+    { code: "de", name: "Deutsch", flag: "🇩🇪" },
+    { code: "it", name: "Italiano", flag: "🇮🇹" },
+    { code: "pt", name: "Português", flag: "🇵🇹" },
+    { code: "ru", name: "Русский", flag: "🇷🇺" },
+    { code: "zh", name: "中文", flag: "🇨🇳" },
+    { code: "ja", name: "日本語", flag: "🇯🇵" },
+    { code: "ko", name: "한국어", flag: "🇰🇷" }
   ];
   
   useEffect(() => {
@@ -384,6 +423,143 @@ export default function RoomPage({ token, onLogout }) {
     }
   }, [myLanguage]);
 
+  // Network monitoring functions
+  const recordRTT = (rtt) => {
+    // Add to measurements array (keep last 5)
+    rttMeasurements.current.push(rtt);
+    if (rttMeasurements.current.length > 5) {
+      rttMeasurements.current.shift();
+    }
+
+    // Calculate moving average
+    const avgRTT = rttMeasurements.current.reduce((a, b) => a + b, 0) / rttMeasurements.current.length;
+    setNetworkRTT(Math.round(avgRTT));
+
+    // Classify network quality
+    let quality;
+    if (avgRTT < 150) {
+      quality = 'high';
+    } else if (avgRTT < 400) {
+      quality = 'medium';
+    } else {
+      quality = 'low';
+    }
+
+    // Only update state if quality changed (use ref to avoid stale closures)
+    if (quality !== networkQualityRef.current) {
+      console.log(`[Network] Quality changed: ${networkQualityRef.current} → ${quality} (${Math.round(avgRTT)}ms avg RTT)`);
+      networkQualityRef.current = quality;
+      setNetworkQuality(quality);
+    }
+  };
+
+  const sendPing = (ws) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const pingStart = Date.now();
+    pendingPingRef.current = pingStart;
+
+    ws.send(JSON.stringify({
+      type: 'ping',
+      timestamp: pingStart
+    }));
+
+    // Timeout after 5 seconds
+    if (pingTimeoutRef.current) {
+      clearTimeout(pingTimeoutRef.current);
+    }
+    pingTimeoutRef.current = setTimeout(() => {
+      if (pendingPingRef.current === pingStart) {
+        console.warn('[Network] Ping timeout - network may be degraded');
+        recordRTT(5000); // Record as 5s RTT
+        pendingPingRef.current = null;
+      }
+    }, 5000);
+  };
+
+  const handlePong = (data) => {
+    if (pendingPingRef.current && data.timestamp === pendingPingRef.current) {
+      if (pingTimeoutRef.current) {
+        clearTimeout(pingTimeoutRef.current);
+      }
+      const rtt = Date.now() - pendingPingRef.current;
+      recordRTT(rtt);
+      pendingPingRef.current = null;
+    }
+  };
+
+  const startNetworkMonitoring = (ws) => {
+    // Send initial ping
+    sendPing(ws);
+
+    // Send ping every 2 seconds
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+    }
+    pingIntervalRef.current = setInterval(() => sendPing(ws), 2000);
+  };
+
+  const stopNetworkMonitoring = () => {
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
+    }
+    if (pingTimeoutRef.current) {
+      clearTimeout(pingTimeoutRef.current);
+      pingTimeoutRef.current = null;
+    }
+    rttMeasurements.current = [];
+    pendingPingRef.current = null;
+    networkQualityRef.current = 'unknown';
+    setNetworkQuality('unknown');
+    setNetworkRTT(null);
+  };
+
+  // Adaptive send rate helper
+  const getOptimalSendInterval = (quality) => {
+    switch (quality) {
+      case 'high':
+        return 300;  // ~256 Kbps
+      case 'medium':
+        return 600;  // ~128 Kbps
+      case 'low':
+        return 1000; // ~77 Kbps
+      default:
+        return 300;
+    }
+  };
+
+  // Bandwidth tracking helper
+  const trackBandwidth = (bytesSent) => {
+    bytesSentRef.current += bytesSent;
+
+    const now = Date.now();
+    const elapsed = (now - lastBandwidthCheckRef.current) / 1000; // seconds
+
+    if (elapsed >= 5) { // Update every 5 seconds
+      const bitsPerSecond = (bytesSentRef.current * 8) / elapsed;
+      const kbps = Math.round(bitsPerSecond / 1000);
+      bandwidthRef.current = kbps;
+
+      // Reset counters
+      bytesSentRef.current = 0;
+      lastBandwidthCheckRef.current = now;
+    }
+  };
+
+  // Update send interval when network quality changes
+  useEffect(() => {
+    const newInterval = getOptimalSendInterval(networkQuality);
+
+    if (newInterval !== sendIntervalRef.current) {
+      console.log(`[Adaptive] Changing send interval: ${sendIntervalRef.current}ms → ${newInterval}ms (quality: ${networkQuality})`);
+      setSendInterval(newInterval);
+      sendIntervalRef.current = newInterval;
+    }
+  }, [networkQuality]);
+
   // Establish persistent presence WebSocket when room page loads
   useEffect(() => {
     let authToken = token;
@@ -416,6 +592,8 @@ export default function RoomPage({ token, onLogout }) {
           // Add our own language to active languages
           setActiveLanguages(prev => new Set([...prev, myLanguage]));
         }
+        // Start network monitoring
+        startNetworkMonitoring(presenceWs);
       };
 
       presenceWs.onmessage = (event) => {
@@ -423,8 +601,18 @@ export default function RoomPage({ token, onLogout }) {
         try {
           const data = JSON.parse(event.data);
 
+          // DEBUG: Log all received WebSocket messages
+          console.log('[PresenceWS] Received message:', data.type, data);
+
+          // Handle ping-pong for network monitoring
+          if (data.type === 'pong') {
+            handlePong(data);
+            return;
+          }
+
           // Handle participant join/leave/language change events as system messages
           if (data.type === 'participant_joined' || data.type === 'participant_left' || data.type === 'participant_language_changed') {
+            console.log('[PresenceWS] Processing participant event:', data.type);
             // Get user's display name from email or user_id
             let displayName = 'Someone';
             let isGuest = false;
@@ -436,14 +624,17 @@ export default function RoomPage({ token, onLogout }) {
               isGuest = true;
             }
 
-            // Don't show our own join message
+            // Don't show our own join/language change messages
             try {
               const ourEmail = authToken ? JSON.parse(atob(authToken.split('.')[1])).email : null;
-              if (data.type === 'participant_joined' && data.user_email === ourEmail) {
+              const isOurMessage = data.user_email === ourEmail;
+
+              if (isOurMessage && (data.type === 'participant_joined' || data.type === 'participant_language_changed')) {
                 // Still update active languages for ourselves
                 if (data.preferred_lang) {
                   setActiveLanguages(prev => new Set([...prev, data.preferred_lang]));
                 }
+                console.log('[PresenceWS] Skipping our own', data.type, 'message');
                 return;
               }
             } catch (e) {
@@ -455,6 +646,36 @@ export default function RoomPage({ token, onLogout }) {
             const langInfo = languages.find(l => l.code === langCode);
             const langFlag = langInfo ? langInfo.flag : '🌐';
             const langName = langInfo ? langInfo.name : langCode;
+
+            // Track recent joins to filter duplicate language change events
+            const userId = data.user_id || data.user_email;
+
+            if (data.type === 'participant_joined') {
+              // Store join info with language and timestamp
+              recentJoinsRef.current.set(userId, {
+                language: langCode,
+                timestamp: Date.now()
+              });
+              // Clean up after 5 seconds
+              setTimeout(() => {
+                recentJoinsRef.current.delete(userId);
+              }, 5000);
+            }
+
+            // Filter out language change events if:
+            // 1. User just joined with the same language (within 5 seconds)
+            // 2. Language didn't actually change
+            if (data.type === 'participant_language_changed') {
+              const recentJoin = recentJoinsRef.current.get(userId);
+              if (recentJoin) {
+                const timeSinceJoin = Date.now() - recentJoin.timestamp;
+                // Skip if same language within 5 seconds of joining
+                if (recentJoin.language === langCode && timeSinceJoin < 5000) {
+                  console.log('[PresenceWS] Skipping duplicate language change (same as join)');
+                  return;
+                }
+              }
+            }
 
             // Create system message text
             let messageText = '';
@@ -469,17 +690,18 @@ export default function RoomPage({ token, onLogout }) {
               setActiveLanguages(prev => new Set([...prev, langCode]));
             }
 
-            // Create a system message
+            // Create a system message (flat structure like regular messages)
             const systemMessage = {
-              type: 'system',
+              type: 'stt_final',
               segment_id: Date.now(),
               ts_iso: new Date().toISOString(),
               text: messageText,
-              is_system: true
+              is_system: true,
+              final: true
             };
 
-            // Add to segments
-            segsRef.current.set(`system-${systemMessage.segment_id}`, { source: systemMessage });
+            // Add to segments (same format as regular STT messages)
+            segsRef.current.set(`s-${systemMessage.segment_id}`, systemMessage);
             scheduleRender();
           }
           // Handle speech_started events
@@ -546,6 +768,7 @@ export default function RoomPage({ token, onLogout }) {
 
     // Cleanup: close presence WebSocket when component unmounts
     return () => {
+      stopNetworkMonitoring();
       if (presenceWsRef.current) {
         console.log('[RoomPage] Closing presence WebSocket on unmount');
         presenceWsRef.current.close();
@@ -715,15 +938,22 @@ export default function RoomPage({ token, onLogout }) {
   function sendPartialIfReady() {
     const now = Date.now();
     if (!isSpeakingRef.current) return;
-    if (now - lastPartialSentRef.current < 300) return;  // Send every 300ms for fast updates
-    if (partialBufferRef.current.length < 3200) return;  // Minimum 0.2s of audio (3200 samples @ 16kHz)
+
+    // Use dynamic send interval based on network quality
+    const interval = sendIntervalRef.current;
+    if (now - lastPartialSentRef.current < interval) return;
+
+    // Adjust minimum buffer size based on interval
+    // Minimum = 0.2s of audio, but scale with interval
+    const minBufferSamples = Math.max(3200, Math.floor((interval / 1000) * 16000 * 0.2));
+    if (partialBufferRef.current.length < minBufferSamples) return;
 
     try {
       const pcm16 = floatTo16(partialBufferRef.current);
       const b64 = btoa(String.fromCharCode(...new Uint8Array(pcm16.buffer)));
 
       if (wsRef.current && wsRef.current.readyState === 1) {
-        wsRef.current.send(JSON.stringify({
+        const payload = JSON.stringify({
           type: "audio_chunk_partial",
           roomId: roomId,
           device: "web",
@@ -731,7 +961,10 @@ export default function RoomPage({ token, onLogout }) {
           seq: seqRef.current++,
           pcm16_base64: b64,
           language: myLanguage || "auto"  // Use "auto" if language not yet selected
-        }));
+        });
+
+        wsRef.current.send(payload);
+        trackBandwidth(payload.length); // Track bytes sent
       }
 
       lastPartialSentRef.current = now;
@@ -779,6 +1012,11 @@ export default function RoomPage({ token, onLogout }) {
   
   async function start() {
     if (isRecordingRef.current) return;
+
+    // Stop test mode if it's active
+    if (testMode) {
+      await handleTestMode(false);
+    }
 
     // Prevent starting only if room is about to expire (less than 1 minute remaining)
     if (!isRoomAdmin && roomStatus && !roomStatus.admin_present && timeRemaining !== null && timeRemaining < 60000) {
@@ -869,8 +1107,12 @@ export default function RoomPage({ token, onLogout }) {
         }
         const rms = Math.sqrt(sum / resampled.length);
 
-        // Speech/silence detection with hysteresis
-        if (rms > ENERGY_THRESHOLD) {
+        // Update audio level for Sound Settings visualization
+        audioLevelRef.current = rms;
+        setAudioLevel(rms);
+
+        // Speech/silence detection with hysteresis (use adjustable threshold)
+        if (rms > audioThreshold) {
           speechFramesRef.current++;
           silenceFramesRef.current = 0;
 
@@ -918,6 +1160,7 @@ export default function RoomPage({ token, onLogout }) {
             }
 
             partialBufferRef.current = new Float32Array(0);
+            ringBufferRef.current = new Float32Array(0);  // Clear ring buffer to prevent previous audio contamination
             currentSegmentHintRef.current = null;
             setTimeout(() => setVadStatus("👂 Listening..."), 300);
           }
@@ -941,6 +1184,7 @@ export default function RoomPage({ token, onLogout }) {
             }
 
             partialBufferRef.current = new Float32Array(0);
+            ringBufferRef.current = new Float32Array(0);  // Clear ring buffer
             currentSegmentHintRef.current = null;
             setVadStatus("⚠️ Auto-stopped");
             setTimeout(() => setVadStatus("👂 Listening..."), 1000);
@@ -1035,7 +1279,108 @@ export default function RoomPage({ token, onLogout }) {
     setStatus("idle");
     setVadStatus("idle");
   }
-  
+
+  // Test mode for Sound Settings - starts microphone without sending to STT
+  async function handleTestMode(shouldStart) {
+    if (shouldStart) {
+      // Check if recording is already active
+      if (isRecordingRef.current) {
+        // Already recording - just enable test mode flag to show we're in test view
+        // Audio levels are already being monitored
+        setTestMode(true);
+        console.log('[Test Mode] Using active recording stream for monitoring');
+        return;
+      }
+
+      // Start test mode with new stream
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            sampleRate: { ideal: 48000 },  // Same as recording mode
+            echoCancellation: true,
+            noiseSuppression: false,       // Same as recording mode
+            autoGainControl: true          // Same as recording mode
+          }
+        });
+        testStreamRef.current = stream;
+
+        // Use browser's default sample rate (same as recording mode)
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        testAudioContextRef.current = audioContext;
+
+        const source = audioContext.createMediaStreamSource(stream);
+        const processor = audioContext.createScriptProcessor(4096, 1, 1);
+        testProcessorRef.current = processor;
+
+        processor.onaudioprocess = (e) => {
+          const inputData = e.inputBuffer.getChannelData(0);
+
+          // Calculate RMS energy (same as recording mode VAD)
+          let sum = 0;
+          for (let i = 0; i < inputData.length; i++) {
+            sum += inputData[i] * inputData[i];
+          }
+          const rms = Math.sqrt(sum / inputData.length);
+
+          // Update audio level
+          audioLevelRef.current = rms;
+          setAudioLevel(rms);
+        };
+
+        source.connect(processor);
+        processor.connect(audioContext.destination);
+
+        setTestMode(true);
+        console.log('[Test Mode] Microphone test started');
+      } catch (err) {
+        console.error('[Test Mode] Failed to start:', err);
+
+        // More specific error message
+        let errorMsg = 'Could not access microphone. ';
+        if (err.name === 'NotAllowedError') {
+          errorMsg += 'Permission denied. Please allow microphone access in your browser settings.';
+        } else if (err.name === 'NotFoundError') {
+          errorMsg += 'No microphone found. Please connect a microphone.';
+        } else if (err.name === 'NotReadableError') {
+          errorMsg += 'Microphone is already in use by another application.';
+        } else {
+          errorMsg += 'Error: ' + err.message;
+        }
+        alert(errorMsg);
+      }
+    } else {
+      // Stop test mode
+      if (isRecordingRef.current) {
+        // If recording is active, just turn off test mode flag
+        // Don't clean up streams since they're being used by recording
+        setTestMode(false);
+        console.log('[Test Mode] Exited test mode (recording still active)');
+        return;
+      }
+
+      // Clean up test mode resources
+      if (testProcessorRef.current) {
+        testProcessorRef.current.disconnect();
+        testProcessorRef.current = null;
+      }
+
+      if (testStreamRef.current) {
+        testStreamRef.current.getTracks().forEach(track => track.stop());
+        testStreamRef.current = null;
+      }
+
+      if (testAudioContextRef.current) {
+        testAudioContextRef.current.close();
+        testAudioContextRef.current = null;
+      }
+
+      setTestMode(false);
+      setAudioLevel(0);
+      console.log('[Test Mode] Microphone test stopped');
+    }
+  }
+
   async function fetchCosts() {
     try {
       const r = await fetch(`/api/costs/room/${encodeURIComponent(roomId)}`, {
@@ -1143,7 +1488,6 @@ export default function RoomPage({ token, onLogout }) {
 
   return (
     <div style={{
-      height: "100vh",
       height: "100dvh",
       display: "flex",
       flexDirection: "column",
@@ -1678,11 +2022,12 @@ export default function RoomPage({ token, onLogout }) {
         paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
         flexShrink: 0
       }}>
-        {/* Push to talk checkbox */}
+        {/* Push to talk checkbox and Network Status */}
         <div style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          gap: "1rem",
           marginBottom: "0.65rem"
         }}>
           <label style={{
@@ -1706,6 +2051,31 @@ export default function RoomPage({ token, onLogout }) {
             />
             Push to talk
           </label>
+
+          {/* Network Status Indicator - Inline */}
+          {networkQuality !== 'unknown' && (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "0.25rem 0.5rem",
+              borderRadius: "12px",
+              backgroundColor: "rgba(255, 255, 255, 0.05)",
+              fontSize: "0.75rem",
+              color: "#999"
+            }}>
+              <div style={{
+                width: "12px",
+                height: "12px",
+                borderRadius: "50%",
+                backgroundColor: networkQuality === 'high' ? '#10b981' : networkQuality === 'medium' ? '#f59e0b' : '#ef4444',
+                boxShadow: `0 0 6px ${networkQuality === 'high' ? '#10b981' : networkQuality === 'medium' ? '#f59e0b' : '#ef4444'}`
+              }} />
+              {networkRTT !== null && (
+                <span>{networkRTT}ms</span>
+              )}
+            </div>
+          )}
         </div>
         
         {/* Microphone button */}
@@ -1754,8 +2124,7 @@ export default function RoomPage({ token, onLogout }) {
         isGuest={isGuest}
         myLanguage={myLanguage}
         languages={languages}
-        onLanguageChange={(lang) => {
-          setMyLanguage(lang);
+        onLanguageChange={() => {
           setShowSettings(false);
           setShowLangPicker(true);
         }}
@@ -1771,6 +2140,10 @@ export default function RoomPage({ token, onLogout }) {
           setShowSettings(false);
           fetchCosts();
           setShowCosts(true);
+        }}
+        onShowSound={() => {
+          setShowSettings(false);
+          setShowSoundSettings(true);
         }}
         onLogout={onLogout}
         canChangeLanguage={status === "idle"}
@@ -1802,6 +2175,18 @@ export default function RoomPage({ token, onLogout }) {
           onClose={() => setShowParticipants(false)}
         />
       )}
+
+      {/* Sound Settings Modal */}
+      <SoundSettingsModal
+        isOpen={showSoundSettings}
+        onClose={() => setShowSoundSettings(false)}
+        currentLevel={audioLevel}
+        threshold={audioThreshold}
+        onThresholdChange={setAudioThreshold}
+        isActive={isSpeakingRef.current}
+        status={vadStatus}
+        onTest={handleTestMode}
+      />
 
       {/* Admin Leave Warning Modal */}
       {showAdminLeaveWarning && (
