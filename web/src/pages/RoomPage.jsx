@@ -456,11 +456,11 @@ export default function RoomPage({ token, onLogout }) {
           }
           // Handle speech_started events
           else if (data.type === 'speech_started') {
-            console.log('[RoomPage] Speech started from:', data.speaker);
+            console.log('[RoomPage] Speech started from:', data.speaker, 'segment_id:', data.segment_id);
 
-            // Create placeholder segment for this speaker
-            const placeholderSegmentId = 'placeholder-' + data.timestamp;
-            const placeholderKey = `s-${placeholderSegmentId}`;
+            // Use the real segment ID from the backend
+            const segmentId = data.segment_id;
+            const placeholderKey = `s-${segmentId}`;
 
             // Only track our own placeholder for removal
             if (data.speaker === (userEmail || 'Guest')) {
@@ -468,7 +468,7 @@ export default function RoomPage({ token, onLogout }) {
             }
 
             segsRef.current.set(placeholderKey, {
-              segment_id: placeholderSegmentId,
+              segment_id: segmentId,
               type: 'stt_partial',
               text: '___SPEAKING___',
               speaker: data.speaker,
@@ -480,13 +480,17 @@ export default function RoomPage({ token, onLogout }) {
 
             // Auto-remove placeholder after 5 seconds if no text arrives
             setTimeout(() => {
-              if (segsRef.current.has(placeholderKey)) {
+              const segment = segsRef.current.get(placeholderKey);
+              // Only delete if it's still a placeholder (not replaced by real text)
+              if (segment && segment.is_placeholder) {
                 segsRef.current.delete(placeholderKey);
                 if (placeholderSegmentKeyRef.current === placeholderKey) {
                   placeholderSegmentKeyRef.current = null;
                 }
                 scheduleRender();
                 console.log('[VAD] Removed stale placeholder after timeout for:', data.speaker);
+              } else if (segment) {
+                console.log('[VAD] Placeholder already replaced with real text, keeping it for:', data.speaker);
               }
             }, 5000);
           }
@@ -629,17 +633,27 @@ export default function RoomPage({ token, onLogout }) {
 
       console.log('[WS] Processing:', m.type, 'segment:', id, 'speaker:', m.speaker);
 
-      // Remove placeholder segment when real text arrives
+      // Remove placeholder segment when real text arrives (only if it matches this segment AND is still a placeholder)
       if (placeholderSegmentKeyRef.current) {
-        segsRef.current.delete(placeholderSegmentKeyRef.current);
-        console.log('[WS] Removed placeholder segment:', placeholderSegmentKeyRef.current);
-        placeholderSegmentKeyRef.current = null;
+        const placeholderSegmentKey = `s-${id}`;
+        if (placeholderSegmentKeyRef.current === placeholderSegmentKey) {
+          const existingSegment = segsRef.current.get(placeholderSegmentKeyRef.current);
+          if (existingSegment && existingSegment.is_placeholder) {
+            segsRef.current.delete(placeholderSegmentKeyRef.current);
+            console.log('[WS] Removed placeholder segment:', placeholderSegmentKeyRef.current);
+          } else {
+            console.log('[WS] Placeholder already replaced, keeping real segment:', placeholderSegmentKeyRef.current);
+          }
+          placeholderSegmentKeyRef.current = null;
+        } else {
+          console.log('[WS] Skipping placeholder removal - segment mismatch:', placeholderSegmentKeyRef.current, 'vs', placeholderSegmentKey);
+        }
       }
 
       if (m.type === "translation_partial" || m.type === "translation_final") {
-        segsRef.current.set(`t-${id}`, m);
+        segsRef.current.set(`t-${id}`, { ...m, is_placeholder: false });
       } else if (m.type === "partial" || m.type === "stt_partial" || m.type === "final" || m.type === "stt_final") {
-        segsRef.current.set(`s-${id}`, m);
+        segsRef.current.set(`s-${id}`, { ...m, is_placeholder: false });
       }
       scheduleRender();
     } catch (e) {

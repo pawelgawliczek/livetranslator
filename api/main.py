@@ -128,13 +128,24 @@ async def ws_room(ws: WebSocket, room_id: str):
                 })
                 continue
 
-            # Handle speech_started event - broadcast to all room participants
+            # Handle speech_started event - allocate segment ID and broadcast to all room participants
             if msg.get("type") == "speech_started":
+                # Allocate the next segment ID immediately
+                r = wsman.redis
+                segment_id_key = f"room:{room_id}:segment_counter"
+                segment_id = await r.incr(segment_id_key)
+
+                # Store the pre-allocated segment ID for this speaker
+                # This will be used by the STT router when audio arrives
+                pending_key = f"room:{room_id}:pending_segment:{user_email}"
+                await r.setex(pending_key, 30, segment_id)  # Expire after 30 seconds
+
                 await wsman.broadcast(room_id, {
                     "type": "speech_started",
                     "room_id": room_id,
                     "speaker": msg.get("speaker", user_email),
-                    "timestamp": msg.get("timestamp", 0)
+                    "timestamp": msg.get("timestamp", 0),
+                    "segment_id": segment_id  # Include the segment ID
                 })
                 continue
 

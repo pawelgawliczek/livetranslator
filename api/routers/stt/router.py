@@ -201,7 +201,19 @@ async def router_loop():
 
                 # Initialize or get existing partial session
                 if room not in partial_sessions:
-                    segment_id = await get_next_segment_id(r, room)
+                    # Check if there's a pre-allocated segment ID from speech_started event
+                    pending_key = f"room:{room}:pending_segment:{speaker}"
+                    pending_segment_id = await r.get(pending_key)
+
+                    if pending_segment_id:
+                        # Use the pre-allocated segment ID and delete the pending key
+                        segment_id = int(pending_segment_id)
+                        await r.delete(pending_key)
+                        print(f"[STT Router] ♻️  Reusing pre-allocated segment ID: {segment_id} for {speaker}")
+                    else:
+                        # No pre-allocated ID, create a new one (fallback)
+                        segment_id = await get_next_segment_id(r, room)
+                        print(f"[STT Router] 🆕 Creating new segment ID: {segment_id} for {speaker} (no pre-allocation)")
 
                     # Get provider for partial mode
                     provider_config = await get_stt_provider_for_language(
