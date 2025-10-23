@@ -88,7 +88,7 @@ def _normalize_language(lang: str) -> str:
     mappings = {
         # European languages
         "pl": "pl-PL",
-        "en": "en-US",
+        "en": "en-EN",
         "es": "es-ES",
         "fr": "fr-FR",
         "de": "de-DE",

@@ -169,6 +169,7 @@ def _normalize_language(language: str) -> str:
         "pl": "pl-PL",
         "pl-PL": "pl-PL",
         "en": "en-US",
+        "en-EN": "en-US",
         "en-US": "en-US",
         "en-GB": "en-GB",
         "ar": "ar-EG",

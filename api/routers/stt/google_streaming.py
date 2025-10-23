@@ -11,6 +11,7 @@ Provides low-latency gRPC streaming with speaker diarization.
 import os
 import base64
 import asyncio
+import queue
 from typing import Optional, Dict, Any, Callable, AsyncIterator
 from dataclasses import dataclass
 from google.cloud import speech_v2 as speech
@@ -31,7 +32,7 @@ class StreamingSession:
     session_id: str
     language: str
     config: Dict[str, Any]
-    audio_queue: asyncio.Queue
+    audio_queue: queue.Queue  # Using sync Queue for Google's sync gRPC client
     is_started: bool = False
     is_connected: bool = False
     audio_duration: float = 0.0
@@ -87,7 +88,7 @@ class GoogleStreamingClient:
                 session_id=session_id,
                 language=_normalize_language(language),
                 config=config or {},
-                audio_queue=asyncio.Queue(),
+                audio_queue=queue.Queue(),  # Sync queue for sync gRPC client
                 on_partial=on_partial,
                 on_final=on_final,
                 on_error=on_error
@@ -114,7 +115,11 @@ class GoogleStreamingClient:
             # Build streaming config
             streaming_config = speech.StreamingRecognitionConfig(
                 config=speech.RecognitionConfig(
-                    auto_decoding_config=speech.AutoDetectDecodingConfig(),
+                    explicit_decoding_config=speech.ExplicitDecodingConfig(
+                        encoding=speech.ExplicitDecodingConfig.AudioEncoding.LINEAR16,
+                        sample_rate_hertz=16000,
+                        audio_channel_count=1,
+                    ),
                     language_codes=[session.language],
                     model="long",
                     features=speech.RecognitionFeatures(
@@ -128,7 +133,7 @@ class GoogleStreamingClient:
             )
 
             # Enable diarization
-            if session.config.get("diarization", True):
+            if session.config.get("diarization", False):
                 min_speakers = session.config.get("min_speaker_count", 2)
                 max_speakers = session.config.get("max_speaker_count", 6)
                 streaming_config.config.features.diarization_config = (
@@ -138,8 +143,8 @@ class GoogleStreamingClient:
                     )
                 )
 
-            # Create request generator
-            async def request_generator() -> AsyncIterator[speech.StreamingRecognizeRequest]:
+            # Create request generator (sync - Google's gRPC client requires sync iterator)
+            def request_generator():
                 # First request with config
                 recognizer = f"projects/{GOOGLE_CLOUD_PROJECT}/locations/{GOOGLE_CLOUD_LOCATION}/recognizers/_"
                 yield speech.StreamingRecognizeRequest(
@@ -147,13 +152,11 @@ class GoogleStreamingClient:
                     streaming_config=streaming_config
                 )
 
-                # Subsequent requests with audio
+                # Subsequent requests with audio (pull from sync queue)
                 while True:
                     try:
-                        audio_bytes = await asyncio.wait_for(
-                            session.audio_queue.get(),
-                            timeout=30.0  # 30s timeout
-                        )
+                        # Block and wait for audio with timeout
+                        audio_bytes = session.audio_queue.get(timeout=30.0)
 
                         if audio_bytes is None:  # End-of-stream marker
                             print(f"[Google Stream] 🏁 End of audio stream for {session.session_id}")
@@ -167,9 +170,11 @@ class GoogleStreamingClient:
                             audio=audio_bytes
                         )
 
-                    except asyncio.TimeoutError:
-                        # No audio for 30 seconds, keep connection alive
+                    except queue.Empty:
                         print(f"[Google Stream] ⏱️  Timeout waiting for audio in {session.session_id}")
+                        break
+                    except Exception as e:
+                        print(f"[Google Stream] ⚠️  Error in request generator: {e}")
                         break
 
             # Start streaming recognition
@@ -177,24 +182,70 @@ class GoogleStreamingClient:
             session.is_started = True
             print(f"[Google Stream] 🎤 Started streaming for {session.session_id}")
 
-            responses = client.streaming_recognize(
-                requests=request_generator()
-            )
+            # Run the entire streaming flow in a thread to avoid blocking the event loop
+            loop = asyncio.get_event_loop()
+            response_queue = asyncio.Queue()
 
-            # Process responses
-            for response in responses:
-                await self._handle_response(session, response)
+            def run_streaming_in_thread():
+                """Run sync streaming in thread and push responses to queue"""
+                try:
+                    responses = client.streaming_recognize(requests=request_generator())
+
+                    # Iterate responses in the same thread
+                    for response in responses:
+                        # Put response in async queue (thread-safe)
+                        asyncio.run_coroutine_threadsafe(
+                            response_queue.put(response),
+                            loop
+                        ).result()
+
+                    # Signal completion
+                    asyncio.run_coroutine_threadsafe(
+                        response_queue.put(None),
+                        loop
+                    ).result()
+
+                except Exception as e:
+                    # Put error in queue
+                    asyncio.run_coroutine_threadsafe(
+                        response_queue.put(('error', e)),
+                        loop
+                    ).result()
+
+            # Start streaming in thread
+            import threading
+            stream_thread = threading.Thread(target=run_streaming_in_thread, daemon=True)
+            stream_thread.start()
+
+            # Process responses from queue in async context
+            while True:
+                response = await response_queue.get()
+
+                if response is None:
+                    # End of stream
+                    break
+                elif isinstance(response, tuple) and response[0] == 'error':
+                    # Error occurred
+                    raise response[1]
+                else:
+                    # Process normal response
+                    await self._handle_response(session, response)
 
             print(f"[Google Stream] ✅ Stream ended for {session.session_id}")
 
         except google_exceptions.GoogleAPICallError as e:
+            import traceback
             print(f"[Google Stream] ❌ API error for {session.session_id}: {e}")
+            print(f"[Google Stream] Traceback:\n{traceback.format_exc()}")
             session.is_connected = False
             if session.on_error:
                 await session.on_error(f"API error: {e}")
 
         except Exception as e:
+            import traceback
             print(f"[Google Stream] ❌ Unexpected error for {session.session_id}: {e}")
+            print(f"[Google Stream] Exception type: {type(e).__name__}")
+            print(f"[Google Stream] Traceback:\n{traceback.format_exc()}")
             session.is_connected = False
             if session.on_error:
                 await session.on_error(f"Unexpected error: {e}")
@@ -206,6 +257,10 @@ class GoogleStreamingClient:
     ):
         """Handle streaming recognition response"""
 
+        # Collect all partial and final results separately
+        partial_transcripts = []
+        final_result = None
+
         for result in response.results:
             if not result.alternatives:
                 continue
@@ -216,81 +271,87 @@ class GoogleStreamingClient:
             if not transcript.strip():
                 continue
 
-            # Partial result
+            # Partial result - accumulate all partials
             if not result.is_final:
-                stability = result.stability if hasattr(result, 'stability') else 0.0
-
-                result_data = {
-                    "text": transcript,
-                    "is_final": False,
-                    "stability": stability,
-                    "language": session.language,
-                    "session_id": session.session_id
-                }
-
-                print(f"[Google Stream] 📝 Partial (stability={stability:.2f}): {transcript[:50]}...")
-
-                if session.on_partial:
-                    await session.on_partial(result_data)
-
-            # Final result
+                partial_transcripts.append(transcript)
             else:
-                # Extract speaker labels
-                speaker_labels = []
-                if hasattr(alternative, 'words') and alternative.words:
-                    current_speaker = None
-                    current_words = []
-                    current_start = None
+                # Final result - process separately
+                final_result = (result, alternative, transcript)
 
-                    for word_info in alternative.words:
-                        speaker = (word_info.speaker_label
-                                 if hasattr(word_info, 'speaker_label')
-                                 else 0)
+        # Emit accumulated partials as single event
+        if partial_transcripts:
+            combined_text = " ".join(partial_transcripts)
+            result_data = {
+                "text": combined_text,
+                "is_final": False,
+                "stability": 0.5,  # Average stability
+                "language": session.language,
+                "session_id": session.session_id
+            }
 
-                        if speaker != current_speaker:
-                            # Save previous speaker segment
-                            if current_words:
-                                speaker_labels.append({
-                                    "speaker": current_speaker,
-                                    "text": " ".join(current_words),
-                                    "start": current_start,
-                                    "end": word_info.start_offset.total_seconds()
-                                })
+            if session.on_partial:
+                await session.on_partial(result_data)
 
-                            # Start new speaker segment
-                            current_speaker = speaker
-                            current_words = [word_info.word]
-                            current_start = (word_info.start_offset.total_seconds()
-                                           if hasattr(word_info, 'start_offset')
-                                           else 0)
-                        else:
-                            current_words.append(word_info.word)
+        # Handle final result
+        if final_result:
+            result, alternative, transcript = final_result
 
-                    # Add last segment
-                    if current_words:
-                        last_word = alternative.words[-1]
-                        speaker_labels.append({
-                            "speaker": current_speaker,
-                            "text": " ".join(current_words),
-                            "start": current_start,
-                            "end": (last_word.end_offset.total_seconds()
-                                  if hasattr(last_word, 'end_offset')
-                                  else 0)
-                        })
+            # Extract speaker labels
+            speaker_labels = []
+            if hasattr(alternative, 'words') and alternative.words:
+                current_speaker = None
+                current_words = []
+                current_start = None
 
-                result_data = {
-                    "text": transcript,
-                    "is_final": True,
-                    "language": session.language,
-                    "speaker_labels": speaker_labels,
-                    "session_id": session.session_id
-                }
+                for word_info in alternative.words:
+                    speaker = (word_info.speaker_label
+                             if hasattr(word_info, 'speaker_label')
+                             else 0)
 
-                print(f"[Google Stream] ✅ Final: {transcript[:50]}... "
-                      f"(speakers: {len(speaker_labels)})")
+                    if speaker != current_speaker:
+                        # Save previous speaker segment
+                        if current_words:
+                            speaker_labels.append({
+                                "speaker": current_speaker,
+                                "text": " ".join(current_words),
+                                "start": current_start,
+                                "end": word_info.start_offset.total_seconds()
+                            })
 
-                if session.on_final:
-                    await session.on_final(result_data)
+                        # Start new speaker segment
+                        current_speaker = speaker
+                        current_words = [word_info.word]
+                        current_start = (word_info.start_offset.total_seconds()
+                                       if hasattr(word_info, 'start_offset')
+                                       else 0)
+                    else:
+                        current_words.append(word_info.word)
+
+                # Add last segment
+                if current_words:
+                    last_word = alternative.words[-1]
+                    speaker_labels.append({
+                        "speaker": current_speaker,
+                        "text": " ".join(current_words),
+                        "start": current_start,
+                        "end": (last_word.end_offset.total_seconds()
+                              if hasattr(last_word, 'end_offset')
+                              else 0)
+                    })
+
+            result_data = {
+                "text": transcript,
+                "is_final": True,
+                "language": session.language,
+                "speaker_labels": speaker_labels,
+                "session_id": session.session_id
+            }
+
+            print(f"[Google Stream] ✅ Final: {transcript[:50]}... "
+                  f"(speakers: {len(speaker_labels)})")
+
+            if session.on_final:
+                await session.on_final(result_data)
 
     async def send_audio(self, session_id: str, audio_base64: str) -> None:
         """Send audio chunk to the streaming session"""
@@ -302,8 +363,8 @@ class GoogleStreamingClient:
         # Decode base64 to raw bytes
         audio_bytes = base64.b64decode(audio_base64)
 
-        # Add to queue
-        await session.audio_queue.put(audio_bytes)
+        # Add to queue (sync put, non-blocking)
+        session.audio_queue.put_nowait(audio_bytes)
 
         print(f"[Google Stream] 📤 Queued {len(audio_bytes)} bytes "
               f"({len(audio_bytes) / 32000:.2f}s) for session {session_id}")
@@ -316,7 +377,7 @@ class GoogleStreamingClient:
             return
 
         # Send end-of-stream marker (None)
-        await session.audio_queue.put(None)
+        session.audio_queue.put_nowait(None)
         print(f"[Google Stream] 🏁 Sent end-of-stream for session {session_id}")
 
     async def close_session(self, session_id: str):
@@ -377,6 +438,7 @@ def _normalize_language(language: str) -> str:
         "pl": "pl-PL",
         "pl-PL": "pl-PL",
         "en": "en-US",
+        "en-EN": "en-US",
         "en-US": "en-US",
         "en-GB": "en-GB",
         "ar": "ar-EG",

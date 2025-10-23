@@ -19,6 +19,13 @@ from datetime import datetime
 from collections import defaultdict
 import threading
 
+# Import Google streaming client
+try:
+    import google_streaming
+except ImportError:
+    google_streaming = None
+    print("[StreamingManager] Warning: google_streaming module not available")
+
 
 class StreamingConnection:
     """
@@ -50,8 +57,9 @@ class StreamingConnection:
         self.connection = None
 
         # Provider-specific connection objects
-        self.ws_client = None  # For Speechmatics
-        self.stream = None     # For other providers
+        self.ws_client = None     # For Speechmatics WebSocket
+        self.google_session = None  # For Google streaming session
+        self.stream = None        # For other providers
 
         # Accumulated state for this session
         self.segment_id = None
@@ -180,6 +188,13 @@ class StreamingConnection:
 
                 # Close the websocket
                 await self.ws_client.close()
+
+            elif self.provider == "google_v2" and self.google_session:
+                # Google: close the streaming session
+                if hasattr(self, '_google_client') and self._google_client:
+                    await self._google_client.close_session(self.google_session.session_id)
+                    print(f"[StreamingConnection] Closed Google session")
+
             elif self.stream:
                 # Other providers: close stream
                 if hasattr(self.stream, 'close'):
@@ -462,13 +477,65 @@ class StreamingConnection:
 
     async def _connect_google(self):
         """Connect to Google Speech-to-Text v2 streaming API."""
-        # TODO: Implement Google v2 streaming
-        raise NotImplementedError("Google v2 streaming not yet implemented")
+        if not google_streaming:
+            raise NotImplementedError("google_streaming module not available")
+
+        # Get or create the global Google client
+        if not hasattr(self, '_google_client'):
+            self._google_client = google_streaming.get_streaming_client()
+
+        # Create a new Google streaming session
+        session_id = self.room_id
+
+        # Create session with callbacks
+        self.google_session = await self._google_client.create_session(
+            session_id=session_id,
+            language=self.language,
+            config=self.config,
+            on_partial=self._handle_google_partial,
+            on_final=self._handle_google_final,
+            on_error=self._handle_google_error
+        )
+
+        print(f"[StreamingConnection] ✓ Google session created for room={self.room_id}")
+
+    async def _handle_google_partial(self, result: Dict[str, Any]):
+        """Handle partial results from Google."""
+        # Update accumulated_text from partial (for audio_end handling)
+        text = result.get("text", "").strip()
+        if text:
+            self.accumulated_text = text
+            self.revision += 1
+
+        # Forward to the common partial handler
+        await self.on_partial(result)
+
+    async def _handle_google_final(self, result: Dict[str, Any]):
+        """Handle final results from Google."""
+        # Update finalized_text from final
+        text = result.get("text", "").strip()
+        if text:
+            self.finalized_text = text
+            self.accumulated_text = text  # Also update accumulated for consistency
+
+        # Forward to the common final handler
+        await self.on_final(result)
+
+    async def _handle_google_error(self, error: str):
+        """Handle errors from Google."""
+        await self.on_error({"error": error, "room_id": self.room_id, "provider": "google_v2"})
 
     async def _send_google(self, audio_bytes: bytes):
-        """Send audio to Google."""
-        # TODO: Implement
-        pass
+        """Send audio to Google streaming session."""
+        if not self.google_session:
+            print(f"[StreamingConnection] ⚠️  No Google session for room={self.room_id}")
+            return
+
+        # Convert bytes to base64 (Google client expects base64)
+        audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+        # Send to Google client
+        await self._google_client.send_audio(self.google_session.session_id, audio_b64)
 
     async def _connect_azure(self):
         """Connect to Azure Speech SDK streaming."""
