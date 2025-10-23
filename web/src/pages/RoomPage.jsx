@@ -584,8 +584,30 @@ export default function RoomPage({ token, onLogout }) {
       console.log('[WS] Received:', m);
 
       // Silently ignore non-STT/translation messages (they're handled by presenceWs)
-      const messageTypes = ["translation_partial", "translation_final", "partial", "stt_partial", "final", "stt_final"];
+      const messageTypes = ["translation_partial", "translation_final", "partial", "stt_partial", "final", "stt_final", "stt_finalize"];
       if (!messageTypes.includes(m.type)) {
+        return;
+      }
+
+      // Handle finalization marker (no text, just marks last partial as final)
+      if (m.type === "stt_finalize") {
+        const frontend_timestamp = Date.now() / 1000; // Convert to seconds
+        const id = m.segment_id | 0;
+        const existingSegment = segsRef.current.get(`s-${id}`);
+        if (existingSegment) {
+          const sync_delay = m.backend_timestamp ? (frontend_timestamp - m.backend_timestamp) : null;
+          console.log(`[WS] ✅ Finalizing segment ${id} (sync delay: ${sync_delay ? (sync_delay * 1000).toFixed(0) + 'ms' : 'N/A'})`);
+          console.log(`[WS]    Backend sent at: ${m.backend_timestamp ? new Date(m.backend_timestamp * 1000).toISOString() : 'N/A'}`);
+          console.log(`[WS]    Frontend received at: ${new Date(frontend_timestamp * 1000).toISOString()}`);
+          // Mark existing partial as final
+          existingSegment.final = true;
+          existingSegment.processing = false;
+          existingSegment.type = "stt_final";
+          segsRef.current.set(`s-${id}`, existingSegment);
+          scheduleRender();
+        } else {
+          console.warn(`[WS] ⚠️ Cannot finalize segment ${id} - not found in segsRef`);
+        }
         return;
       }
 

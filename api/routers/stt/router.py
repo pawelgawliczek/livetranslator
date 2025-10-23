@@ -539,7 +539,9 @@ async def router_loop():
 
             # AUDIO SESSION END: audio_end
             elif msg_type == "audio_end":
-                print(f"[STT Router] Audio session ended for room={room}")
+                import time
+                timestamp = time.time()
+                print(f"[STT Router] 🛑 [{timestamp:.3f}] audio_end received for room={room}")
 
                 if room in partial_sessions:
                     session = partial_sessions[room]
@@ -552,30 +554,29 @@ async def router_loop():
 
                     # Check if we have a streaming connection with finalized text
                     streaming_conn = session.get("streaming_connection")
-                    print(f"[STT Router] DEBUG: streaming_conn={streaming_conn}, has_finalized={hasattr(streaming_conn, 'finalized_text') if streaming_conn else False}, finalized_text='{streaming_conn.finalized_text[:50] if streaming_conn and hasattr(streaming_conn, 'finalized_text') else 'N/A'}'")
+                    print(f"[STT Router] 🔍 [{timestamp:.3f}] streaming_conn exists: {streaming_conn is not None}")
+                    if streaming_conn:
+                        print(f"[STT Router] 🔍 [{timestamp:.3f}]   - segment_id: {streaming_conn.segment_id}")
+                        print(f"[STT Router] 🔍 [{timestamp:.3f}]   - finalized_text: '{streaming_conn.finalized_text[:80] if streaming_conn.finalized_text else '(empty)'}'")
+                        print(f"[STT Router] 🔍 [{timestamp:.3f}]   - accumulated_text: '{streaming_conn.accumulated_text[:80] if streaming_conn.accumulated_text else '(empty)'}'")
 
-                    # Send final result if we have finalized text
-                    if streaming_conn and hasattr(streaming_conn, 'finalized_text') and streaming_conn.finalized_text:
-                        # Use finalized text from streaming connection (already high quality)
-                        final_text = streaming_conn.finalized_text.strip()
-                        print(f"[STT Router] ✅ Using streaming finalized text: {final_text[:80]}...")
+                    # For streaming providers, send a "finalization marker" event
+                    # The last partial contains the complete text, we just mark it as finalized
+                    if streaming_conn and hasattr(streaming_conn, 'finalized_text'):
+                        # Get the last partial text (finalized + partial combined)
+                        last_partial_text = streaming_conn.accumulated_text.strip()
+                        print(f"[STT Router] 📊 [{timestamp:.3f}] Streaming session ended - sending finalization marker for: {last_partial_text[:80]}...")
 
-                        quality_event = {
-                            "type": "stt_final",
+                        # Send finalization marker event (tells frontend the last partial is now final)
+                        finalization_event = {
+                            "type": "stt_finalize",
                             "room_id": room,
                             "segment_id": session["segment_id"],
                             "revision": session["chunk_count"],
-                            "text": final_text,
-                            "lang": session.get("detected_lang", "auto"),
                             "final": True,
-                            "processing": False,
-                            "ts_iso": None,
-                            "device": "web",
-                            "speaker": session["speaker"],
-                            "target_lang": session["target_lang"],
-                            "provider": session["provider"]
+                            "processing": False
                         }
-                        await r.publish(STT_OUTPUT_EVENTS, jdumps(quality_event))
+                        await r.publish(STT_OUTPUT_EVENTS, jdumps(finalization_event))
 
                         # Track costs
                         audio_duration = len(session["accumulated_audio"]) / (16000 * 2)
@@ -588,14 +589,48 @@ async def router_loop():
                             "unit_type": "seconds"
                         }
                         await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
-                        print(f"[STT Router] 💰 Cost tracked: {audio_duration:.1f}s ({session['provider']})")
+                        print(f"[STT Router] 💰 [{timestamp:.3f}] Cost tracked: {audio_duration:.1f}s ({session['provider']})")
 
-                    # Reset finalized text for next sentence (even within same segment)
-                    if streaming_conn and hasattr(streaming_conn, 'finalized_text'):
-                        print(f"[STT Router] 🔄 Resetting finalized text for next utterance")
+                        # Save accumulated text before resetting - use for content-based blocking of late finals
+                        # Use accumulated_text (not finalized_text) because it includes partials that may arrive as late finals
+                        # This will be used to block late AddTranscript events that arrive after the new segment starts
+                        if streaming_conn.accumulated_text:
+                            # Clear previous_segment_text from the PREVIOUS audio_end cycle
+                            # Then save the current accumulated text as the new previous_segment_text
+                            old_previous = streaming_conn.previous_segment_text
+                            streaming_conn.previous_segment_text = streaming_conn.accumulated_text.strip()
+                            print(f"[STT Router] 💾 [{timestamp:.3f}] Updated blocking text (from accumulated): '{streaming_conn.previous_segment_text[:80]}...'")
+                            if old_previous:
+                                print(f"[STT Router] 🗑️  [{timestamp:.3f}] Cleared old blocking text: '{old_previous[:50]}...'")
+                        elif streaming_conn.finalized_text:
+                            # Fallback to finalized_text if accumulated_text is empty
+                            old_previous = streaming_conn.previous_segment_text
+                            streaming_conn.previous_segment_text = streaming_conn.finalized_text.strip()
+                            print(f"[STT Router] 💾 [{timestamp:.3f}] Updated blocking text (from finalized): '{streaming_conn.previous_segment_text[:80]}...'")
+                            if old_previous:
+                                print(f"[STT Router] 🗑️  [{timestamp:.3f}] Cleared old blocking text: '{old_previous[:50]}...'")
+                        else:
+                            print(f"[STT Router] ⚠️  [{timestamp:.3f}] No text to save for blocking (both accumulated and finalized empty)")
+
+                        # Reset finalized text for next sentence (even within same segment)
+                        print(f"[STT Router] 🔄 [{timestamp:.3f}] Resetting finalized text for next utterance")
+                        print(f"[STT Router] 🔄 [{timestamp:.3f}]   - BEFORE: finalized='{streaming_conn.finalized_text[:50] if streaming_conn.finalized_text else '(empty)'}', accum='{streaming_conn.accumulated_text[:50] if streaming_conn.accumulated_text else '(empty)'}'")
                         streaming_conn.finalized_text = ""
                         streaming_conn.accumulated_text = ""
                         streaming_conn.revision = 0
+
+                        # CRITICAL: Freeze last_audio_end_time at audio_end AND set flag
+                        # Any AddTranscript that arrives after this point within 1.5s should be blocked
+                        if hasattr(streaming_conn, 'last_audio_end_time') and streaming_conn.last_audio_end_time is not None:
+                            streaming_conn.audio_has_ended = True  # Enable threshold blocking
+                            print(f"[STT Router] 🔒 [{timestamp:.3f}] Audio ended - last_audio_end_time FROZEN at {streaming_conn.last_audio_end_time:.2f}s")
+                            print(f"[STT Router] 🔒 [{timestamp:.3f}] Threshold blocking ENABLED - will block AddTranscript within 1.5s of cutoff")
+                            print(f"[STT Router] 🔒 [{timestamp:.3f}] Any future AddTranscript with end_time <= {streaming_conn.last_audio_end_time + 1.5:.2f}s will be blocked")
+
+                        print(f"[STT Router] 🔄 [{timestamp:.3f}]   - AFTER: finalized='{streaming_conn.finalized_text}', accum='{streaming_conn.accumulated_text}'")
+
+                        # Skip batch refinement for streaming providers
+                        # No separate final event needed - finalization marker is enough
 
                     elif session["accumulated_audio"] and len(session["accumulated_audio"]) > 0:
                         # Fallback: use batch API for non-streaming providers

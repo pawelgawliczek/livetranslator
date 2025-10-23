@@ -38,6 +38,7 @@ class StreamingSession:
     # Callbacks
     on_partial: Optional[Callable] = None
     on_final: Optional[Callable] = None
+    on_finalize: Optional[Callable] = None  # Called on EndOfTranscript
     on_error: Optional[Callable] = None
 
 
@@ -55,6 +56,7 @@ class SpeechmaticsStreamingClient:
         config: Optional[Dict[str, Any]] = None,
         on_partial: Optional[Callable] = None,
         on_final: Optional[Callable] = None,
+        on_finalize: Optional[Callable] = None,
         on_error: Optional[Callable] = None
     ) -> StreamingSession:
         """Create a new streaming session with WebSocket connection"""
@@ -75,6 +77,7 @@ class SpeechmaticsStreamingClient:
                 config=config or {},
                 on_partial=on_partial,
                 on_final=on_final,
+                on_finalize=on_finalize,
                 on_error=on_error
             )
 
@@ -133,6 +136,20 @@ class SpeechmaticsStreamingClient:
                 "sample_rate": 16000
             }
         }
+
+        # End of utterance detection (VAD-equivalent)
+        # Recommended: 0.5-0.8s for voice AI, lower = faster detection
+        # This helps detect when user finishes speaking and reduces late finals
+        if "end_of_utterance_silence_trigger" in session.config:
+            start_request["transcription_config"]["end_of_utterance_silence_trigger"] = session.config["end_of_utterance_silence_trigger"]
+        else:
+            start_request["transcription_config"]["end_of_utterance_silence_trigger"] = 0.6  # Default: 0.6s (Speechmatics recommended range)
+
+        # Adaptive mode adjusts based on speaking patterns
+        if "end_of_utterance_mode" in session.config:
+            start_request["transcription_config"]["end_of_utterance_mode"] = session.config["end_of_utterance_mode"]
+        else:
+            start_request["transcription_config"]["end_of_utterance_mode"] = "adaptive"  # adaptive|fixed|none
 
         # Enable diarization
         if session.config.get("diarization", True):
@@ -226,7 +243,11 @@ class SpeechmaticsStreamingClient:
                         await self._handle_final(session, data)
 
                     elif message_type == "EndOfTranscript":
-                        print(f"[Speechmatics Stream] 🏁 End of transcript for {session.session_id}")
+                        print(f"[Speechmatics Stream] 🏁 End of transcript (End of Utterance) for {session.session_id}")
+                        # This event fires after end_of_utterance_silence_trigger timeout
+                        # Forward to frontend to finalize the segment display
+                        if session.on_finalize:
+                            await session.on_finalize()
 
                     elif message_type == "Warning":
                         print(f"[Speechmatics Stream] ⚠️  Warning: {data.get('reason', 'unknown')}")

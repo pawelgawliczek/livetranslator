@@ -58,6 +58,11 @@ class StreamingConnection:
         self.revision = 0
         self.accumulated_text = ""
         self.finalized_text = ""  # For Speechmatics: text confirmed by AddTranscript
+        self.previous_segment_text = ""  # Save finalized text from previous segment to detect late finals
+        self.ended_segment_id = None  # Track which segment ended (to block its late finals)
+        self.segment_start_time = None  # Track when segment started - for time-based blocking
+        self.last_audio_end_time = None  # Track audio end_time from Speechmatics - for audio timing-based blocking
+        self.audio_has_ended = False  # Track if audio_end has been called - ONLY apply threshold AFTER this
 
         self._lock = threading.Lock()
 
@@ -113,11 +118,49 @@ class StreamingConnection:
 
     def reset_for_new_segment(self, segment_id: int):
         """Reset accumulated state for a new audio segment."""
-        print(f"[StreamingConnection] 🔄 Resetting for new segment {segment_id}")
+        import time
+        timestamp = time.time()
+        print(f"[StreamingConnection] 🔄 [{timestamp:.3f}] Resetting for new segment {segment_id} (prev segment: {self.segment_id})")
+
+        # Save current accumulated/finalized text before resetting - ONLY if previous_segment_text is not already set
+        # (audio_end may have already saved it before this reset is called)
+        # Use accumulated_text because it includes partials that may arrive as late finals
+        if not self.previous_segment_text:
+            if self.accumulated_text:
+                self.previous_segment_text = self.accumulated_text.strip()
+                print(f"[StreamingConnection] 💾 [{timestamp:.3f}] Saved previous segment text (accumulated): '{self.previous_segment_text[:80]}...'")
+            elif self.finalized_text:
+                self.previous_segment_text = self.finalized_text.strip()
+                print(f"[StreamingConnection] 💾 [{timestamp:.3f}] Saved previous segment text (finalized): '{self.previous_segment_text[:80]}...'")
+            else:
+                print(f"[StreamingConnection] ⚠️  [{timestamp:.3f}] No text to save (both accumulated and finalized empty)")
+        else:
+            print(f"[StreamingConnection] ✓ [{timestamp:.3f}] Previous segment text already saved: '{self.previous_segment_text[:80]}...'")
+
+        # Track which segment ended
+        if self.segment_id is not None and segment_id != self.segment_id:
+            self.ended_segment_id = self.segment_id
+            print(f"[StreamingConnection] 📌 [{timestamp:.3f}] Will block late finals from ended segment {self.segment_id}")
+        else:
+            print(f"[StreamingConnection] ℹ️  [{timestamp:.3f}] Same segment or first segment, no blocking needed")
+
+        print(f"[StreamingConnection] 🧹 [{timestamp:.3f}] Clearing state: accumulated_text='{self.accumulated_text[:50] if self.accumulated_text else ''}', finalized_text='{self.finalized_text[:50] if self.finalized_text else ''}'")
+
+        # IMPORTANT: FREEZE last_audio_end_time when starting new segment
+        # Any AddTranscript with end_time <= this frozen value belongs to previous segment
+        if self.last_audio_end_time is not None:
+            print(f"[StreamingConnection] 🔒 [{timestamp:.3f}] FREEZING last_audio_end_time at {self.last_audio_end_time:.2f}s for blocking")
+            print(f"[StreamingConnection] 🔒 [{timestamp:.3f}] Any audio ending <= {self.last_audio_end_time:.2f}s will be blocked as late")
+
         self.segment_id = segment_id
         self.revision = 0
         self.accumulated_text = ""
         self.finalized_text = ""
+        self.segment_start_time = timestamp  # Record when this segment started
+        # DON'T reset audio_has_ended here - keep it True until we see real new speech (time_diff > 1.5s)
+        print(f"[StreamingConnection] ⏱️  [{timestamp:.3f}] Segment start time recorded for blocking window")
+        print(f"[StreamingConnection] 🔒 [{timestamp:.3f}] audio_has_ended={self.audio_has_ended} - will remain True until new speech detected")
+        # DON'T clear previous_segment_text or last_audio_end_time here - they're needed for blocking late finals!
 
     async def close(self):
         """Close the streaming connection."""
@@ -226,6 +269,12 @@ class StreamingConnection:
                         partial_text = metadata.get("transcript", "").strip()
 
                         if partial_text:
+                            # Block partials that are duplicates from previous segment
+                            # This happens when late finals were blocked but partials slip through
+                            if self.previous_segment_text and partial_text in self.previous_segment_text:
+                                print(f"[StreamingConnection] 🚫 BLOCKED duplicate partial: '{partial_text[:80]}' (was in previous segment)")
+                                continue
+
                             # Combine finalized text + current partial
                             if self.finalized_text:
                                 full_text = self.finalized_text + " " + partial_text
@@ -246,16 +295,115 @@ class StreamingConnection:
 
                     elif msg_type == "AddTranscript":
                         # Final result - this is confirmed text that won't change
+                        import time
+                        timestamp = time.time()
                         metadata = msg.get("metadata", {})
                         final_text = metadata.get("transcript", "").strip()
+
+                        # Strip leading punctuation - it's never correct at the start of a segment
+                        # Speechmatics sometimes adds ". " at the beginning due to VAD/revision issues
+                        original_text = final_text
+                        final_text = final_text.lstrip('.,!?;: ')
+                        if original_text != final_text:
+                            print(f"[StreamingConnection] ✂️  [{timestamp:.3f}] Stripped leading punctuation: '{original_text}' → '{final_text}'")
+
+                        # Extract Speechmatics sequence numbers for tracking
+                        start_time = metadata.get("start_time", None)
+                        end_time = metadata.get("end_time", None)
+
+                        print(f"[StreamingConnection] 📨 [{timestamp:.3f}] AddTranscript received: '{final_text[:80] if final_text else '(empty)'}' for segment_id={self.segment_id}")
+                        print(f"[StreamingConnection] 📨 [{timestamp:.3f}]   - Speechmatics timing: start={start_time}, end={end_time}")
+                        print(f"[StreamingConnection] 📨 [{timestamp:.3f}]   - Full metadata: {metadata}")
+
                         if final_text:
-                            # Add to finalized text
+                            # Audio timing-based blocking: Use Speechmatics end_time to determine if this belongs to previous segment
+                            # This is more accurate than arrival time or content matching
+                            should_block = False
+
+                            if end_time is not None and self.last_audio_end_time is not None:
+                                # Check for time going backwards - indicates late final from previous segment
+                                if end_time <= self.last_audio_end_time:
+                                    should_block = True
+                                    print(f"[StreamingConnection] 🚫 [{timestamp:.3f}] BLOCKED - audio time going BACKWARDS: '{final_text[:80]}'")
+                                    print(f"[StreamingConnection] 🚫 [{timestamp:.3f}]   - This end_time: {end_time:.2f}s <= last seen: {self.last_audio_end_time:.2f}s")
+                                    print(f"[StreamingConnection] 🚫 [{timestamp:.3f}]   - This is a late final from a previous segment!")
+                                elif self.audio_has_ended:
+                                    # After audio_end, apply threshold to distinguish late finals from new speech
+                                    # Increased to 3.0s because late finals can arrive for 2-3 seconds after utterance ends
+                                    # User reported: if they speak immediately after frontend shows "final" (0.6s), duplicates occur
+                                    # Waiting longer eliminates duplicates, confirming late finals need more time to arrive
+                                    LATE_FINAL_THRESHOLD = 3.0  # seconds (increased from 1.5s)
+                                    time_diff = end_time - self.last_audio_end_time
+
+                                    if time_diff <= LATE_FINAL_THRESHOLD:
+                                        # Too close to previous segment - this is a late final
+                                        should_block = True
+                                        print(f"[StreamingConnection] 🚫 [{timestamp:.3f}] BLOCKED - within threshold after audio_end: '{final_text[:80]}'")
+                                        print(f"[StreamingConnection] 🚫 [{timestamp:.3f}]   - end_time: {end_time:.2f}s, last_audio_end_time: {self.last_audio_end_time:.2f}s")
+                                        print(f"[StreamingConnection] 🚫 [{timestamp:.3f}]   - time_diff: {time_diff:.2f}s <= threshold: {LATE_FINAL_THRESHOLD}s")
+                                        print(f"[StreamingConnection] 🚫 [{timestamp:.3f}]   - This is a late final from previous segment!")
+                                    else:
+                                        # Sufficient gap - this is genuine new speech
+                                        print(f"[StreamingConnection] ✅ [{timestamp:.3f}] New speech detected: time_diff {time_diff:.2f}s > {LATE_FINAL_THRESHOLD}s")
+                                        self.last_audio_end_time = end_time
+                                        self.audio_has_ended = False  # Reset flag - we're in active speech now
+                                        print(f"[StreamingConnection] 📍 [{timestamp:.3f}] Updated last_audio_end_time to {end_time:.2f}s")
+                                        print(f"[StreamingConnection] 🎤 [{timestamp:.3f}] audio_has_ended=False - active speech mode")
+                                else:
+                                    # Active speech mode - accept and update continuously
+                                    print(f"[StreamingConnection] ✅ [{timestamp:.3f}] Active speech, time progressing: {self.last_audio_end_time:.2f}s → {end_time:.2f}s")
+                                    self.last_audio_end_time = end_time
+                            elif end_time is not None:
+                                # First AddTranscript - initialize tracking
+                                print(f"[StreamingConnection] 📍 [{timestamp:.3f}] First AddTranscript, initializing last_audio_end_time to {end_time:.2f}s")
+                                self.last_audio_end_time = end_time
+
+                            if should_block:
+                                continue
+
+                            # Detect punctuation-only finals (sentence boundaries from Speechmatics)
+                            is_punctuation_only = final_text in ['.', '!', '?', ',', ';', ':']
+
+                            if is_punctuation_only:
+                                # Append punctuation to both finalized_text AND accumulated_text
+                                # Then send it as a final event so frontend displays it
+                                old_finalized = self.finalized_text
+                                old_accumulated = self.accumulated_text
+
+                                if self.finalized_text:
+                                    self.finalized_text += final_text  # No space before punctuation
+                                else:
+                                    self.finalized_text = final_text
+
+                                # Also update accumulated_text (so partials include punctuation)
+                                if self.accumulated_text:
+                                    self.accumulated_text += final_text  # No space before punctuation
+                                else:
+                                    self.accumulated_text = final_text
+
+                                print(f"[StreamingConnection] 📍 [{timestamp:.3f}] Punctuation detected: '{final_text}' - appending and sending as final")
+                                print(f"[StreamingConnection] 📍 [{timestamp:.3f}]   - updated finalized_text: '{self.finalized_text[:80]}'")
+                                print(f"[StreamingConnection] 📍 [{timestamp:.3f}]   - updated accumulated_text: '{self.accumulated_text[:80]}'")
+
+                                # Send the punctuation as a final event so frontend appends it
+                                await self.on_final({
+                                    "text": final_text,
+                                    "language": self.language,
+                                    "room_id": self.room_id,
+                                    "is_final": True
+                                })
+                                continue
+
+                            # Add to finalized text (normal words)
+                            old_finalized = self.finalized_text
                             if self.finalized_text:
                                 self.finalized_text += " " + final_text
                             else:
                                 self.finalized_text = final_text
 
-                            print(f"[StreamingConnection] ✓ Finalized: '{final_text[:50]}'")
+                            print(f"[StreamingConnection] ✓ [{timestamp:.3f}] Finalized (segment {self.segment_id}): '{final_text[:80]}'")
+                            print(f"[StreamingConnection] ✓ [{timestamp:.3f}]   - old finalized_text: '{old_finalized[:50] if old_finalized else '(empty)'}'")
+                            print(f"[StreamingConnection] ✓ [{timestamp:.3f}]   - new finalized_text: '{self.finalized_text[:80]}'")
 
                             await self.on_final({
                                 "text": final_text,
@@ -265,7 +413,19 @@ class StreamingConnection:
                             })
 
                     elif msg_type == "EndOfTranscript":
-                        print(f"[StreamingConnection] Speechmatics end of transcript for room={self.room_id}")
+                        import time
+                        finalize_timestamp = time.time()
+                        print(f"[StreamingConnection] 🏁 [{finalize_timestamp:.3f}] Speechmatics EndOfTranscript received (after {self.config.get('end_of_utterance_silence_trigger', 0.6)}s silence) for room={self.room_id}")
+                        print(f"[StreamingConnection] 📤 [{finalize_timestamp:.3f}] Sending stt_finalize to frontend for segment_id={self.segment_id}")
+                        # This event fires after end_of_utterance_silence_trigger timeout
+                        # Send finalize event to frontend to switch partial → final display
+                        await self.on_final({
+                            "type": "stt_finalize",
+                            "segment_id": self.segment_id,
+                            "room_id": self.room_id,
+                            "language": self.language,
+                            "backend_timestamp": finalize_timestamp  # For measuring sync delay
+                        })
 
                     elif msg_type == "Error":
                         error_msg = msg.get("reason", "Unknown error")
