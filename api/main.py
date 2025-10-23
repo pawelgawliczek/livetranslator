@@ -142,17 +142,27 @@ async def ws_room(ws: WebSocket, room_id: str):
     print(f"[WebSocket] Completed language registration")
 
     # Broadcast participant joined event to notify other users in the room
-    await wsman.broadcast(room_id, {
+    join_event = {
         "type": "participant_joined",
         "room_id": room_id,
         "user_email": user_email,
         "user_id": user_id,
         "preferred_lang": user_lang
-    })
+    }
+    print(f"[WebSocket] Broadcasting participant_joined: {join_event}")
+    await wsman.broadcast(room_id, join_event)
 
     try:
         while True:
             msg = await ws.receive_json()
+
+            # Handle ping-pong for network monitoring
+            if msg.get("type") == "ping":
+                await ws.send_json({
+                    "type": "pong",
+                    "timestamp": msg.get("timestamp")
+                })
+                continue
 
             # Handle language preference update
             if msg.get("type") == "set_language":
@@ -164,12 +174,15 @@ async def ws_room(ws: WebSocket, room_id: str):
                 await trigger_room_language_aggregation(room_id)
 
                 # Notify room about language change
-                await wsman.broadcast(room_id, {
+                lang_event = {
                     "type": "participant_language_changed",
                     "room_id": room_id,
                     "user_email": user_email,
+                    "user_id": user_id,
                     "preferred_lang": new_lang
-                })
+                }
+                print(f"[WebSocket] Broadcasting participant_language_changed: {lang_event}")
+                await wsman.broadcast(room_id, lang_event)
                 continue
 
             # Handle speech_started event - allocate segment ID and broadcast to all room participants
@@ -208,16 +221,20 @@ async def ws_room(ws: WebSocket, room_id: str):
                 # forward control events
                 await stt.push_raw(msg)
     except WebSocketDisconnect:
-        # Broadcast participant left event before disconnecting
-        await wsman.broadcast(room_id, {
+        # Disconnect first (removes this WebSocket from the room)
+        await wsman.disconnect(room_id, ws)
+        MET_WS_CONNS.dec()
+
+        # Then broadcast participant left event to remaining clients
+        left_event = {
             "type": "participant_left",
             "room_id": room_id,
             "user_email": user_email,
             "user_id": user_id,
             "preferred_lang": user_lang
-        })
-        await wsman.disconnect(room_id, ws)
-        MET_WS_CONNS.dec()
+        }
+        print(f"[WebSocket] Broadcasting participant_left: {left_event}")
+        await wsman.broadcast(room_id, left_event)
 
 class TReq(BaseModel):
     src: str

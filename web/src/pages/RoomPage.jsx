@@ -601,9 +601,6 @@ export default function RoomPage({ token, onLogout }) {
         try {
           const data = JSON.parse(event.data);
 
-          // DEBUG: Log all received WebSocket messages
-          console.log('[PresenceWS] Received message:', data.type, data);
-
           // Handle ping-pong for network monitoring
           if (data.type === 'pong') {
             handlePong(data);
@@ -612,7 +609,6 @@ export default function RoomPage({ token, onLogout }) {
 
           // Handle participant join/leave/language change events as system messages
           if (data.type === 'participant_joined' || data.type === 'participant_left' || data.type === 'participant_language_changed') {
-            console.log('[PresenceWS] Processing participant event:', data.type);
             // Get user's display name from email or user_id
             let displayName = 'Someone';
             let isGuest = false;

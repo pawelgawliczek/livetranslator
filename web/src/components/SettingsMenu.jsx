@@ -10,6 +10,7 @@ export default function SettingsMenu({
   onShowParticipants,
   onShowInvite,
   onShowCosts,
+  onShowSound,
   onLogout,
   canChangeLanguage = true,
   persistenceEnabled = false,
@@ -58,6 +59,11 @@ export default function SettingsMenu({
       icon: "💰",
       label: "Costs",
       onClick: onShowCosts
+    },
+    {
+      icon: "🎙️",
+      label: "Sound Settings",
+      onClick: onShowSound
     },
     // Only show persistence toggle for logged-in users
     ...(!isGuest ? [{

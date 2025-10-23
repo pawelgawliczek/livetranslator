@@ -343,27 +343,35 @@ class StreamingConnection:
                                     print(f"[StreamingConnection] 🚫 [{timestamp:.3f}]   - This end_time: {end_time:.2f}s <= last seen: {self.last_audio_end_time:.2f}s")
                                     print(f"[StreamingConnection] 🚫 [{timestamp:.3f}]   - This is a late final from a previous segment!")
                                 elif self.audio_has_ended:
-                                    # After audio_end, apply threshold to distinguish late finals from new speech
-                                    # Increased to 3.0s because late finals can arrive for 2-3 seconds after utterance ends
-                                    # User reported: if they speak immediately after frontend shows "final" (0.6s), duplicates occur
-                                    # Waiting longer eliminates duplicates, confirming late finals need more time to arrive
-                                    LATE_FINAL_THRESHOLD = 3.0  # seconds (increased from 1.5s)
-                                    time_diff = end_time - self.last_audio_end_time
-
-                                    if time_diff <= LATE_FINAL_THRESHOLD:
-                                        # Too close to previous segment - this is a late final
-                                        should_block = True
-                                        print(f"[StreamingConnection] 🚫 [{timestamp:.3f}] BLOCKED - within threshold after audio_end: '{final_text[:80]}'")
-                                        print(f"[StreamingConnection] 🚫 [{timestamp:.3f}]   - end_time: {end_time:.2f}s, last_audio_end_time: {self.last_audio_end_time:.2f}s")
-                                        print(f"[StreamingConnection] 🚫 [{timestamp:.3f}]   - time_diff: {time_diff:.2f}s <= threshold: {LATE_FINAL_THRESHOLD}s")
-                                        print(f"[StreamingConnection] 🚫 [{timestamp:.3f}]   - This is a late final from previous segment!")
-                                    else:
-                                        # Sufficient gap - this is genuine new speech
-                                        print(f"[StreamingConnection] ✅ [{timestamp:.3f}] New speech detected: time_diff {time_diff:.2f}s > {LATE_FINAL_THRESHOLD}s")
+                                    # After audio_end, check if this transcript overlaps with already-seen audio
+                                    # Use start_time to determine if this is NEW audio content
+                                    if start_time is not None and start_time > self.last_audio_end_time:
+                                        # start_time is AFTER the last seen audio - this is NEW content
+                                        # Accept it as either continuation of current segment or start of new segment
+                                        print(f"[StreamingConnection] ✅ [{timestamp:.3f}] New audio content: start_time {start_time:.2f}s > last_audio_end_time {self.last_audio_end_time:.2f}s")
                                         self.last_audio_end_time = end_time
                                         self.audio_has_ended = False  # Reset flag - we're in active speech now
                                         print(f"[StreamingConnection] 📍 [{timestamp:.3f}] Updated last_audio_end_time to {end_time:.2f}s")
                                         print(f"[StreamingConnection] 🎤 [{timestamp:.3f}] audio_has_ended=False - active speech mode")
+                                    else:
+                                        # start_time overlaps with or is missing - apply threshold check
+                                        LATE_FINAL_THRESHOLD = 3.0  # seconds
+                                        time_diff = end_time - self.last_audio_end_time
+
+                                        if time_diff <= LATE_FINAL_THRESHOLD:
+                                            # Too close to previous segment - likely a late final
+                                            should_block = True
+                                            print(f"[StreamingConnection] 🚫 [{timestamp:.3f}] BLOCKED - within threshold after audio_end: '{final_text[:80]}'")
+                                            print(f"[StreamingConnection] 🚫 [{timestamp:.3f}]   - start_time: {start_time}, end_time: {end_time:.2f}s, last_audio_end_time: {self.last_audio_end_time:.2f}s")
+                                            print(f"[StreamingConnection] 🚫 [{timestamp:.3f}]   - time_diff: {time_diff:.2f}s <= threshold: {LATE_FINAL_THRESHOLD}s")
+                                            print(f"[StreamingConnection] 🚫 [{timestamp:.3f}]   - This is likely a late final from previous segment!")
+                                        else:
+                                            # Sufficient gap - this is genuine new speech
+                                            print(f"[StreamingConnection] ✅ [{timestamp:.3f}] New speech detected: time_diff {time_diff:.2f}s > {LATE_FINAL_THRESHOLD}s")
+                                            self.last_audio_end_time = end_time
+                                            self.audio_has_ended = False  # Reset flag - we're in active speech now
+                                            print(f"[StreamingConnection] 📍 [{timestamp:.3f}] Updated last_audio_end_time to {end_time:.2f}s")
+                                            print(f"[StreamingConnection] 🎤 [{timestamp:.3f}] audio_has_ended=False - active speech mode")
                                 else:
                                     # Active speech mode - accept and update continuously
                                     print(f"[StreamingConnection] ✅ [{timestamp:.3f}] Active speech, time progressing: {self.last_audio_end_time:.2f}s → {end_time:.2f}s")
