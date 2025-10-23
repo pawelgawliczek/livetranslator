@@ -159,6 +159,8 @@ async def mark_stale_zombie_rooms():
             zombie_cutoff = datetime.utcnow() - timedelta(minutes=30)
 
             # Query for zombie rooms
+            # Note: We still mark admin_left_at for rooms with recording=true
+            # This tracks admin presence for billing/monitoring, but cleanup phase won't delete them
             zombie_stmt = select(
                 rooms_table.c.id,
                 rooms_table.c.code,
@@ -207,6 +209,7 @@ async def cleanup_abandoned_rooms():
             cutoff_time = datetime.utcnow() - timedelta(minutes=ADMIN_ABSENT_THRESHOLD_MINUTES)
 
             # Find rooms where admin left before cutoff time
+            # Exclude rooms with recording=true (Save History enabled)
             stmt = select(
                 rooms_table.c.id,
                 rooms_table.c.code,
@@ -219,7 +222,8 @@ async def cleanup_abandoned_rooms():
                 rooms_table.c.admin_left_at
             ).where(
                 rooms_table.c.admin_left_at.isnot(None),
-                rooms_table.c.admin_left_at < cutoff_time
+                rooms_table.c.admin_left_at < cutoff_time,
+                rooms_table.c.recording == False  # Don't cleanup rooms with Save History enabled
             )
             result = await session.execute(stmt)
             abandoned_rooms = result.all()
