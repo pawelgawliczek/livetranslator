@@ -1,6 +1,42 @@
 # LiveTranslator - TODO Roadmap
 
-**Last Updated:** 2025-10-22
+**Last Updated:** 2025-10-23
+
+---
+
+## 🎉 Recent Progress (2025-10-23)
+
+### ✅ Arabic (ar-EG) STT Complete with Google Cloud Speech v2 Streaming
+**🎯 Third Language Production-Ready: Polish, English, Arabic**
+
+#### What Was Built:
+- ✅ **Google Cloud Speech v2 Streaming** - Real-time Arabic transcription with gRPC
+- ✅ **Explicit Audio Encoding** - LINEAR16 16kHz configuration (fixed auto-detection issues)
+- ✅ **Partial Result Concatenation** - Multiple results merged to prevent UI flickering
+- ✅ **Accumulated Text Fallback** - Partials stored for finalization (fixes "last word cut" bug)
+- ✅ **Language Normalization** - ar-EG support across all providers
+- ✅ **en-EN Generic English** - Universal English variant mapping
+
+#### Production-Ready Languages:
+1. **Polish (pl-PL)** - Speechmatics streaming ✅
+2. **English (en-EN, en-US, en-GB)** - Speechmatics streaming ✅
+3. **Arabic (ar-EG)** - Google v2 streaming ✅
+
+#### Technical Implementation:
+- Fixed diarization default (True → False) for Arabic streaming
+- Threading bridge for Google's sync gRPC client in async Python
+- Database routing: google_v2 primary, azure fallback
+- Comprehensive tests: test_google_streaming.py, test_arabic_stt_integration.py
+
+#### Known Limitations:
+- Very short utterances (< 1 second) may miss transcription due to Google's ~900ms processing latency
+- Longer utterances (> 2 seconds) work perfectly with real-time partials
+
+**Files Modified:**
+- `google_streaming.py` - Streaming client with explicit encoding
+- `streaming_manager.py` - Google partial/final accumulation
+- `language_router.py` - ar-EG, en-EN normalization
+- All provider backends - Language code support
 
 ---
 
@@ -611,6 +647,58 @@ After enabling English (en-US, en-GB) and Arabic (ar-EG) languages for productio
 - Bandwidth reduction: 50-75% with Opus
 - No increase in transcription errors
 - User satisfaction with adaptive quality
+
+---
+
+### 🔥 0.9 STT Logging Optimization
+
+**Status:** Not Started (Scheduled after Phase 0.8)
+**Priority:** MEDIUM
+**Estimated Time:** 1-2 days
+
+**Context:**
+After completing network optimization work, reduce STT logging verbosity to improve production readability and performance. Current implementation is very verbose with per-transcript details that were useful during debugging but are excessive for production monitoring.
+
+**Tasks:**
+- [ ] Add log level system (DEBUG/INFO/WARNING/ERROR) to streaming_manager.py
+- [ ] Add STT_DEBUG environment variable for conditional verbose logging (default: False)
+- [ ] Reduce per-transcript detailed logs when STT_DEBUG=False:
+  - Keep: Blocking decisions (🚫), EndOfTranscript timing (🏁), error logs
+  - Keep: Audio timing logs (audio_end, late finals detected)
+  - Remove: Detailed per-transcript logging unless DEBUG mode enabled
+- [ ] Implement aggregated metrics per segment:
+  - Total transcripts processed
+  - Total blocked transcripts
+  - Segment duration
+  - Sync delays (min/max/avg)
+- [ ] Add summary logs per segment completion instead of per-transcript details
+- [ ] Update docker-compose.yml to add STT_DEBUG environment variable
+- [ ] Update DOCUMENTATION.md with logging configuration guide
+- [ ] Test logging output in both DEBUG and production modes
+
+**Expected Log Reduction:**
+- **Before (DEBUG):** 10-20 lines per transcript × 10-50 transcripts/segment = 100-1000 lines per segment
+- **After (INFO):** 5-10 lines per segment + error details = ~10-20 lines per segment
+- **Reduction:** 80-95% fewer log lines in production
+
+**Files to Create/Modify:**
+- `api/routers/stt/streaming_manager.py` - Add log levels, conditional logging
+- `docker-compose.yml` - Add STT_DEBUG environment variable
+- `DOCUMENTATION.md` - Document logging configuration
+
+**Environment Variables:**
+```bash
+# Enable verbose STT logging (default: false)
+STT_DEBUG=false  # Production mode
+STT_DEBUG=true   # Development/debugging mode
+```
+
+**Testing:**
+- [ ] Test with STT_DEBUG=false - Verify production logs are concise
+- [ ] Test with STT_DEBUG=true - Verify all debug details are present
+- [ ] Verify blocking decisions still logged in production mode
+- [ ] Verify error conditions are always logged regardless of debug mode
+- [ ] Measure log volume reduction in production
 
 ---
 
