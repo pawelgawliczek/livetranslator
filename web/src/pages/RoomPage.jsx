@@ -138,9 +138,11 @@ export default function RoomPage({ token, onLogout }) {
   // Improved VAD configuration - stricter silence detection to prevent repetitions
   const silenceFramesRef = useRef(0);  // Count consecutive silent frames
   const speechFramesRef = useRef(0);   // Count consecutive speech frames
+  const ringBufferRef = useRef(new Float32Array(0));  // Pre-buffer to capture speech onset
   const SILENCE_THRESHOLD = 20;        // 20 frames (~200ms) of silence before stopping
   const SPEECH_THRESHOLD = 5;          // 5 frames (~50ms) of speech to start
   const ENERGY_THRESHOLD = 0.015;      // Much higher threshold for washing machine noise (was 0.004)
+  const RING_BUFFER_MS = 500;          // Keep 500ms of audio before speech detection
 
   const languages = [
     { code: "auto", name: "Auto", flag: "🌐" },
@@ -813,6 +815,7 @@ export default function RoomPage({ token, onLogout }) {
       speechFramesRef.current = 0;
       isSpeakingRef.current = false;
       partialBufferRef.current = new Float32Array(0);
+      ringBufferRef.current = new Float32Array(0);
       lastPartialSentRef.current = 0;
 
       processor.onaudioprocess = (e) => {
@@ -850,7 +853,9 @@ export default function RoomPage({ token, onLogout }) {
             console.log('[VAD] 🎤 Speech started');
             setVadStatus("🎤 Speaking...");
             isSpeakingRef.current = true;
-            partialBufferRef.current = new Float32Array(0);
+            // Start with ring buffer content to capture beginning of first word
+            partialBufferRef.current = new Float32Array(ringBufferRef.current);
+            console.log(`[VAD] Pre-buffered ${ringBufferRef.current.length} samples (${(ringBufferRef.current.length / 16000 * 1000).toFixed(0)}ms)`);
             lastPartialSentRef.current = 0;
             currentSegmentHintRef.current = Date.now();
 
@@ -915,6 +920,22 @@ export default function RoomPage({ token, onLogout }) {
             setTimeout(() => setVadStatus("👂 Listening..."), 1000);
           }
         }
+
+        // Always update ring buffer (even when not speaking) to capture speech onset
+        const ringBufferSize = Math.floor(targetSampleRate * RING_BUFFER_MS / 1000); // 500ms at 16kHz = 8000 samples
+        const oldRing = ringBufferRef.current;
+        const newRing = new Float32Array(Math.min(oldRing.length + resampled.length, ringBufferSize));
+        if (oldRing.length + resampled.length <= ringBufferSize) {
+          // Buffer not full yet, just append
+          newRing.set(oldRing);
+          newRing.set(resampled, oldRing.length);
+        } else {
+          // Buffer full, shift and append (keep last ringBufferSize samples)
+          const offset = oldRing.length + resampled.length - ringBufferSize;
+          newRing.set(oldRing.subarray(offset));
+          newRing.set(resampled, newRing.length - resampled.length);
+        }
+        ringBufferRef.current = newRing;
 
         // Accumulate resampled audio during speech
         if (isSpeakingRef.current) {
