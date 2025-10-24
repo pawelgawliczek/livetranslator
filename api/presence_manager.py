@@ -5,7 +5,7 @@ This module handles user presence state with packet-loss resistance and debounci
 It is SEPARATE from translation routing (which uses active_lang Redis keys).
 
 Key Features:
-- 15-second grace period before marking user as "left"
+- 10-second grace period before marking user as "left"
 - Automatic reconnection handling (silent if within grace period)
 - Broadcasts presence_snapshot events (idempotent, includes full participant list)
 - Background cleanup task for expired disconnect timers
@@ -19,7 +19,7 @@ import structlog
 import redis.asyncio as redis
 
 # Configurable constant for grace period before user is marked as "left"
-PRESENCE_GRACE_PERIOD_SECONDS = 15
+PRESENCE_GRACE_PERIOD_SECONDS = 10
 
 
 class PresenceManager:
@@ -343,6 +343,16 @@ class PresenceManager:
                                 room_id = presence_key_str.split(":")[1]
                                 user_id = user_key_str.replace("user:", "")
 
+                                # Save user info for the event before removing
+                                user_info = {
+                                    "left_user": {
+                                        "user_id": user_id,
+                                        "display_name": user_data.get("display_name", "Unknown"),
+                                        "language": user_data.get("language", "unknown"),
+                                        "is_guest": user_data.get("is_guest", False)
+                                    }
+                                }
+
                                 # Remove from presence state
                                 await self.redis.hdel(presence_key_str, user_key_str)
 
@@ -350,8 +360,8 @@ class PresenceManager:
                                 timer_key = f"room:{room_id}:disconnect_timer:{user_id}"
                                 await self.redis.delete(timer_key)
 
-                                # Broadcast user_left event
-                                event = await self._build_presence_snapshot(room_id, "user_left", user_id)
+                                # Broadcast user_left event with user info
+                                event = await self._build_presence_snapshot(room_id, "user_left", user_id, extra=user_info)
                                 await self.redis.publish("presence_events", json.dumps(event))
 
                                 self.log.info(

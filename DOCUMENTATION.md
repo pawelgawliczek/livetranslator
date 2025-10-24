@@ -50,7 +50,7 @@
 **User Experience:**
 - **WebSocket-based** live updates with processing indicators
 - **Visual Feedback** - Real-time speaking indicators, spinning icons, 28-language localization
-- **Presence System** - Debounced join/leave notifications with 15-second grace period for packet-loss resistance
+- **Presence System** - Debounced join/leave notifications with 10-second grace period for packet-loss resistance
 - **Active Language Tracking** - Language flags with counts in room header, participants sidebar with real-time updates
 - **Toast Notifications** - Auto-dismissing presence notifications (join/leave/language change)
 - **Welcome Banner** - Shows current participants when joining room
@@ -1024,7 +1024,7 @@ Sent when a user connects or presence state changes. Contains complete participa
 **Frontend Display:** Updates participants panel and language flags in header
 
 #### User Joined
-Sent after 15-second grace period confirms user stayed in room.
+Sent after 10-second grace period confirms user stayed in room.
 
 ```json
 {
@@ -1040,7 +1040,7 @@ Sent after 15-second grace period confirms user stayed in room.
 **Frontend Display:** Toast notification: "🇬🇧 john joined with English"
 
 #### User Left
-Sent after 15-second grace period expires without reconnection.
+Sent after 10-second grace period expires without reconnection.
 
 ```json
 {
@@ -1130,16 +1130,16 @@ Managed by PresenceManager for packet-loss resistant user experience.
    - Field: `user:{user_id}`
    - Value: JSON with display_name, language, joined_at, state
 
-2. **Grace Period:** 15-second debounce for disconnect events
+2. **Grace Period:** 10-second debounce for disconnect events
    - User disconnects → Marked as "disconnecting"
-   - Timer set: `room:{room_id}:disconnect_timer:{user_id}` (15s TTL)
-   - User reconnects within 15s → Silent, no notification
+   - Timer set: `room:{room_id}:disconnect_timer:{user_id}` (10s TTL)
+   - User reconnects within 10s → Silent, no notification
    - Timer expires → Broadcast "user_left" event
 
 3. **Presence Events:** Broadcast via `presence_events` Redis channel
    - `presence_snapshot` - Complete participant list (idempotent)
    - `user_joined` - After confirming user stayed (post grace period)
-   - `user_left` - After 15s grace period expires
+   - `user_left` - After 10s grace period expires
    - `language_changed` - Immediate language change notification
 
 4. **Background Cleanup:** PresenceManager cleanup task runs every 5s
@@ -2105,13 +2105,13 @@ Both issues are edge cases that don't affect production functionality.
 **Presence System:**
 - Complete rewrite of user presence tracking with dual-layer architecture
 - Added PresenceManager with Redis-backed state management
-- Implemented 15-second grace period for disconnect debouncing
+- Implemented 10-second grace period for disconnect debouncing
 - Packet-loss resistant notifications (no spam during network instability)
-- Silent reconnection handling (no notification if reconnect within 15s)
+- Silent reconnection handling (no notification if reconnect within 10s)
 - Background cleanup task for expired disconnections
 
 **Frontend Enhancements:**
-- New NotificationToast component with auto-dismiss (5s) and debouncing (15s)
+- New NotificationToast component with auto-dismiss (5s) and debouncing (10s)
 - New ParticipantsPanel sidebar showing all active participants
 - Language flags with counts in room header (e.g., "🇬🇧 2 🇵🇱 1")
 - Welcome banner on join showing current participants (10s auto-dismiss)

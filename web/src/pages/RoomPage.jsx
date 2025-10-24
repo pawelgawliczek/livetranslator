@@ -1,7 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import InviteModal from "../components/InviteModal";
-import ParticipantsModal from "../components/ParticipantsModal";
 import SettingsMenu from "../components/SettingsMenu";
 import SoundSettingsModal from "../components/SoundSettingsModal";
 import NotificationToast from "../components/NotificationToast";
@@ -89,7 +88,6 @@ export default function RoomPage({ token, onLogout }) {
   const [showCosts, setShowCosts] = useState(false);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
-  const [showParticipants, setShowParticipants] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showSoundSettings, setShowSoundSettings] = useState(false);
   const [userEmail, setUserEmail] = useState("");
@@ -645,12 +643,26 @@ export default function RoomPage({ token, onLogout }) {
               const now = Date.now();
               const lastNotification = notificationDebounce.current.get(triggeredBy);
 
-              // Debounce: max 1 notification per user per 15 seconds
-              if (!lastNotification || now - lastNotification > 15000) {
-                notificationDebounce.current.set(triggeredBy, now);
+              // Debounce for join/left events only (to avoid spam during reconnections)
+              // Language changes always show notification
+              const isLanguageChange = data.type === 'language_changed';
+              const shouldShowNotification = isLanguageChange || !lastNotification || now - lastNotification > 10000;
 
-                // Find participant info
-                const participant = data.participants?.find(p => p.user_id === triggeredBy);
+              if (shouldShowNotification) {
+                // Only update debounce timestamp for join/leave events
+                if (!isLanguageChange) {
+                  notificationDebounce.current.set(triggeredBy, now);
+                }
+
+                // For user_left events, use the left_user info from the event
+                // For other events, find participant info from current participants
+                let participant;
+                if (data.type === 'user_left' && data.left_user) {
+                  participant = data.left_user;
+                } else {
+                  participant = data.participants?.find(p => p.user_id === triggeredBy);
+                }
+
                 if (participant) {
                   const name = participant.display_name;
                   const lang = languages.find(l => l.code === participant.language);
@@ -1546,24 +1558,6 @@ export default function RoomPage({ token, onLogout }) {
                 })}
               </span>
             )}
-            <button
-              onClick={() => setShowParticipantsPanel(!showParticipantsPanel)}
-              style={{
-                background: "#2a2a2a",
-                border: "1px solid #444",
-                borderRadius: "6px",
-                color: "white",
-                cursor: "pointer",
-                padding: "0.2rem 0.4rem",
-                fontSize: "0.8rem",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.2rem"
-              }}
-              title="Show participants"
-            >
-              👥 {participants.length}
-            </button>
           </div>
           {vadStatus !== "idle" && (
             <div style={{
@@ -2135,7 +2129,7 @@ export default function RoomPage({ token, onLogout }) {
         }}
         onShowParticipants={() => {
           setShowSettings(false);
-          setShowParticipants(true);
+          setShowParticipantsPanel(true);
         }}
         onShowInvite={() => {
           setShowSettings(false);
@@ -2168,16 +2162,6 @@ export default function RoomPage({ token, onLogout }) {
         <InviteModal
           roomCode={roomId}
           onClose={() => setShowInvite(false)}
-        />
-      )}
-
-      {/* Participants Modal */}
-      {showParticipants && (
-        <ParticipantsModal
-          roomCode={roomId}
-          token={token}
-          isOpen={showParticipants}
-          onClose={() => setShowParticipants(false)}
         />
       )}
 
