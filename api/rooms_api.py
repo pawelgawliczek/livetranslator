@@ -55,7 +55,6 @@ class RoomStatusResponse(BaseModel):
     admin_present: bool
     admin_left_at: datetime | None = None
     expires_at: datetime | None = None  # When room will be deleted (admin_left_at + 30 min)
-    active_languages: list[str] = []  # List of active language codes in room
 
     class Config:
         json_encoders = {
@@ -430,7 +429,6 @@ async def get_room_status(
 
     # Refresh user's language TTL in Redis (keeps them active for translation routing)
     wsman = getattr(request.app.state, 'wsman', None)
-    active_languages = []
 
     if wsman and wsman.redis:
         user_id = user.get("sub")
@@ -439,21 +437,11 @@ async def get_room_status(
         # Refresh TTL to 15 seconds (3x the 5s poll interval)
         await wsman.redis.setex(key, 15, user_lang)
 
-        # Get all active languages in room from Redis
-        pattern = f"room:{room_code}:active_lang:*"
-        async for lang_key in wsman.redis.scan_iter(match=pattern, count=100):
-            lang = await wsman.redis.get(lang_key)
-            if lang:
-                lang_str = lang.decode() if isinstance(lang, bytes) else lang
-                if lang_str not in active_languages:
-                    active_languages.append(lang_str)
-
     return RoomStatusResponse(
         code=room.code,
         admin_present=admin_present,
         admin_left_at=room.admin_left_at,
-        expires_at=expires_at,
-        active_languages=active_languages
+        expires_at=expires_at
     )
 
 # NOTE: Per-room STT settings removed in favor of language-based routing (Migration 006)

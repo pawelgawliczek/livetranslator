@@ -35,8 +35,8 @@ class WSManager:
 
     async def run_pubsub(self):
         pubsub = self.redis.pubsub()
-        await pubsub.subscribe("stt_events", "mt_events")
-        self.log.info("subscribed", channel="stt_events,mt_events")
+        await pubsub.subscribe("stt_events", "mt_events", "presence_events")
+        self.log.info("subscribed", channel="stt_events,mt_events,presence_events")
 
         async for msg in pubsub.listen():
             if not msg or msg.get("type") != "message":
@@ -44,7 +44,7 @@ class WSManager:
 
             channel = msg.get("channel")
             raw = msg.get("data")
-            
+
             try:
                 payload = raw if isinstance(raw, (bytes, bytearray)) else raw.encode("utf-8")
                 data = orjson.loads(payload)
@@ -61,6 +61,8 @@ class WSManager:
                 await self._handle_stt_event(data, room)
             elif channel == "mt_events":
                 await self._handle_mt_event(data, room)
+            elif channel == "presence_events":
+                await self._handle_presence_event(data, room)
 
     async def _handle_stt_event(self, data: dict, room: str):
         seg_id = int(data.get("segment_id") or 0)
@@ -93,6 +95,22 @@ class WSManager:
             save_stt_event(room, seg_id, rev, is_final, src_lang, text)
         except Exception as e:
             self.log.error("persist_stt_error", room=room, segment=seg_id, err=str(e))
+
+    async def _handle_presence_event(self, data: dict, room: str):
+        """
+        Handle presence events from PresenceManager and broadcast to room participants.
+
+        These events include:
+        - presence_snapshot: Complete participant list
+        - user_joined: New user joined (after grace period confirmation)
+        - user_left: User left (after grace period expiration)
+        - language_changed: User changed language
+        """
+        event_type = data.get("type", "unknown")
+        self.log.info("presence_event", room=room, type=event_type)
+
+        # Broadcast presence event to all connected clients in the room
+        await self.broadcast(room, data)
 
     async def _handle_mt_event(self, data: dict, room: str):
         seg_id = int(data.get("segment_id") or 0)

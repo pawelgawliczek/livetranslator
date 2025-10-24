@@ -11,6 +11,7 @@ from .ws_manager import WSManager
 from .stt_client import STTClient
 from .mt_client import MTClient
 from .jwt_tools import verify_token
+from .presence_manager import PresenceManager
 from .events import router as events_router
 from .auth import router as auth_router
 from .costs_api import router as costs_router
@@ -63,14 +64,17 @@ app.add_middleware(
 wsman = WSManager(str(settings.LT_REDIS_URL), str(settings.LT_MT_BASE_URL), "en")
 stt = STTClient(str(settings.LT_REDIS_URL))
 mt = MTClient(str(settings.LT_MT_BASE_URL))
+presence_manager = PresenceManager(wsman.redis)
 
-# Store wsman in app state so other endpoints can access it
+# Store managers in app state so other endpoints can access them
 app.state.wsman = wsman
+app.state.presence_manager = presence_manager
 
 @app.on_event("startup")
 async def _startup():
     migrate()
     asyncio.create_task(wsman.run_pubsub())
+    asyncio.create_task(presence_manager.cleanup_stale_disconnects())
 
 @app.get("/healthz")
 def healthz():
@@ -143,17 +147,20 @@ async def ws_room(ws: WebSocket, room_id: str):
     active_languages = await trigger_room_language_aggregation(room_id)
     print(f"[WebSocket] Completed language registration")
 
-    # Broadcast participant joined event to notify other users in the room
-    join_event = {
-        "type": "participant_joined",
-        "room_id": room_id,
-        "user_email": user_email,
-        "user_id": user_id,
-        "preferred_lang": user_lang,
-        "active_languages": active_languages  # Include complete active language list
-    }
-    print(f"[WebSocket] Broadcasting participant_joined: {join_event}")
-    await wsman.broadcast(room_id, join_event)
+    # Add presence tracking (debounced, packet-loss resistant)
+    is_guest = str(user_id).startswith('guest:')
+    if is_guest:
+        # For guests, user_id format is "guest:{name}:{timestamp}"
+        parts = str(user_id).split(':', 2)
+        display_name = parts[1] if len(parts) > 1 else 'Guest'
+    else:
+        display_name = user_email.split('@')[0] if '@' in user_email else user_email
+
+    presence_event = await presence_manager.user_connected(
+        room_id, str(user_id), display_name, user_lang, is_guest
+    )
+    await wsman.broadcast(room_id, presence_event)
+    print(f"[WebSocket] Broadcasted presence event: {presence_event['type']}")
 
     try:
         while True:
@@ -176,17 +183,13 @@ async def ws_room(ws: WebSocket, room_id: str):
                 await register_user_language(room_id, str(user_id), new_lang)
                 active_languages = await trigger_room_language_aggregation(room_id)
 
-                # Notify room about language change
-                lang_event = {
-                    "type": "participant_language_changed",
-                    "room_id": room_id,
-                    "user_email": user_email,
-                    "user_id": user_id,
-                    "preferred_lang": new_lang,
-                    "active_languages": active_languages  # Include complete active language list
-                }
-                print(f"[WebSocket] Broadcasting participant_language_changed: {lang_event}")
-                await wsman.broadcast(room_id, lang_event)
+                # Update presence with new language (debounced notifications)
+                presence_event = await presence_manager.user_changed_language(
+                    room_id, str(user_id), new_lang
+                )
+                if presence_event:
+                    await wsman.broadcast(room_id, presence_event)
+                    print(f"[WebSocket] Broadcasted language change: {new_lang}")
                 continue
 
             # Handle speech_started event - allocate segment ID and broadcast to all room participants
@@ -229,24 +232,17 @@ async def ws_room(ws: WebSocket, room_id: str):
         await wsman.disconnect(room_id, ws)
         MET_WS_CONNS.dec()
 
-        # Clean up user's language from Redis immediately
+        # Clean up user's language from Redis immediately (for translation routing)
         lang_key = f"room:{room_id}:active_lang:{user_id}"
         await wsman.redis.delete(lang_key)
 
-        # Re-aggregate languages to get updated list
+        # Re-aggregate languages to get updated list (for translation routing)
         active_languages = await trigger_room_language_aggregation(room_id)
 
-        # Then broadcast participant left event to remaining clients
-        left_event = {
-            "type": "participant_left",
-            "room_id": room_id,
-            "user_email": user_email,
-            "user_id": user_id,
-            "preferred_lang": user_lang,
-            "active_languages": active_languages  # Include updated active language list
-        }
-        print(f"[WebSocket] Broadcasting participant_left: {left_event}")
-        await wsman.broadcast(room_id, left_event)
+        # Start grace period for presence (debounced - no immediate "left" notification)
+        # Actual "user_left" broadcast happens after 15s grace period if user doesn't reconnect
+        await presence_manager.user_disconnected(room_id, str(user_id))
+        print(f"[WebSocket] Started disconnect grace period for user={user_id}")
 
 class TReq(BaseModel):
     src: str

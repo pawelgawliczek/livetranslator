@@ -4,6 +4,8 @@ import InviteModal from "../components/InviteModal";
 import ParticipantsModal from "../components/ParticipantsModal";
 import SettingsMenu from "../components/SettingsMenu";
 import SoundSettingsModal from "../components/SoundSettingsModal";
+import NotificationToast from "../components/NotificationToast";
+import ParticipantsPanel from "../components/ParticipantsPanel";
 
 export default function RoomPage({ token, onLogout }) {
   const { roomId } = useParams();
@@ -113,8 +115,13 @@ export default function RoomPage({ token, onLogout }) {
   const [showExpirationModal, setShowExpirationModal] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [showAdminLeftNotification, setShowAdminLeftNotification] = useState(false);
-  const [activeLanguages, setActiveLanguages] = useState(new Set());
-  const recentJoinsRef = useRef(new Map()); // Track recent joins to filter duplicate language change events
+  // Presence system state
+  const [participants, setParticipants] = useState([]);
+  const [languageCounts, setLanguageCounts] = useState({});
+  const [notifications, setNotifications] = useState([]);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [showParticipantsPanel, setShowParticipantsPanel] = useState(false);
+  const notificationDebounce = useRef(new Map()); // Track last notification time per user
   const myLanguageRef = useRef(myLanguage); // Ref to always have current language value in closures
 
   // Network quality monitoring
@@ -344,11 +351,6 @@ export default function RoomPage({ token, onLogout }) {
         if (res.ok) {
           const status = await res.json();
           setRoomStatus(status);
-
-          // Update active languages from status response (synchronized with Redis)
-          if (status.active_languages && Array.isArray(status.active_languages)) {
-            setActiveLanguages(new Set(status.active_languages));
-          }
 
           // Calculate time remaining if admin is absent
           if (!status.admin_present && status.expires_at) {
@@ -617,96 +619,64 @@ export default function RoomPage({ token, onLogout }) {
             return;
           }
 
-          // Handle participant join/leave/language change events as system messages
-          if (data.type === 'participant_joined' || data.type === 'participant_left' || data.type === 'participant_language_changed') {
-            // Get user's display name from email or user_id
-            let displayName = 'Someone';
-            let isGuest = false;
-            if (data.user_email && data.user_email !== 'unknown') {
-              displayName = data.user_email.split('@')[0];
-            } else if (data.user_id && String(data.user_id).startsWith('guest:')) {
-              const parts = String(data.user_id).split(':', 2);
-              displayName = parts[1] || 'Guest';
-              isGuest = true;
+          // Handle presence events from new presence system
+          if (data.type === 'presence_snapshot' || data.type === 'user_joined' ||
+              data.type === 'user_left' || data.type === 'language_changed') {
+
+            console.log('[PresenceWS] Received presence event:', data.type);
+
+            // Update participants and language counts
+            if (data.participants && Array.isArray(data.participants)) {
+              setParticipants(data.participants);
+            }
+            if (data.language_counts) {
+              setLanguageCounts(data.language_counts);
             }
 
-            // Update active languages immediately from backend (do this FIRST, before any early returns)
-            if (data.active_languages && Array.isArray(data.active_languages)) {
-              setActiveLanguages(new Set(data.active_languages));
+            // Show welcome message on first presence_snapshot
+            if (data.type === 'presence_snapshot' && !showWelcome) {
+              setShowWelcome(true);
+              setTimeout(() => setShowWelcome(false), 10000); // Auto-dismiss after 10s
             }
 
-            // Don't show our own join/language change messages
-            try {
-              const ourEmail = authToken ? JSON.parse(atob(authToken.split('.')[1])).email : null;
-              const isOurMessage = data.user_email === ourEmail;
+            // Show notification toast for events (not for presence_snapshot)
+            if (data.type !== 'presence_snapshot' && data.triggered_by_user_id) {
+              const triggeredBy = data.triggered_by_user_id;
+              const now = Date.now();
+              const lastNotification = notificationDebounce.current.get(triggeredBy);
 
-              if (isOurMessage && (data.type === 'participant_joined' || data.type === 'participant_language_changed')) {
-                // Don't show system message for our own events (but activeLanguages was already updated above)
-                return;
-              }
-            } catch (e) {
-              // Ignore token parsing errors
-            }
+              // Debounce: max 1 notification per user per 15 seconds
+              if (!lastNotification || now - lastNotification > 15000) {
+                notificationDebounce.current.set(triggeredBy, now);
 
-            // Get language info
-            const langCode = data.preferred_lang || 'en';
-            const langInfo = languages.find(l => l.code === langCode);
-            const langFlag = langInfo ? langInfo.flag : '🌐';
-            const langName = langInfo ? langInfo.name : langCode;
+                // Find participant info
+                const participant = data.participants?.find(p => p.user_id === triggeredBy);
+                if (participant) {
+                  const name = participant.display_name;
+                  const lang = languages.find(l => l.code === participant.language);
 
-            // Track recent joins to filter duplicate language change events
-            const userId = data.user_id || data.user_email;
+                  let message = '';
+                  if (data.type === 'user_joined') {
+                    message = `${lang?.flag || '🌐'} ${name}${participant.is_guest ? ' (guest)' : ''} joined with ${lang?.name || participant.language}`;
+                  } else if (data.type === 'user_left') {
+                    message = `${name}${participant.is_guest ? ' (guest)' : ''} left the room`;
+                  } else if (data.type === 'language_changed') {
+                    const newLang = languages.find(l => l.code === data.new_language);
+                    message = `${newLang?.flag || '🌐'} ${name}${participant.is_guest ? ' (guest)' : ''} changed to ${newLang?.name || data.new_language}`;
+                  }
 
-            if (data.type === 'participant_joined') {
-              // Store join info with language and timestamp
-              recentJoinsRef.current.set(userId, {
-                language: langCode,
-                timestamp: Date.now()
-              });
-              // Clean up after 5 seconds
-              setTimeout(() => {
-                recentJoinsRef.current.delete(userId);
-              }, 5000);
-            }
+                  if (message) {
+                    const notif = { id: Date.now(), message };
+                    setNotifications(prev => [...prev, notif].slice(-3)); // Keep last 3
 
-            // Filter out language change events if:
-            // 1. User just joined with the same language (within 5 seconds)
-            // 2. Language didn't actually change
-            if (data.type === 'participant_language_changed') {
-              const recentJoin = recentJoinsRef.current.get(userId);
-              if (recentJoin) {
-                const timeSinceJoin = Date.now() - recentJoin.timestamp;
-                // Skip if same language within 5 seconds of joining
-                if (recentJoin.language === langCode && timeSinceJoin < 5000) {
-                  console.log('[PresenceWS] Skipping duplicate language change (same as join)');
-                  return;
+                    // Auto-dismiss after 5 seconds
+                    setTimeout(() => {
+                      setNotifications(prev => prev.filter(n => n.id !== notif.id));
+                    }, 5000);
+                  }
                 }
               }
             }
-
-            // Create system message text
-            let messageText = '';
-            if (data.type === 'participant_joined') {
-              messageText = `${langFlag} ${displayName}${isGuest ? ' (guest)' : ''} joined with ${langName}`;
-            } else if (data.type === 'participant_left') {
-              messageText = `${displayName}${isGuest ? ' (guest)' : ''} left the room`;
-            } else if (data.type === 'participant_language_changed') {
-              messageText = `${langFlag} ${displayName}${isGuest ? ' (guest)' : ''} changed to ${langName}`;
-            }
-
-            // Create a system message (flat structure like regular messages)
-            const systemMessage = {
-              type: 'stt_final',
-              segment_id: Date.now(),
-              ts_iso: new Date().toISOString(),
-              text: messageText,
-              is_system: true,
-              final: true
-            };
-
-            // Add to segments (same format as regular STT messages)
-            segsRef.current.set(`s-${systemMessage.segment_id}`, systemMessage);
-            scheduleRender();
           }
           // Handle speech_started events
           else if (data.type === 'speech_started') {
@@ -1552,18 +1522,48 @@ export default function RoomPage({ token, onLogout }) {
             gap: "0.4rem"
           }}>
             <span>{roomId}</span>
-            {activeLanguages.size > 0 && (
+            {Object.keys(languageCounts).length > 0 && (
               <span style={{
                 fontSize: "0.85rem",
                 display: "inline-flex",
-                gap: "0.2rem"
+                gap: "0.3rem",
+                alignItems: "center"
               }}>
-                {Array.from(activeLanguages).map(langCode => {
+                {Object.entries(languageCounts).map(([langCode, count]) => {
                   const lang = languages.find(l => l.code === langCode);
-                  return lang ? lang.flag : null;
+                  return (
+                    <span key={langCode} style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.1rem",
+                      background: "rgba(255,255,255,0.1)",
+                      padding: "0.1rem 0.3rem",
+                      borderRadius: "4px"
+                    }}>
+                      {lang?.flag || '🌐'} {count}
+                    </span>
+                  );
                 })}
               </span>
             )}
+            <button
+              onClick={() => setShowParticipantsPanel(!showParticipantsPanel)}
+              style={{
+                background: "#2a2a2a",
+                border: "1px solid #444",
+                borderRadius: "6px",
+                color: "white",
+                cursor: "pointer",
+                padding: "0.2rem 0.4rem",
+                fontSize: "0.8rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.2rem"
+              }}
+              title="Show participants"
+            >
+              👥 {participants.length}
+            </button>
           </div>
           {vadStatus !== "idle" && (
             <div style={{
@@ -2417,6 +2417,105 @@ export default function RoomPage({ token, onLogout }) {
       )}
 
       {/* NOTE: Room Admin Settings removed - using language-based routing (Migration 006) */}
+
+      {/* Notification Toast System */}
+      <NotificationToast notifications={notifications} />
+
+      {/* Participants Panel */}
+      <ParticipantsPanel
+        participants={participants}
+        languages={languages}
+        isOpen={showParticipantsPanel}
+        onToggle={() => setShowParticipantsPanel(false)}
+      />
+
+      {/* Welcome Banner */}
+      {showWelcome && (
+        <div style={{
+          position: "fixed",
+          top: "60px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "#1a1a1a",
+          border: "1px solid #444",
+          borderRadius: "12px",
+          padding: "1rem 1.5rem",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+          zIndex: 998,
+          maxWidth: "400px",
+          width: "90%"
+        }}>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: "0.5rem"
+          }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: "1rem",
+              fontWeight: "600",
+              color: "white"
+            }}>
+              Welcome to {roomId}!
+            </h3>
+            <button
+              onClick={() => setShowWelcome(false)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#999",
+                cursor: "pointer",
+                fontSize: "1.2rem",
+                padding: 0,
+                lineHeight: 1
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          {participants.length > 1 ? (
+            <div style={{ color: "#ccc", fontSize: "0.9rem" }}>
+              <p style={{ margin: "0 0 0.5rem 0" }}>Also here:</p>
+              <ul style={{
+                margin: 0,
+                padding: "0 0 0 1.2rem",
+                listStyle: "none"
+              }}>
+                {participants
+                  .filter(p => {
+                    // Filter out current user
+                    try {
+                      if (isGuest) {
+                        const guestId = sessionStorage.getItem('guest_id');
+                        return p.user_id !== guestId;
+                      } else {
+                        const claims = authToken ? JSON.parse(atob(authToken.split('.')[1])) : null;
+                        return p.user_id !== String(claims?.sub);
+                      }
+                    } catch {
+                      return true;
+                    }
+                  })
+                  .map(p => {
+                    const lang = languages.find(l => l.code === p.language);
+                    return (
+                      <li key={p.user_id} style={{ marginBottom: "0.3rem" }}>
+                        {lang?.flag || '🌐'} {p.display_name}
+                        {p.is_guest && <span style={{ color: "#999" }}> (guest)</span>}
+                        <span style={{ color: "#999" }}> ({lang?.name || p.language})</span>
+                      </li>
+                    );
+                  })}
+              </ul>
+            </div>
+          ) : (
+            <p style={{ margin: 0, color: "#ccc", fontSize: "0.9rem" }}>
+              You're the first one here!
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
