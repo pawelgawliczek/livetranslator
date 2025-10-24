@@ -13,11 +13,17 @@ export default function JoinPage({ token, onLogin }) {
 
   const languages = [
     { code: "en", name: "English", flag: "🇬🇧" },
-    { code: "pl", name: "Polish", flag: "🇵🇱" },
-    { code: "ar", name: "Arabic", flag: "🇪🇬" },
-    { code: "es", name: "Spanish", flag: "🇪🇸" },
-    { code: "fr", name: "French", flag: "🇫🇷" },
-    { code: "de", name: "German", flag: "🇩🇪" },
+    { code: "pl", name: "Polski", flag: "🇵🇱" },
+    { code: "ar", name: "العربية", flag: "🇸🇦" },
+    { code: "es", name: "Español", flag: "🇪🇸" },
+    { code: "fr", name: "Français", flag: "🇫🇷" },
+    { code: "de", name: "Deutsch", flag: "🇩🇪" },
+    { code: "it", name: "Italiano", flag: "🇮🇹" },
+    { code: "pt", name: "Português", flag: "🇵🇹" },
+    { code: "ru", name: "Русский", flag: "🇷🇺" },
+    { code: "zh", name: "中文", flag: "🇨🇳" },
+    { code: "ja", name: "日本語", flag: "🇯🇵" },
+    { code: "ko", name: "한국어", flag: "🇰🇷" }
   ];
 
   useEffect(() => {

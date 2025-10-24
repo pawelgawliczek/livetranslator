@@ -86,20 +86,49 @@ export default function QuickRoomModal({ token, onClose }) {
   async function createQuickRoom() {
     try {
       // Generate a unique room code (max 12 chars)
-      // Format: q-XXXXX where X is base36 timestamp
-      const timestamp = Date.now();
-      const shortCode = timestamp.toString(36); // Convert to base36 for shorter string
-      const quickRoomCode = `q-${shortCode}`; // e.g., q-mh07s8a (11 chars)
+      // Format: q-XXXXX where X is base36 timestamp + random suffix
+      // Retry up to 3 times if code already exists
+      let quickRoomCode;
+      let createResp;
+      let attempts = 0;
+      const maxAttempts = 3;
 
-      // Create the room
-      const createResp = await fetch("/api/rooms", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ code: quickRoomCode })
-      });
+      while (attempts < maxAttempts) {
+        attempts++;
+
+        // Generate code with timestamp + random suffix for uniqueness
+        const timestamp = Date.now();
+        const random = Math.floor(Math.random() * 1000); // 0-999
+        const shortCode = timestamp.toString(36) + random.toString(36);
+        quickRoomCode = `q-${shortCode}`.substring(0, 12); // Ensure max 12 chars
+
+        // Create the room
+        createResp = await fetch("/api/rooms", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ code: quickRoomCode })
+        });
+
+        if (createResp.ok) {
+          break; // Success!
+        }
+
+        // Check if it's a conflict error
+        const errorData = await createResp.json().catch(() => ({}));
+        if (createResp.status === 400 && errorData.detail?.includes("already exists")) {
+          console.log(`[QuickRoom] Code collision detected (attempt ${attempts}/${maxAttempts}), retrying...`);
+          if (attempts >= maxAttempts) {
+            throw new Error("Failed to generate unique room code after multiple attempts");
+          }
+          continue; // Retry with new code
+        } else {
+          // Different error, don't retry
+          throw new Error("Failed to create room");
+        }
+      }
 
       if (!createResp.ok) {
         throw new Error("Failed to create room");

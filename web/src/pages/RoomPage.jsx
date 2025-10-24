@@ -115,6 +115,7 @@ export default function RoomPage({ token, onLogout }) {
   const [showAdminLeftNotification, setShowAdminLeftNotification] = useState(false);
   const [activeLanguages, setActiveLanguages] = useState(new Set());
   const recentJoinsRef = useRef(new Map()); // Track recent joins to filter duplicate language change events
+  const myLanguageRef = useRef(myLanguage); // Ref to always have current language value in closures
 
   // Network quality monitoring
   const [networkQuality, setNetworkQuality] = useState('unknown'); // 'high', 'medium', 'low', 'unknown'
@@ -344,6 +345,11 @@ export default function RoomPage({ token, onLogout }) {
           const status = await res.json();
           setRoomStatus(status);
 
+          // Update active languages from status response (synchronized with Redis)
+          if (status.active_languages && Array.isArray(status.active_languages)) {
+            setActiveLanguages(new Set(status.active_languages));
+          }
+
           // Calculate time remaining if admin is absent
           if (!status.admin_present && status.expires_at) {
             // Parse expires_at as UTC and convert to local time for comparison
@@ -411,6 +417,11 @@ export default function RoomPage({ token, onLogout }) {
   useEffect(() => {
     fetchHistory();
   }, [roomId, myLanguage]);
+
+  // Keep myLanguageRef in sync with myLanguage state
+  useEffect(() => {
+    myLanguageRef.current = myLanguage;
+  }, [myLanguage]);
 
   // Send language update to server when it changes
   useEffect(() => {
@@ -589,8 +600,7 @@ export default function RoomPage({ token, onLogout }) {
             language: myLanguage
           }));
           console.log('[RoomPage] Sent initial language to server:', myLanguage);
-          // Add our own language to active languages
-          setActiveLanguages(prev => new Set([...prev, myLanguage]));
+          // Active languages will be updated by next status poll
         }
         // Start network monitoring
         startNetworkMonitoring(presenceWs);
@@ -620,17 +630,18 @@ export default function RoomPage({ token, onLogout }) {
               isGuest = true;
             }
 
+            // Update active languages immediately from backend (do this FIRST, before any early returns)
+            if (data.active_languages && Array.isArray(data.active_languages)) {
+              setActiveLanguages(new Set(data.active_languages));
+            }
+
             // Don't show our own join/language change messages
             try {
               const ourEmail = authToken ? JSON.parse(atob(authToken.split('.')[1])).email : null;
               const isOurMessage = data.user_email === ourEmail;
 
               if (isOurMessage && (data.type === 'participant_joined' || data.type === 'participant_language_changed')) {
-                // Still update active languages for ourselves
-                if (data.preferred_lang) {
-                  setActiveLanguages(prev => new Set([...prev, data.preferred_lang]));
-                }
-                console.log('[PresenceWS] Skipping our own', data.type, 'message');
+                // Don't show system message for our own events (but activeLanguages was already updated above)
                 return;
               }
             } catch (e) {
@@ -677,13 +688,10 @@ export default function RoomPage({ token, onLogout }) {
             let messageText = '';
             if (data.type === 'participant_joined') {
               messageText = `${langFlag} ${displayName}${isGuest ? ' (guest)' : ''} joined with ${langName}`;
-              setActiveLanguages(prev => new Set([...prev, langCode]));
             } else if (data.type === 'participant_left') {
               messageText = `${displayName}${isGuest ? ' (guest)' : ''} left the room`;
-              // Don't remove language immediately - let the TTL expire naturally
             } else if (data.type === 'participant_language_changed') {
               messageText = `${langFlag} ${displayName}${isGuest ? ' (guest)' : ''} changed to ${langName}`;
-              setActiveLanguages(prev => new Set([...prev, langCode]));
             }
 
             // Create a system message (flat structure like regular messages)
@@ -792,15 +800,16 @@ export default function RoomPage({ token, onLogout }) {
         const seg = segments.get(segId);
 
         if (msg.type && msg.type.startsWith("translation")) {
-          // Only store translation if it matches my language
-          console.log(`[Translation Filter] myLanguage=${myLanguage}, msg.tgt=${msg.tgt}, match=${msg.tgt === myLanguage}`);
-          if (msg.tgt === myLanguage) {
+          // Only store translation if it matches my language (use ref to get current value)
+          const currentLang = myLanguageRef.current;
+          console.log(`[Translation Filter] myLanguage=${currentLang}, msg.tgt=${msg.tgt}, match=${msg.tgt === currentLang}`);
+          if (msg.tgt === currentLang) {
             if (!seg.translation || msg.final || (!msg.final && !seg.translation.final)) {
               seg.translation = msg;
               console.log(`[Translation] Stored translation for segment ${segId}`);
             }
           } else {
-            console.log(`[Translation] Skipped translation (tgt=${msg.tgt} !== myLang=${myLanguage})`);
+            console.log(`[Translation] Skipped translation (tgt=${msg.tgt} !== myLang=${currentLang})`);
           }
         } else {
           if (!seg.source || msg.final || (!msg.final && !seg.source.final)) {

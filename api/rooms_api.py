@@ -18,7 +18,7 @@ import json
 import os
 
 from .db import SessionLocal
-from .models import Room
+from .models import Room, RoomArchive
 from .jwt_tools import verify_token
 
 router = APIRouter(prefix="/api/rooms", tags=["rooms"])
@@ -55,6 +55,7 @@ class RoomStatusResponse(BaseModel):
     admin_present: bool
     admin_left_at: datetime | None = None
     expires_at: datetime | None = None  # When room will be deleted (admin_left_at + 30 min)
+    active_languages: list[str] = []  # List of active language codes in room
 
     class Config:
         json_encoders = {
@@ -122,10 +123,16 @@ async def create_room(
     """
     user_id = user.get("sub")
 
-    # Check if room code already exists
-    existing = db.query(Room).filter(Room.code == request.code).first()
-    if existing:
+    # Check if room code already exists in active rooms
+    existing_room = db.query(Room).filter(Room.code == request.code).first()
+    if existing_room:
         raise HTTPException(status_code=400, detail="Room code already exists")
+
+    # Check if room code exists in archived rooms
+    # This prevents reusing codes that would violate the unique constraint on room_archive
+    archived_room = db.query(RoomArchive).filter(RoomArchive.room_code == request.code).first()
+    if archived_room:
+        raise HTTPException(status_code=400, detail="Room code already exists in archive. Please choose a different code.")
 
     # Create new room
     room = Room(
@@ -423,6 +430,8 @@ async def get_room_status(
 
     # Refresh user's language TTL in Redis (keeps them active for translation routing)
     wsman = getattr(request.app.state, 'wsman', None)
+    active_languages = []
+
     if wsman and wsman.redis:
         user_id = user.get("sub")
         user_lang = user.get("preferred_lang", "en")
@@ -430,11 +439,21 @@ async def get_room_status(
         # Refresh TTL to 15 seconds (3x the 5s poll interval)
         await wsman.redis.setex(key, 15, user_lang)
 
+        # Get all active languages in room from Redis
+        pattern = f"room:{room_code}:active_lang:*"
+        async for lang_key in wsman.redis.scan_iter(match=pattern, count=100):
+            lang = await wsman.redis.get(lang_key)
+            if lang:
+                lang_str = lang.decode() if isinstance(lang, bytes) else lang
+                if lang_str not in active_languages:
+                    active_languages.append(lang_str)
+
     return RoomStatusResponse(
         code=room.code,
         admin_present=admin_present,
         admin_left_at=room.admin_left_at,
-        expires_at=expires_at
+        expires_at=expires_at,
+        active_languages=active_languages
     )
 
 # NOTE: Per-room STT settings removed in favor of language-based routing (Migration 006)
