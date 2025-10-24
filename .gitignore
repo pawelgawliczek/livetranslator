@@ -36,5 +36,23 @@ data/logs/
 /opt/caddy/caddy_config/
 /.env
 /run/secrets/*
-*.sh
 minimal-pg-fix.sql
+
+# Test artifacts
+tests/logs/
+tests/htmlcov/
+tests/.pytest_cache/
+.coverage
+coverage.json
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# Test volumes
+test_pg_data/
+test_redis_data/
+
+# E2E tests
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/e2e/.auth/

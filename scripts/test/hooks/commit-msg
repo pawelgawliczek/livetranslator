@@ -1,0 +1,43 @@
+#!/bin/bash
+# Commit message hook: Validate commit message format
+# Install with: make test-hooks
+
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Colors
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+# Check for conventional commit format
+# Examples: feat: add tests, fix: resolve bug, docs: update readme
+PATTERN="^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: .{3,}"
+
+if ! echo "$COMMIT_MSG" | grep -qE "$PATTERN"; then
+    echo -e "${RED}❌ Invalid commit message format!${NC}"
+    echo ""
+    echo "Commit message must follow Conventional Commits:"
+    echo ""
+    echo -e "${YELLOW}Format: <type>(<scope>): <description>${NC}"
+    echo ""
+    echo "Types:"
+    echo "  feat:     New feature"
+    echo "  fix:      Bug fix"
+    echo "  docs:     Documentation"
+    echo "  style:    Formatting"
+    echo "  refactor: Code refactoring"
+    echo "  test:     Adding tests"
+    echo "  chore:    Maintenance"
+    echo "  perf:     Performance"
+    echo "  ci:       CI/CD changes"
+    echo ""
+    echo "Examples:"
+    echo "  feat(auth): add Google OAuth support"
+    echo "  fix(api): resolve room creation bug"
+    echo "  test: add unit tests for JWT validation"
+    echo ""
+    exit 1
+fi
+
+exit 0

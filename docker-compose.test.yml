@@ -1,0 +1,145 @@
+# Test Environment Docker Compose
+# Completely isolated from production - different ports, networks, volumes
+#
+# Usage:
+#   docker-compose -f docker-compose.test.yml up -d
+#   docker-compose -f docker-compose.test.yml down -v
+
+version: '3.8'
+
+networks:
+  test_network:
+    driver: bridge
+    name: test_network
+
+volumes:
+  test_pg_data:
+  test_redis_data:
+
+services:
+  # Test PostgreSQL Database (Port 5433)
+  postgres_test:
+    image: postgres:16
+    container_name: postgres_test
+    environment:
+      POSTGRES_DB: livetranslator_test
+      POSTGRES_USER: lt_test_user
+      POSTGRES_PASSWORD: test_password_changeme
+    ports:
+      - "5433:5432"  # Different from production (5432)
+    networks:
+      - test_network
+    volumes:
+      - test_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lt_test_user -d livetranslator_test || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Test Redis (Port 6380)
+  redis_test:
+    image: redis:7
+    container_name: redis_test
+    command: ["redis-server", "--appendonly", "yes", "--dir", "/data"]
+    ports:
+      - "6380:6379"  # Different from production (6379)
+    networks:
+      - test_network
+    volumes:
+      - test_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Test API Server (Port 9004)
+  api_test:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: api_test
+    environment:
+      # Test environment marker
+      LT_ENV: test
+
+      # Test database
+      POSTGRES_DB: livetranslator_test
+      POSTGRES_USER: lt_test_user
+      POSTGRES_PASSWORD: test_password_changeme
+      POSTGRES_HOST: postgres_test
+      POSTGRES_PORT: 5432
+      LT_DB_URL: postgresql+psycopg2://lt_test_user:test_password_changeme@postgres_test:5432/livetranslator_test
+
+      # Test Redis
+      LT_REDIS_URL: redis://redis_test:6379/5
+
+      # Mock credentials (no real API calls)
+      LT_JWT_SECRET_FILE: /tmp/test_jwt_secret
+      OPENAI_API_KEY: test-key-mock-no-real-calls
+      SPEECHMATICS_API_KEY: test-key-mock
+      DEEPL_API_KEY: test-key-mock
+      GOOGLE_TRANSLATE_API_KEY: test-key-mock
+      AWS_ACCESS_KEY_ID: test-key-mock
+      AWS_SECRET_ACCESS_KEY: test-key-mock
+      AZURE_SPEECH_KEY: test-key-mock
+      SONIOX_API_KEY: test-key-mock
+
+      # Test settings
+      UVICORN_WORKERS: "1"
+      LOG_LEVEL: "INFO"
+    ports:
+      - "9004:8000"  # Different from production (9003)
+    depends_on:
+      postgres_test:
+        condition: service_healthy
+      redis_test:
+        condition: service_healthy
+    networks:
+      - test_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # Create mock JWT secret
+    command: >
+      sh -c "
+        echo 'test-jwt-secret-for-testing-only' > /tmp/test_jwt_secret &&
+        uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 1
+      "
+
+  # Mock STT Provider Service
+  mock_stt_provider:
+    build:
+      context: ./tests/mocks/stt_provider
+      dockerfile: Dockerfile
+    container_name: mock_stt_provider_test
+    networks:
+      - test_network
+    environment:
+      PORT: "8080"
+
+  # Mock MT Provider Service
+  mock_mt_provider:
+    build:
+      context: ./tests/mocks/mt_provider
+      dockerfile: Dockerfile
+    container_name: mock_mt_provider_test
+    networks:
+      - test_network
+    environment:
+      PORT: "8081"
+
+  # Test Web Frontend (optional, for E2E tests)
+  web_test:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: web_test
+    networks:
+      - test_network
+    environment:
+      VITE_API_URL: http://api_test:8000

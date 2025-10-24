@@ -1,0 +1,61 @@
+#!/bin/bash
+# Pre-push hook: Run full test suite before push
+# Install with: make test-hooks
+
+set -e
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+echo ""
+echo -e "${YELLOW}🧪 Running pre-push test suite...${NC}"
+echo -e "${YELLOW}This may take 5-10 minutes...${NC}"
+echo ""
+
+# Change to repository root
+cd "$(git rev-parse --show-toplevel)"
+
+# Start test services
+./scripts/test/start_test_services.sh
+
+# Run full test suite (unit + integration)
+# Skip E2E tests as they're too slow for pre-push
+echo ""
+echo -e "${YELLOW}Running unit tests...${NC}"
+./scripts/test/run_unit_tests.sh || {
+    echo -e "${RED}❌ Unit tests failed!${NC}"
+    ./scripts/test/stop_test_services.sh
+    exit 1
+}
+
+echo ""
+echo -e "${YELLOW}Running integration tests...${NC}"
+./scripts/test/run_integration_tests.sh || {
+    echo -e "${RED}❌ Integration tests failed!${NC}"
+    ./scripts/test/stop_test_services.sh
+    exit 1
+}
+
+# Cleanup
+./scripts/test/stop_test_services.sh
+
+TEST_RESULT=$?
+
+if [ $TEST_RESULT -ne 0 ]; then
+    echo ""
+    echo -e "${RED}❌ Test suite failed! Push aborted.${NC}"
+    echo ""
+    echo "Options:"
+    echo "  1. Fix the failing tests"
+    echo "  2. Skip hook: git push --no-verify (not recommended)"
+    echo ""
+    exit 1
+fi
+
+echo ""
+echo -e "${GREEN}✅ All tests passed! Pushing...${NC}"
+echo ""
+exit 0
