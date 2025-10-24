@@ -50,7 +50,10 @@
 **User Experience:**
 - **WebSocket-based** live updates with processing indicators
 - **Visual Feedback** - Real-time speaking indicators, spinning icons, 28-language localization
-- **Active Language Tracking** - Language flags displayed in room header, system messages for join/leave/language change events
+- **Presence System** - Debounced join/leave notifications with 15-second grace period for packet-loss resistance
+- **Active Language Tracking** - Language flags with counts in room header, participants sidebar with real-time updates
+- **Toast Notifications** - Auto-dismissing presence notifications (join/leave/language change)
+- **Welcome Banner** - Shows current participants when joining room
 - **Progressive Web App** (PWA) support with mobile optimization
 - **Google OAuth** + email/password authentication
 - **History** with on-demand translation and export capabilities
@@ -300,6 +303,7 @@ Audio Chunk → STT Router → Language-Based Routing (Database Config)
 | `stt_events` | Transcription results (partial/final) | STT Router | MT Router, WS Manager, Persistence |
 | `mt_events` | Translation results (partial/final) | MT Router | WS Manager, Persistence |
 | `cost_events` | Cost tracking events | STT Router, MT Router | Cost Tracker |
+| `presence_events` | User presence updates (join/leave/language change) | PresenceManager | WS Manager |
 
 ---
 
@@ -993,49 +997,81 @@ Final translation.
 }
 ```
 
-#### Participant Joined
-Sent when a user joins the room.
+#### Presence Snapshot
+Sent when a user connects or presence state changes. Contains complete participant list (idempotent).
 
 ```json
 {
-  "type": "participant_joined",
+  "type": "presence_snapshot",
   "room_id": "room-123",
-  "user_email": "john@example.com",
-  "user_id": "456",
-  "preferred_lang": "en"
+  "participants": [
+    {
+      "user_id": "456",
+      "display_name": "john",
+      "language": "en",
+      "is_guest": false,
+      "joined_at": "2025-10-24T12:00:00Z"
+    }
+  ],
+  "language_counts": {
+    "en": 2,
+    "pl": 1
+  },
+  "timestamp": "2025-10-24T12:00:05Z"
 }
 ```
 
-**Frontend Display:** System message: "🇬🇧 john joined with English"
+**Frontend Display:** Updates participants panel and language flags in header
 
-#### Participant Left
-Sent when a user leaves the room.
+#### User Joined
+Sent after 15-second grace period confirms user stayed in room.
 
 ```json
 {
-  "type": "participant_left",
+  "type": "user_joined",
   "room_id": "room-123",
-  "user_email": "john@example.com",
-  "user_id": "456",
-  "preferred_lang": "en"
+  "triggered_by_user_id": "456",
+  "participants": [...],
+  "language_counts": {...},
+  "timestamp": "2025-10-24T12:00:15Z"
 }
 ```
 
-**Frontend Display:** System message: "john left the room"
+**Frontend Display:** Toast notification: "🇬🇧 john joined with English"
 
-#### Participant Language Changed
+#### User Left
+Sent after 15-second grace period expires without reconnection.
+
+```json
+{
+  "type": "user_left",
+  "room_id": "room-123",
+  "triggered_by_user_id": "456",
+  "participants": [...],
+  "language_counts": {...},
+  "timestamp": "2025-10-24T12:15:20Z"
+}
+```
+
+**Frontend Display:** Toast notification: "john left the room"
+
+#### Language Changed
 Sent when a user changes their language preference.
 
 ```json
 {
-  "type": "participant_language_changed",
+  "type": "language_changed",
   "room_id": "room-123",
-  "user_email": "john@example.com",
-  "preferred_lang": "ar"
+  "triggered_by_user_id": "456",
+  "old_language": "en",
+  "new_language": "ar",
+  "participants": [...],
+  "language_counts": {...},
+  "timestamp": "2025-10-24T12:05:00Z"
 }
 ```
 
-**Frontend Display:** System message: "🇪🇬 john changed to Arabic"
+**Frontend Display:** Toast notification: "🇪🇬 john changed to Arabic"
 
 #### Set Language (Client → Server)
 Sent when user changes their preferred language.
@@ -1050,16 +1086,21 @@ Sent when user changes their preferred language.
 **Backend Actions:**
 - Registers language with 15s TTL in Redis (`room:{room_id}:active_lang:{user_id}`)
 - Triggers immediate language aggregation
-- Broadcasts `participant_language_changed` to all room participants
+- Updates presence state via PresenceManager
+- Broadcasts `language_changed` event to all room participants
 - Updates translation routing to include new language
 
 ---
 
-### Active Language Tracking
+### Active Language Tracking & Presence System
 
-**Purpose:** Optimize translation costs by only translating to languages of active participants
+**Purpose:** Optimize translation costs by only translating to languages of active participants, while providing packet-loss resistant presence UI
 
-**Architecture:**
+**Dual-Layer Architecture:**
+
+#### Layer 1: Translation Routing (Fast, Critical)
+Used by MT router for determining which languages to translate to.
+
 1. **Language Registration:** User language stored in Redis with 15s TTL
    - Key: `room:{room_id}:active_lang:{user_id}`
    - Value: ISO language code (e.g., "en", "pl", "ar")
@@ -1081,10 +1122,37 @@ Sent when user changes their preferred language.
    - Status poll refreshes TTL every 5 seconds
    - User disconnect = no more polls = automatic removal
 
+#### Layer 2: Presence UI (Debounced, User-Facing)
+Managed by PresenceManager for packet-loss resistant user experience.
+
+1. **Presence State:** User presence stored in Redis hash
+   - Key: `room:{room_id}:presence_state`
+   - Field: `user:{user_id}`
+   - Value: JSON with display_name, language, joined_at, state
+
+2. **Grace Period:** 15-second debounce for disconnect events
+   - User disconnects → Marked as "disconnecting"
+   - Timer set: `room:{room_id}:disconnect_timer:{user_id}` (15s TTL)
+   - User reconnects within 15s → Silent, no notification
+   - Timer expires → Broadcast "user_left" event
+
+3. **Presence Events:** Broadcast via `presence_events` Redis channel
+   - `presence_snapshot` - Complete participant list (idempotent)
+   - `user_joined` - After confirming user stayed (post grace period)
+   - `user_left` - After 15s grace period expires
+   - `language_changed` - Immediate language change notification
+
+4. **Background Cleanup:** PresenceManager cleanup task runs every 5s
+   - Scans for expired disconnect timers
+   - Removes users from presence state
+   - Broadcasts final "user_left" events
+
 **Frontend Display:**
-- **Room Header:** Language flags for all active languages (e.g., "room-123 🇬🇧 🇵🇱 🇪🇬")
-- **System Messages:** Join/leave/language change notifications in chat
-- **Styling:** Smaller, centered, semi-transparent to minimize distraction
+- **Room Header:** Language flags with counts (e.g., "🇬🇧 2 🇵🇱 1 🇪🇬 1") + participants button
+- **Participants Panel:** Collapsible sidebar showing all active participants with languages
+- **Toast Notifications:** Auto-dismissing (5s) presence notifications with 15s debouncing
+- **Welcome Banner:** Shows current participants when joining (10s auto-dismiss)
+- **No Chat Spam:** System messages removed from chat transcript
 
 ---
 
@@ -2031,6 +2099,38 @@ Both issues are edge cases that don't affect production functionality.
 
 ## 📝 Changelog
 
+### Version 1.4.0 (2025-10-24)
+**Presence System Rewrite with Packet-Loss Resistance**
+
+**Presence System:**
+- Complete rewrite of user presence tracking with dual-layer architecture
+- Added PresenceManager with Redis-backed state management
+- Implemented 15-second grace period for disconnect debouncing
+- Packet-loss resistant notifications (no spam during network instability)
+- Silent reconnection handling (no notification if reconnect within 15s)
+- Background cleanup task for expired disconnections
+
+**Frontend Enhancements:**
+- New NotificationToast component with auto-dismiss (5s) and debouncing (15s)
+- New ParticipantsPanel sidebar showing all active participants
+- Language flags with counts in room header (e.g., "🇬🇧 2 🇵🇱 1")
+- Welcome banner on join showing current participants (10s auto-dismiss)
+- Removed system messages from chat transcript (now use toast notifications)
+- Presence events now idempotent (include full participant list)
+
+**Backend Changes:**
+- New `presence_events` Redis channel for presence updates
+- Separation of concerns: Translation routing (fast) vs Presence UI (debounced)
+- PresenceManager cleanup task runs every 5 seconds
+- Updated WebSocket protocol with new presence event types
+- Removed `active_languages` from status endpoint response
+
+**Key Benefits:**
+- No notification flood during rapid connect/disconnect
+- Graceful handling of browser refresh and network interruptions
+- Better UX with dedicated presence UI (not mixed with chat)
+- Translation routing preserved exactly as-is (critical path untouched)
+
 ### Version 1.3.0 (2025-10-23)
 **Multi-Provider Architecture & Language-Based Routing**
 
@@ -2071,5 +2171,5 @@ Both issues are edge cases that don't affect production functionality.
 
 ---
 
-**Last Updated:** 2025-10-23
-**Version:** 1.3.0 - Multi-Provider Architecture & Language-Based Routing
+**Last Updated:** 2025-10-24
+**Version:** 1.4.0 - Presence System Rewrite with Packet-Loss Resistance
