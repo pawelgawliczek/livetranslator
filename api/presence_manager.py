@@ -297,9 +297,9 @@ class PresenceManager:
         Background task: Check disconnect timers and finalize user removals.
 
         This task runs every 5 seconds and:
-        1. Scans for expired disconnect timers
-        2. Removes users from presence state
-        3. Broadcasts "user_left" events
+        1. Scans all presence states for disconnecting users
+        2. Checks if grace period has elapsed
+        3. Removes users and broadcasts "user_left" events
 
         Should be started as an asyncio task on application startup.
         """
@@ -309,65 +309,87 @@ class PresenceManager:
             try:
                 await asyncio.sleep(5)
 
-                # Scan for disconnect timer keys
-                pattern = "room:*:disconnect_timer:*"
-                keys_to_process = []
+                # Scan for all presence_state hashes
+                pattern = "room:*:presence_state"
 
-                async for key in self.redis.scan_iter(match=pattern, count=100):
-                    # Check if timer has expired (TTL <= 0)
-                    key_str = key if isinstance(key, str) else key.decode()
-                    ttl = await self.redis.ttl(key_str)
+                async for presence_key in self.redis.scan_iter(match=pattern, count=100):
+                    presence_key_str = presence_key if isinstance(presence_key, str) else presence_key.decode()
 
-                    if ttl <= 0:
-                        keys_to_process.append(key_str)
+                    # Get all users in this room
+                    all_users = await self.redis.hgetall(presence_key_str)
+                    current_time = datetime.utcnow()
 
-                # Process expired timers
-                for key_str in keys_to_process:
-                    try:
-                        # Parse room_id and user_id from key
-                        # Format: room:{room_id}:disconnect_timer:{user_id}
-                        parts = key_str.split(":")
-                        if len(parts) < 4:
+                    for user_key, user_data_str in all_users.items():
+                        try:
+                            user_key_str = user_key if isinstance(user_key, str) else user_key.decode()
+                            user_data_bytes = user_data_str if isinstance(user_data_str, bytes) else user_data_str.encode()
+                            user_data = json.loads(user_data_bytes)
+
+                            # Only process users in disconnecting state
+                            if user_data.get("state") != "disconnecting":
+                                continue
+
+                            # Check if grace period has elapsed
+                            disconnect_started_str = user_data.get("disconnect_started")
+                            if not disconnect_started_str:
+                                continue
+
+                            disconnect_started = datetime.fromisoformat(disconnect_started_str)
+                            elapsed = (current_time - disconnect_started).total_seconds()
+
+                            if elapsed >= PRESENCE_GRACE_PERIOD_SECONDS:
+                                # Grace period expired, remove user
+                                # Extract room_id and user_id from keys
+                                room_id = presence_key_str.split(":")[1]
+                                user_id = user_key_str.replace("user:", "")
+
+                                # Remove from presence state
+                                await self.redis.hdel(presence_key_str, user_key_str)
+
+                                # Remove disconnect timer if it still exists
+                                timer_key = f"room:{room_id}:disconnect_timer:{user_id}"
+                                await self.redis.delete(timer_key)
+
+                                # Broadcast user_left event
+                                event = await self._build_presence_snapshot(room_id, "user_left", user_id)
+                                await self.redis.publish("presence_events", json.dumps(event))
+
+                                self.log.info(
+                                    "user_left_after_grace_period",
+                                    room=room_id,
+                                    user=user_id,
+                                    display_name=user_data.get("display_name", "Unknown"),
+                                    elapsed_seconds=int(elapsed)
+                                )
+
+                        except (json.JSONDecodeError, ValueError, IndexError) as e:
+                            self.log.error(
+                                "cleanup_parse_error",
+                                user_key=user_key_str if 'user_key_str' in locals() else str(user_key),
+                                error=str(e)
+                            )
                             continue
 
-                        room_id = parts[1]
-                        user_id = parts[3]
+                # Legacy: Also check for orphaned disconnect timers (old approach)
+                # This ensures cleanup of any timers that exist without corresponding presence state
+                keys_to_process = []
+                pattern = "room:*:disconnect_timer:*"
 
-                        # Remove from presence state
+                async for key in self.redis.scan_iter(match=pattern, count=100):
+                    key_str = key if isinstance(key, str) else key.decode()
+                    # Check if corresponding presence state exists
+                    parts = key_str.split(":")
+                    if len(parts) >= 4:
+                        room_id = parts[1]
+                        user_id = ":".join(parts[3:])  # Handle user IDs with colons (e.g., guest:name:timestamp)
                         presence_key = f"room:{room_id}:presence_state"
                         user_key = f"user:{user_id}"
 
-                        # Get user data before removal for logging
-                        user_data_str = await self.redis.hget(presence_key, user_key)
-                        display_name = "Unknown"
-                        if user_data_str:
-                            try:
-                                user_data = json.loads(user_data_str)
-                                display_name = user_data.get("display_name", "Unknown")
-                            except json.JSONDecodeError:
-                                pass
-
-                        # Remove user from presence
-                        await self.redis.hdel(presence_key, user_key)
-                        await self.redis.delete(key_str)
-
-                        # Broadcast user_left event
-                        event = await self._build_presence_snapshot(room_id, "user_left", user_id)
-                        await self.redis.publish("presence_events", json.dumps(event))
-
-                        self.log.info(
-                            "user_left_after_grace_period",
-                            room=room_id,
-                            user=user_id,
-                            display_name=display_name
-                        )
-
-                    except Exception as e:
-                        self.log.error(
-                            "cleanup_single_timer_error",
-                            key=key_str,
-                            error=str(e)
-                        )
+                        # If user not in presence state, timer is orphaned - remove it
+                        user_exists = await self.redis.hexists(presence_key, user_key)
+                        if not user_exists:
+                            await self.redis.delete(key_str)
+                            self.log.info("orphaned_timer_removed", timer_key=key_str)
 
             except Exception as e:
                 self.log.error("cleanup_task_error", error=str(e))
