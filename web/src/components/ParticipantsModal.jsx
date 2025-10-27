@@ -110,7 +110,9 @@ function getLanguageName(code) {
     "fr": "French",
     "de": "German"
   };
-  return languages[code] || code.toUpperCase();
+  // Normalize language code to base language (e.g., "en-GB" -> "en")
+  const baseLang = code?.split('-')[0] || code;
+  return languages[baseLang] || code.toUpperCase();
 }
 
 const styles = {

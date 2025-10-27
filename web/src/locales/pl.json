@@ -128,7 +128,18 @@
     "start": "Start",
     "stop": "Stop",
     "recording": "Nagrywanie",
-    "holdToSpeak": "Przytrzymaj aby mówić"
+    "holdToSpeak": "Przytrzymaj aby mówić",
+    "adminLeaveModal": {
+      "title": "Czy na pewno chcesz wyjść?",
+      "subtitle": "Jako administrator pokoju, gdy wyjdziesz:",
+      "point1": "Inni uczestnicy zostaną powiadomieni",
+      "point2": "Nagrywanie i tłumaczenie zostaną wyłączone",
+      "point3": "Pokój automatycznie zamknie się za 30 minut",
+      "point4": "Wszyscy uczestnicy zostaną usunięci po upływie czasu",
+      "rejoinNote": "Możesz dołączyć ponownie w ciągu 30 minut, aby zresetować licznik.",
+      "stay": "Zostań",
+      "leave": "Wyjdź mimo to"
+    }
   },
   "join": {
     "title": "Dołącz do pokoju",

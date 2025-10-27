@@ -128,7 +128,18 @@
     "start": "Start",
     "stop": "Stop",
     "recording": "Recording",
-    "holdToSpeak": "Hold to Speak"
+    "holdToSpeak": "Hold to Speak",
+    "adminLeaveModal": {
+      "title": "Are you sure you want to leave?",
+      "subtitle": "As the room admin, when you leave:",
+      "point1": "Other participants will be notified",
+      "point2": "Recording and translation will be disabled",
+      "point3": "The room will automatically close in 30 minutes",
+      "point4": "All participants will be removed when time expires",
+      "rejoinNote": "You can rejoin anytime within 30 minutes to reset the timer.",
+      "stay": "Stay",
+      "leave": "Leave Anyway"
+    }
   },
   "join": {
     "title": "Join Room",

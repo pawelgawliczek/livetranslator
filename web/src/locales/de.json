@@ -128,7 +128,18 @@
     "start": "Start",
     "stop": "Stopp",
     "recording": "Aufnahme",
-    "holdToSpeak": "Halten zum Sprechen"
+    "holdToSpeak": "Halten zum Sprechen",
+    "adminLeaveModal": {
+      "title": "Möchten Sie wirklich gehen?",
+      "subtitle": "Als Raumadministrator, wenn Sie gehen:",
+      "point1": "Andere Teilnehmer werden benachrichtigt",
+      "point2": "Aufnahme und Übersetzung werden deaktiviert",
+      "point3": "Der Raum wird automatisch in 30 Minuten geschlossen",
+      "point4": "Alle Teilnehmer werden nach Ablauf der Zeit entfernt",
+      "rejoinNote": "Sie können jederzeit innerhalb von 30 Minuten erneut beitreten, um den Timer zurückzusetzen.",
+      "stay": "Bleiben",
+      "leave": "Trotzdem gehen"
+    }
   },
   "join": {
     "title": "Raum beitreten",

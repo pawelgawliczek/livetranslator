@@ -128,7 +128,18 @@
     "start": "Iniciar",
     "stop": "Detener",
     "recording": "Grabando",
-    "holdToSpeak": "Mantener para hablar"
+    "holdToSpeak": "Mantener para hablar",
+    "adminLeaveModal": {
+      "title": "¿Estás seguro de que quieres salir?",
+      "subtitle": "Como administrador de la sala, cuando salgas:",
+      "point1": "Se notificará a los demás participantes",
+      "point2": "La grabación y traducción se desactivarán",
+      "point3": "La sala se cerrará automáticamente en 30 minutos",
+      "point4": "Todos los participantes serán eliminados cuando expire el tiempo",
+      "rejoinNote": "Puedes volver a unirte en cualquier momento dentro de 30 minutos para restablecer el temporizador.",
+      "stay": "Quedarse",
+      "leave": "Salir de todos modos"
+    }
   },
   "join": {
     "title": "Unirse a la sala",

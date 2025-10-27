@@ -128,7 +128,18 @@
     "start": "Démarrer",
     "stop": "Arrêter",
     "recording": "Enregistrement",
-    "holdToSpeak": "Maintenir pour parler"
+    "holdToSpeak": "Maintenir pour parler",
+    "adminLeaveModal": {
+      "title": "Êtes-vous sûr de vouloir partir?",
+      "subtitle": "En tant qu'administrateur de la salle, lorsque vous partez:",
+      "point1": "Les autres participants seront informés",
+      "point2": "L'enregistrement et la traduction seront désactivés",
+      "point3": "La salle se fermera automatiquement dans 30 minutes",
+      "point4": "Tous les participants seront supprimés à l'expiration du délai",
+      "rejoinNote": "Vous pouvez rejoindre à tout moment dans les 30 minutes pour réinitialiser le minuteur.",
+      "stay": "Rester",
+      "leave": "Partir quand même"
+    }
   },
   "join": {
     "title": "Rejoindre la salle",

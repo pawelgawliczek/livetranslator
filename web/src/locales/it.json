@@ -128,7 +128,18 @@
     "start": "Avvia",
     "stop": "Ferma",
     "recording": "Registrazione",
-    "holdToSpeak": "Tieni premuto per parlare"
+    "holdToSpeak": "Tieni premuto per parlare",
+    "adminLeaveModal": {
+      "title": "Sei sicuro di voler andare?",
+      "subtitle": "Come amministratore della stanza, quando esci:",
+      "point1": "Gli altri partecipanti saranno avvisati",
+      "point2": "Registrazione e traduzione saranno disabilitate",
+      "point3": "La stanza si chiuderà automaticamente tra 30 minuti",
+      "point4": "Tutti i partecipanti saranno rimossi alla scadenza del tempo",
+      "rejoinNote": "Puoi rientrare in qualsiasi momento entro 30 minuti per reimpostare il timer.",
+      "stay": "Resta",
+      "leave": "Esci comunque"
+    }
   },
   "join": {
     "title": "Entra nella stanza",

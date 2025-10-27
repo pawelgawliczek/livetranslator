@@ -37,7 +37,9 @@ export default function ParticipantsPanel({
             <div style={styles.emptyState}>{t('participants.empty')}</div>
           ) : (
             participants.map((p) => {
-              const lang = languages.find((l) => l.code === p.language);
+              // Normalize language code to base language (e.g., "en-GB" -> "en")
+              const baseLang = p.language?.split('-')[0] || p.language;
+              const lang = languages.find((l) => l.code === baseLang);
               return (
                 <div key={p.user_id} style={styles.participant}>
                   <div style={styles.participantInfo}>

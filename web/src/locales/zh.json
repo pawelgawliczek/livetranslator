@@ -128,7 +128,18 @@
     "start": "开始",
     "stop": "停止",
     "recording": "录音中",
-    "holdToSpeak": "按住说话"
+    "holdToSpeak": "按住说话",
+    "adminLeaveModal": {
+      "title": "您确定要离开吗？",
+      "subtitle": "作为房间管理员，当您离开时：",
+      "point1": "其他参与者将收到通知",
+      "point2": "录音和翻译将被禁用",
+      "point3": "房间将在 30 分钟后自动关闭",
+      "point4": "时间到期时，所有参与者都将被移除",
+      "rejoinNote": "您可以在 30 分钟内随时重新加入以重置计时器。",
+      "stay": "留下",
+      "leave": "仍然离开"
+    }
   },
   "join": {
     "title": "加入房间",

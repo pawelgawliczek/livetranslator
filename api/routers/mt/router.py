@@ -13,10 +13,7 @@ except:
     def jloads(b): return json.loads(b if isinstance(b, str) else b.decode())
 
 from openai_backend import translate_text as openai_translate
-try:
-    import deepl_backend
-except ImportError:
-    deepl_backend = None
+import deepl_backend
 import google_backend
 import amazon_backend
 
@@ -173,8 +170,6 @@ async def translate_with_provider(provider: str, text: str, src: str, tgt: str) 
     """
     try:
         if provider == "deepl":
-            if deepl_backend is None:
-                raise Exception("DeepL backend not available (deepl package not installed)")
             result = await deepl_backend.translate(text, src, tgt)
             return {
                 "text": result["text"],

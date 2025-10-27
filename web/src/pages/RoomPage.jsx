@@ -660,7 +660,9 @@ export default function RoomPage({ token, onLogout }) {
 
                 if (participant) {
                   const name = participant.display_name;
-                  const lang = languages.find(l => l.code === participant.language);
+                  // Normalize language code to base language (e.g., "en-GB" -> "en")
+                  const baseLang = participant.language?.split('-')[0] || participant.language;
+                  const lang = languages.find(l => l.code === baseLang);
 
                   let message = '';
                   if (data.type === 'user_joined') {
@@ -668,7 +670,9 @@ export default function RoomPage({ token, onLogout }) {
                   } else if (data.type === 'user_left') {
                     message = `${name}${participant.is_guest ? ' (guest)' : ''} left the room`;
                   } else if (data.type === 'language_changed') {
-                    const newLang = languages.find(l => l.code === data.new_language);
+                    // Normalize language code for language change as well
+                    const baseNewLang = data.new_language?.split('-')[0] || data.new_language;
+                    const newLang = languages.find(l => l.code === baseNewLang);
                     message = `${newLang?.flag || '🌐'} ${name}${participant.is_guest ? ' (guest)' : ''} changed to ${newLang?.name || data.new_language}`;
                   }
 
@@ -2286,19 +2290,19 @@ export default function RoomPage({ token, onLogout }) {
               ⚠️
             </div>
             <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.3rem", textAlign: "center" }}>
-              Are you sure you want to leave?
+              {t('room.adminLeaveModal.title')}
             </h3>
             <p style={{ margin: "0 0 1.5rem 0", fontSize: "0.95rem", color: "#ccc", lineHeight: "1.5" }}>
-              As the room admin, when you leave:
+              {t('room.adminLeaveModal.subtitle')}
             </p>
             <ul style={{ margin: "0 0 1.5rem 0", fontSize: "0.9rem", color: "#ccc", lineHeight: "1.6", paddingLeft: "1.5rem" }}>
-              <li>Other participants will be notified</li>
-              <li>Recording and translation will be disabled</li>
-              <li>The room will <strong style={{ color: "#f59e0b" }}>automatically close in 30 minutes</strong></li>
-              <li>All participants will be removed when time expires</li>
+              <li>{t('room.adminLeaveModal.point1')}</li>
+              <li>{t('room.adminLeaveModal.point2')}</li>
+              <li>{t('room.adminLeaveModal.point3')}</li>
+              <li>{t('room.adminLeaveModal.point4')}</li>
             </ul>
             <p style={{ margin: "0 0 1.5rem 0", fontSize: "0.85rem", color: "#999", fontStyle: "italic" }}>
-              You can rejoin anytime within 30 minutes to reset the timer.
+              {t('room.adminLeaveModal.rejoinNote')}
             </p>
             <div style={{ display: "flex", gap: "0.75rem" }}>
               <button
@@ -2315,7 +2319,7 @@ export default function RoomPage({ token, onLogout }) {
                   fontSize: "1rem"
                 }}
               >
-                Stay
+                {t('room.adminLeaveModal.stay')}
               </button>
               <button
                 onClick={() => {
@@ -2334,7 +2338,7 @@ export default function RoomPage({ token, onLogout }) {
                   fontSize: "1rem"
                 }}
               >
-                Leave Anyway
+                {t('room.adminLeaveModal.leave')}
               </button>
             </div>
           </div>
