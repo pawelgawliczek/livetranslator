@@ -299,6 +299,101 @@ class TestPresenceManagerLanguageChange:
         # Verify no state update was made (no hset call)
         assert not mock_redis.hset.called
 
+    @pytest.mark.asyncio
+    async def test_first_language_set_after_connection_no_notification(self, presence_manager, mock_redis):
+        """
+        Test that first set_language after connection doesn't trigger notification.
+
+        This prevents "YOU changed to English" message when localStorage language
+        differs from database language. The user connects with their DB language (e.g., "pl"),
+        then frontend immediately sends their localStorage language (e.g., "en").
+        This should update the language without broadcasting a "language_changed" event.
+
+        Regression test for: https://github.com/.../issues/language-change-on-join
+        """
+        room_id = "test-room"
+        user_id = "user123"
+
+        # User connected with "pl" from database (via JWT token)
+        existing_data = {
+            "display_name": "John Doe",
+            "language": "pl",  # From database
+            "is_guest": False,
+            "state": "active",
+            "joined_at": datetime.utcnow().isoformat(),
+            "last_seen": datetime.utcnow().isoformat(),
+            "language_initialized": False  # First connection, not yet initialized
+        }
+        mock_redis.hget.return_value = json.dumps(existing_data).encode()
+
+        # Frontend sends "en" from localStorage (different from DB)
+        event = await presence_manager.user_changed_language(
+            room_id, user_id, "en"
+        )
+
+        # Verify NO event is broadcast (no notification shown)
+        assert event is None, "First language set should not broadcast event"
+
+        # Verify language was updated in presence state
+        assert mock_redis.hset.called, "Language should be updated in Redis"
+        call_args = mock_redis.hset.call_args[0]
+        user_data = json.loads(call_args[2])
+        assert user_data["language"] == "en", "Language should be updated to 'en'"
+        assert user_data["language_initialized"] is True, "language_initialized flag should be set"
+
+        # Now test that subsequent language changes DO broadcast
+        mock_redis.hset.reset_mock()
+
+        # Update mock to return the new state (with language_initialized=True)
+        updated_data = {
+            "display_name": "John Doe",
+            "language": "en",
+            "is_guest": False,
+            "state": "active",
+            "joined_at": datetime.utcnow().isoformat(),
+            "last_seen": datetime.utcnow().isoformat(),
+            "language_initialized": True  # Now initialized
+        }
+        mock_redis.hget.return_value = json.dumps(updated_data).encode()
+
+        # Change language again (now it should broadcast)
+        event = await presence_manager.user_changed_language(
+            room_id, user_id, "pl"
+        )
+
+        # Verify event IS broadcast for subsequent changes
+        assert event is not None, "Subsequent language changes should broadcast"
+        assert event["type"] == "language_changed"
+        assert event["old_language"] == "en"
+        assert event["new_language"] == "pl"
+
+    @pytest.mark.asyncio
+    async def test_language_normalization_en_us_vs_en(self, presence_manager, mock_redis):
+        """Test that language codes are normalized (en-US should equal en)."""
+        room_id = "test-room"
+        user_id = "user123"
+
+        # User has "en-US" stored
+        existing_data = {
+            "display_name": "John Doe",
+            "language": "en-US",
+            "is_guest": False,
+            "state": "active",
+            "joined_at": datetime.utcnow().isoformat(),
+            "last_seen": datetime.utcnow().isoformat(),
+            "language_initialized": True
+        }
+        mock_redis.hget.return_value = json.dumps(existing_data).encode()
+
+        # Try to change to "en" (should be treated as same language)
+        event = await presence_manager.user_changed_language(
+            room_id, user_id, "en"
+        )
+
+        # Verify None is returned (normalized languages match)
+        assert event is None, "en-US and en should be treated as same language"
+        assert not mock_redis.hset.called, "No update should occur for normalized same language"
+
 
 class TestPresenceManagerSnapshot:
     """Test suite for presence snapshot generation."""

@@ -96,7 +96,8 @@ class PresenceManager:
             "is_guest": is_guest,
             "joined_at": datetime.utcnow().isoformat(),
             "last_seen": datetime.utcnow().isoformat(),
-            "state": "active"
+            "state": "active",
+            "language_initialized": False  # Track if user has sent their first set_language
         }
 
         await self.redis.hset(presence_key, user_key, json.dumps(user_data))
@@ -172,7 +173,7 @@ class PresenceManager:
 
         Returns:
             Dict containing presence_snapshot event with language_changed type,
-            or None if user not found
+            or None if user not found or language unchanged
         """
         presence_key = f"room:{room_id}:presence_state"
         user_key = f"user:{user_id}"
@@ -188,14 +189,42 @@ class PresenceManager:
 
         user_data = json.loads(user_data_str)
         old_language = user_data.get("language")
+        language_initialized = user_data.get("language_initialized", True)  # Default True for old data
 
-        # If language hasn't actually changed, don't broadcast event
-        if old_language == new_language:
+        # If this is the first language being set after connection, don't broadcast
+        # This prevents "YOU changed to English" notification when just joining
+        if not language_initialized:
+            user_data["language"] = new_language
+            user_data["language_initialized"] = True
+            user_data["last_seen"] = datetime.utcnow().isoformat()
+            await self.redis.hset(presence_key, user_key, json.dumps(user_data))
+
+            self.log.info(
+                "user_language_initialized",
+                room=room_id,
+                user=user_id,
+                language=new_language
+            )
+            return None
+
+        # Normalize language codes for comparison (strip region codes like -US, -GB)
+        def normalize_lang(lang):
+            if not lang:
+                return None
+            return lang.split('-')[0].split('_')[0].lower()
+
+        old_normalized = normalize_lang(old_language)
+        new_normalized = normalize_lang(new_language)
+
+        # If language hasn't actually changed (after normalization), don't broadcast event
+        if old_normalized == new_normalized:
             self.log.debug(
                 "language_unchanged_skipping_broadcast",
                 room=room_id,
                 user=user_id,
-                language=new_language
+                old_language=old_language,
+                new_language=new_language,
+                normalized=old_normalized
             )
             return None
 

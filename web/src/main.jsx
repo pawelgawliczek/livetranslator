@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./i18n";
+import { loadLanguageFromProfile } from "./utils/languageSync";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
@@ -13,12 +14,15 @@ import AdminSettingsPage from "./pages/AdminSettingsPage";
 
 function App() {
   const [token, setToken] = React.useState(localStorage.getItem("token") || "");
-  
-  const login = (newToken) => {
+
+  const login = async (newToken) => {
     setToken(newToken);
     localStorage.setItem("token", newToken);
+
+    // Load user's preferred language from their profile
+    await loadLanguageFromProfile(newToken);
   };
-  
+
   const logout = () => {
     setToken("");
     localStorage.removeItem("token");
