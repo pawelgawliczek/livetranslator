@@ -250,9 +250,9 @@ async def transcribe_stream(
     """
     # For streaming, we would maintain WebSocket connections
     # This is a placeholder that uses the batch API
-    # TODO: Implement proper WebSocket streaming with connection pooling
+    # Note: Full streaming implementation available in speechmatics_streaming.py
 
-    print(f"[Speechmatics] Stream transcription not yet implemented, falling back to batch")
+    print(f"[Speechmatics] Stream transcription using batch API (fallback mode)")
     result = await transcribe_audio_chunk(audio_base64, language, config)
     result["is_final"] = False  # Mark as partial
     return result

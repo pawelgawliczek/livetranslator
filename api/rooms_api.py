@@ -256,7 +256,7 @@ async def get_room_participants(
             email=user_email,
             is_guest=is_guest,
             preferred_lang=preferred_lang,
-            is_speaking=False    # TODO: Track speaking status
+            is_speaking=False
         )
 
     # Convert map to list

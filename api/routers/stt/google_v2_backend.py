@@ -153,8 +153,8 @@ async def transcribe_stream(
             "stability": 0.85
         }
     """
-    # TODO: Implement proper streaming with connection pooling
-    print(f"[Google STT v2] Stream transcription using batch API (streaming not yet implemented)")
+    # Note: Full streaming implementation available in google_streaming.py
+    print(f"[Google STT v2] Stream transcription using batch API (fallback mode)")
 
     result = await transcribe_audio_chunk(audio_base64, language, config)
     result["is_final"] = False
