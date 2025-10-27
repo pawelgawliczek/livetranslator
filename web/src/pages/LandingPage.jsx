@@ -33,27 +33,104 @@ export default function LandingPage() {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: "2rem 2rem 1rem 2rem"
+        padding: "2rem 2rem 1rem 2rem",
+        maxWidth: "1200px",
+        margin: "0 auto",
+        width: "100%"
       }}>
+        {/* Main Title */}
+        <div style={{
+          background: "rgba(255,255,255,0.15)",
+          padding: "0.5rem 1.5rem",
+          borderRadius: "50px",
+          marginBottom: "1.5rem",
+          fontSize: "0.9rem",
+          fontWeight: "600",
+          backdropFilter: "blur(10px)"
+        }}>
+          🌍 Real-time Translation Platform
+        </div>
+
         <h1 style={{
           fontSize: "clamp(2.5rem, 8vw, 4rem)",
           fontWeight: "bold",
           marginBottom: "1rem",
-          textAlign: "center"
+          textAlign: "center",
+          lineHeight: "1.1"
         }}>
           {t('landing.title')}
         </h1>
 
         <p style={{
           fontSize: "clamp(1.1rem, 3vw, 1.5rem)",
-          marginBottom: "3rem",
+          marginBottom: "2rem",
           textAlign: "center",
-          maxWidth: "600px"
+          maxWidth: "700px",
+          lineHeight: "1.5"
         }}>
           {t('landing.subtitle')}
         </p>
 
-        <div style={{display: "flex", gap: "1rem", flexWrap: "wrap", justifyContent: "center"}}>
+        {/* Features Grid */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+          gap: "1.5rem",
+          width: "100%",
+          maxWidth: "900px",
+          marginBottom: "2.5rem"
+        }}>
+          <div style={{
+            background: "rgba(255,255,255,0.15)",
+            padding: "1.5rem",
+            borderRadius: "12px",
+            textAlign: "center",
+            backdropFilter: "blur(10px)"
+          }}>
+            <div style={{fontSize: "2.5rem", marginBottom: "0.5rem"}}>🗣️</div>
+            <h3 style={{fontSize: "1.1rem", fontWeight: "600", marginBottom: "0.5rem"}}>
+              Real-time Speech
+            </h3>
+            <p style={{fontSize: "0.9rem", opacity: 0.9}}>
+              Instant voice-to-text translation as you speak
+            </p>
+          </div>
+
+          <div style={{
+            background: "rgba(255,255,255,0.15)",
+            padding: "1.5rem",
+            borderRadius: "12px",
+            textAlign: "center",
+            backdropFilter: "blur(10px)"
+          }}>
+            <div style={{fontSize: "2.5rem", marginBottom: "0.5rem"}}>🌐</div>
+            <h3 style={{fontSize: "1.1rem", fontWeight: "600", marginBottom: "0.5rem"}}>
+              12+ Languages
+            </h3>
+            <p style={{fontSize: "0.9rem", opacity: 0.9}}>
+              English, Polish, Arabic, Spanish, French, German & more
+            </p>
+          </div>
+
+          <div style={{
+            background: "rgba(255,255,255,0.15)",
+            padding: "1.5rem",
+            borderRadius: "12px",
+            textAlign: "center",
+            backdropFilter: "blur(10px)"
+          }}>
+            <div style={{fontSize: "2.5rem", marginBottom: "0.5rem"}}>👥</div>
+            <h3 style={{fontSize: "1.1rem", fontWeight: "600", marginBottom: "0.5rem"}}>
+              Multi-participant
+            </h3>
+            <p style={{fontSize: "0.9rem", opacity: 0.9}}>
+              Connect multiple people in different languages
+            </p>
+          </div>
+        </div>
+
+        {/* CTA Buttons */}
+        <div style={{display: "flex", gap: "1rem", flexWrap: "wrap", justifyContent: "center", marginBottom: "2rem"}}>
           <button
             onClick={() => navigate("/login")}
             style={{
@@ -65,7 +142,8 @@ export default function LandingPage() {
               fontSize: "1.1rem",
               fontWeight: "600",
               cursor: "pointer",
-              minWidth: "150px"
+              minWidth: "150px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
             }}
           >
             {t('landing.signIn')}
@@ -87,6 +165,28 @@ export default function LandingPage() {
           >
             {t('landing.createAccount')}
           </button>
+        </div>
+
+        {/* Creator Info */}
+        <div style={{
+          marginTop: "1rem",
+          fontSize: "0.9rem",
+          opacity: 0.9,
+          textAlign: "center"
+        }}>
+          Created by{" "}
+          <a
+            href="https://pawelgawliczek.cloud/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: "white",
+              textDecoration: "underline",
+              fontWeight: "600"
+            }}
+          >
+            Pawel Gawliczek
+          </a>
         </div>
       </div>
       <Footer />
