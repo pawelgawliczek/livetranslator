@@ -223,14 +223,10 @@ class TestRoomCleanupService:
 
         from api.services.room_cleanup_service import cleanup_abandoned_rooms
 
-        # Mock the async context manager
-        async_session_mock = AsyncMock()
-        async_session_mock.__aenter__.return_value = mock_session
-        async_session_mock.__aexit__.return_value = None
-
-        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=async_session_mock):
-            # Should not raise exception
-            await cleanup_abandoned_rooms()
+        # Call cleanup_abandoned_rooms with session parameter (for tests)
+        # The service will catch the error, rollback, and re-raise
+        with pytest.raises(Exception, match="Database connection error"):
+            await cleanup_abandoned_rooms(session=mock_session)
 
         # Verify rollback was called
         assert mock_session.rollback.called

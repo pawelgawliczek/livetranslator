@@ -24,14 +24,6 @@ class TestEndToEndLanguageFlow:
     def mock_redis(self):
         """Create a mock Redis client with full functionality."""
         redis = AsyncMock()
-        redis.setex = AsyncMock()
-        redis.get = AsyncMock()
-        redis.delete = AsyncMock()
-        redis.sadd = AsyncMock()
-        redis.smembers = AsyncMock()
-        redis.expire = AsyncMock()
-        redis.incr = AsyncMock(return_value=1)
-        redis.publish = AsyncMock()
 
         # Track state
         self.language_keys = {}
@@ -50,10 +42,16 @@ class TestEndToEndLanguageFlow:
         async def mock_smembers(key):
             return {lang.encode() for lang in self.target_languages}
 
-        redis.setex = mock_setex
-        redis.get = mock_get
+        # Configure AsyncMock side effects instead of replacing them
+        redis.setex = AsyncMock(side_effect=mock_setex)
+        redis.get = AsyncMock(side_effect=mock_get)
         redis.scan_iter = mock_scan
-        redis.smembers = mock_smembers
+        redis.smembers = AsyncMock(side_effect=mock_smembers)
+        redis.delete = AsyncMock()
+        redis.sadd = AsyncMock()
+        redis.expire = AsyncMock()
+        redis.incr = AsyncMock(return_value=1)
+        redis.publish = AsyncMock()
 
         return redis
 
@@ -147,12 +145,13 @@ class TestEndToEndLanguageFlow:
         async def custom_get(key):
             return languages.get(key)
 
-        async def custom_scan():
+        async def custom_scan(**kwargs):
             for key in languages.keys():
                 yield key.encode() if isinstance(key, str) else key
 
-        mock_redis.setex = custom_setex
-        mock_redis.get = custom_get
+        # Configure side effects on the AsyncMock objects
+        mock_redis.setex = AsyncMock(side_effect=custom_setex)
+        mock_redis.get = AsyncMock(side_effect=custom_get)
         mock_redis.scan_iter = custom_scan
 
         with patch('api.main.wsman') as mock_wsman:
@@ -408,12 +407,13 @@ class TestCompleteUserSession:
         async def track_get(key):
             return languages.get(key)
 
-        async def track_scan():
+        async def track_scan(**kwargs):
             for key in languages.keys():
                 yield key.encode() if isinstance(key, str) else key
 
-        mock_redis.setex = track_setex
-        mock_redis.get = track_get
+        # Configure side effects on AsyncMock objects
+        mock_redis.setex = AsyncMock(side_effect=track_setex)
+        mock_redis.get = AsyncMock(side_effect=track_get)
         mock_redis.scan_iter = track_scan
         mock_redis.delete = AsyncMock()
         mock_redis.sadd = AsyncMock()

@@ -243,6 +243,10 @@ class TestConnectionLifecycle:
         room_id = "test-room"
         provider = sample_partial_session["provider"]
 
+        # Set up a mock connection (simulating active streaming)
+        mock_connection = Mock()
+        sample_partial_session["streaming_connection"] = mock_connection
+
         # Simulate audio end
         if sample_partial_session.get("streaming_connection"):
             await mock_streaming_manager.close_connection(room_id, provider)
