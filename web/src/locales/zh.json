@@ -413,6 +413,7 @@
     "openEmail": "📧 打开电子邮件应用",
     "roomLabel": "房间：",
     "expiresLabel": "过期时间：",
+    "expiresInMinutes": "{minutes} 分钟",
     "emailSubject": "加入我的 LiveTranslator 房间"
   }
 }

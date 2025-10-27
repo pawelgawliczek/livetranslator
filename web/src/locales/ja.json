@@ -413,6 +413,7 @@
     "openEmail": "📧 メールアプリを開く",
     "roomLabel": "ルーム：",
     "expiresLabel": "期限切れ：",
+    "expiresInMinutes": "{minutes} 分",
     "emailSubject": "私のLiveTranslatorルームに参加してください"
   }
 }

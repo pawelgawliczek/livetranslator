@@ -215,7 +215,7 @@ export default function InviteModal({ roomCode, onClose }) {
             <div style={styles.roomInfoRow}>
               <span style={styles.infoLabel}>{t('invite.expiresLabel')}</span>
               <span style={styles.infoValue}>
-                {inviteData?.expires_in_minutes || 30} minutes
+                {t('invite.expiresInMinutes', { minutes: inviteData?.expires_in_minutes || 30 })}
               </span>
             </div>
           </div>

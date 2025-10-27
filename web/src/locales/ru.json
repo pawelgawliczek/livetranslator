@@ -413,6 +413,7 @@
     "openEmail": "📧 Открыть приложение почты",
     "roomLabel": "Комната:",
     "expiresLabel": "Истекает:",
+    "expiresInMinutes": "{minutes} минут",
     "emailSubject": "Присоединяйтесь к моей комнате LiveTranslator"
   }
 }

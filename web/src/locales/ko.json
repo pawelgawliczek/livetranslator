@@ -413,6 +413,7 @@
     "openEmail": "📧 이메일 앱 열기",
     "roomLabel": "룸:",
     "expiresLabel": "만료:",
+    "expiresInMinutes": "{minutes}분",
     "emailSubject": "내 LiveTranslator 룸에 참가하세요"
   }
 }

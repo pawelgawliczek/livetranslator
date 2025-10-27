@@ -348,6 +348,7 @@
     "openEmail": "📧 Otwórz aplikację e-mail",
     "roomLabel": "Pokój:",
     "expiresLabel": "Wygasa:",
+    "expiresInMinutes": "{minutes} minut",
     "emailSubject": "Dołącz do mojego pokoju LiveTranslator"
   },
   "joinPage": {

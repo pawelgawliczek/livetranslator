@@ -413,6 +413,7 @@
     "openEmail": "📧 فتح تطبيق البريد الإلكتروني",
     "roomLabel": "الغرفة:",
     "expiresLabel": "تنتهي:",
+    "expiresInMinutes": "{minutes} دقيقة",
     "emailSubject": "انضم إلى غرفة LiveTranslator الخاصة بي"
   }
 }

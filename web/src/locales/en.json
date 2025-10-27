@@ -348,6 +348,7 @@
     "openEmail": "📧 Open Email App",
     "roomLabel": "Room:",
     "expiresLabel": "Expires:",
+    "expiresInMinutes": "{minutes} minutes",
     "emailSubject": "Join my LiveTranslator room"
   },
   "joinPage": {

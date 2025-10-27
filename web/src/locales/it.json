@@ -413,6 +413,7 @@
     "openEmail": "📧 Apri app email",
     "roomLabel": "Stanza:",
     "expiresLabel": "Scade:",
+    "expiresInMinutes": "{minutes} minuti",
     "emailSubject": "Unisciti alla mia stanza LiveTranslator"
   }
 }

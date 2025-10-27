@@ -413,6 +413,7 @@
     "openEmail": "📧 E-Mail-App öffnen",
     "roomLabel": "Raum:",
     "expiresLabel": "Läuft ab:",
+    "expiresInMinutes": "{minutes} Minuten",
     "emailSubject": "Treten Sie meinem LiveTranslator-Raum bei"
   }
 }
