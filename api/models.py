@@ -69,7 +69,7 @@ class RoomParticipant(Base):
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     session_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
-    preferred_language: Mapped[str] = mapped_column(String(10), nullable=False)
+    spoken_language: Mapped[str] = mapped_column(String(10), nullable=False)
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     left_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

@@ -40,7 +40,10 @@ class TestWSManagerAdminPresence:
     def mock_ws_manager(self):
         """Create a mock WebSocket manager."""
         from api.ws_manager import WSManager
-        manager = WSManager()
+        manager = WSManager(
+            redis_url="redis://localhost:6379",
+            mt_base_url="http://localhost:8000"
+        )
         manager.rooms = {}
         manager.log = Mock()
         return manager
@@ -249,7 +252,10 @@ class TestWSManagerDebouncing:
     def mock_ws_manager(self):
         """Create a mock WebSocket manager."""
         from api.ws_manager import WSManager
-        manager = WSManager()
+        manager = WSManager(
+            redis_url="redis://localhost:6379",
+            mt_base_url="http://localhost:8000"
+        )
         manager._pending_admin_checks = {}
         manager.log = Mock()
         return manager

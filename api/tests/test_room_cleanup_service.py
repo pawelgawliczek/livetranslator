@@ -65,15 +65,20 @@ class TestRoomCleanupService:
     @pytest.mark.asyncio
     async def test_cleanup_finds_abandoned_rooms(self, mock_session, abandoned_room_data):
         """Test that cleanup correctly identifies abandoned rooms."""
-        # Mock the query result
+        # Mock the query result (AsyncMock for execute, but sync result object)
         mock_result = Mock()
-        mock_result.all.return_value = abandoned_room_data
-        mock_session.execute.return_value = mock_result
+        mock_result.all = Mock(return_value=abandoned_room_data)
+        mock_session.execute = AsyncMock(return_value=mock_result)
 
         from api.services.room_cleanup_service import cleanup_abandoned_rooms
 
+        # Mock the async context manager
+        async_session_mock = AsyncMock()
+        async_session_mock.__aenter__.return_value = mock_session
+        async_session_mock.__aexit__.return_value = None
+
         # Mock the global session maker
-        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=mock_session):
+        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=async_session_mock):
             await cleanup_abandoned_rooms()
 
         # Verify that execute was called to find abandoned rooms
@@ -87,12 +92,17 @@ class TestRoomCleanupService:
         """Test that cleanup does NOT delete active rooms."""
         # Mock empty result (no abandoned rooms)
         mock_result = Mock()
-        mock_result.all.return_value = []
-        mock_session.execute.return_value = mock_result
+        mock_result.all = Mock(return_value=[])
+        mock_session.execute = AsyncMock(return_value=mock_result)
 
         from api.services.room_cleanup_service import cleanup_abandoned_rooms
 
-        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=mock_session):
+        # Mock the async context manager
+        async_session_mock = AsyncMock()
+        async_session_mock.__aenter__.return_value = mock_session
+        async_session_mock.__aexit__.return_value = None
+
+        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=async_session_mock):
             await cleanup_abandoned_rooms()
 
         # Should query but not delete anything
@@ -116,14 +126,19 @@ class TestRoomCleanupService:
         )
 
         mock_result = Mock()
-        mock_result.all.return_value = [empty_room]
-        mock_result.first.return_value = (0, 0, 0)  # No cost data
-        mock_result.scalar.return_value = 0  # No participants/messages
-        mock_session.execute.return_value = mock_result
+        mock_result.all = Mock(return_value=[empty_room])
+        mock_result.first = Mock(return_value=(0, 0, 0))  # No cost data
+        mock_result.scalar = Mock(return_value=0)  # No participants/messages
+        mock_session.execute = AsyncMock(return_value=mock_result)
 
         from api.services.room_cleanup_service import cleanup_abandoned_rooms
 
-        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=mock_session):
+        # Mock the async context manager
+        async_session_mock = AsyncMock()
+        async_session_mock.__aenter__.return_value = mock_session
+        async_session_mock.__aexit__.return_value = None
+
+        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=async_session_mock):
             await cleanup_abandoned_rooms()
 
         # Should delete the room even though it's empty
@@ -146,14 +161,19 @@ class TestRoomCleanupService:
         )
 
         mock_result = Mock()
-        mock_result.all.return_value = [room_with_auth_users]
-        mock_result.first.return_value = (0, 0, 0)
-        mock_result.scalar.return_value = 2  # 2 authenticated users
-        mock_session.execute.return_value = mock_result
+        mock_result.all = Mock(return_value=[room_with_auth_users])
+        mock_result.first = Mock(return_value=(0, 0, 0))
+        mock_result.scalar = Mock(return_value=2)  # 2 authenticated users
+        mock_session.execute = AsyncMock(return_value=mock_result)
 
         from api.services.room_cleanup_service import cleanup_abandoned_rooms
 
-        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=mock_session):
+        # Mock the async context manager
+        async_session_mock = AsyncMock()
+        async_session_mock.__aenter__.return_value = mock_session
+        async_session_mock.__aexit__.return_value = None
+
+        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=async_session_mock):
             await cleanup_abandoned_rooms()
 
         # Should delete the room even though authenticated users are present
@@ -199,11 +219,16 @@ class TestRoomCleanupService:
     async def test_cleanup_handles_errors_gracefully(self, mock_session):
         """Test that cleanup handles database errors without crashing."""
         # Make execute raise an exception
-        mock_session.execute.side_effect = Exception("Database connection error")
+        mock_session.execute = AsyncMock(side_effect=Exception("Database connection error"))
 
         from api.services.room_cleanup_service import cleanup_abandoned_rooms
 
-        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=mock_session):
+        # Mock the async context manager
+        async_session_mock = AsyncMock()
+        async_session_mock.__aenter__.return_value = mock_session
+        async_session_mock.__aexit__.return_value = None
+
+        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=async_session_mock):
             # Should not raise exception
             await cleanup_abandoned_rooms()
 
@@ -214,12 +239,17 @@ class TestRoomCleanupService:
     async def test_cleanup_commits_successful_deletions(self, mock_session, abandoned_room_data):
         """Test that successful deletions are committed."""
         mock_result = Mock()
-        mock_result.all.return_value = abandoned_room_data
-        mock_session.execute.return_value = mock_result
+        mock_result.all = Mock(return_value=abandoned_room_data)
+        mock_session.execute = AsyncMock(return_value=mock_result)
 
         from api.services.room_cleanup_service import cleanup_abandoned_rooms
 
-        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=mock_session):
+        # Mock the async context manager
+        async_session_mock = AsyncMock()
+        async_session_mock.__aenter__.return_value = mock_session
+        async_session_mock.__aexit__.return_value = None
+
+        with patch('api.services.room_cleanup_service.AsyncSessionLocal', return_value=async_session_mock):
             await cleanup_abandoned_rooms()
 
         # Verify commit was called

@@ -92,129 +92,51 @@ def system_settings(setup_database):
     db.close()
 
 
+@pytest.mark.skip(reason="Deprecated: Global STT provider settings replaced by language-based routing (Migration 006)")
 class TestAdminProviders:
-    """Test GET /api/admin/providers endpoint."""
+    """
+    DEPRECATED TEST CLASS - /api/admin/providers endpoint removed.
+
+    Replaced by language-based routing system (stt_routing_config table).
+    See Migration 006 for details.
+    New endpoints: /api/admin/languages, /api/admin/languages/{language}
+    """
 
     def test_get_providers_as_admin(self, client, admin_token):
-        """Test getting available providers as admin."""
-        response = client.get(
-            "/api/admin/providers",
-            headers={"Authorization": f"Bearer {admin_token}"}
-        )
-        assert response.status_code == 200
-        data = response.json()
-
-        # Check structure
-        assert "stt_partial" in data
-        assert "stt_final" in data
-        assert "mt" in data
-
-        # Check STT partial providers
-        assert len(data["stt_partial"]) > 0
-        provider_ids = [p["id"] for p in data["stt_partial"]]
-        assert "openai_chunked" in provider_ids
-        assert "deepgram" in provider_ids
-        assert "local" in provider_ids
-
-        # Check STT final providers
-        assert len(data["stt_final"]) > 0
-        final_ids = [p["id"] for p in data["stt_final"]]
-        assert "openai" in final_ids
-        assert "elevenlabs" in final_ids
-        assert "none" in final_ids
-
-        # Check MT providers
-        assert len(data["mt"]) > 0
-        mt_ids = [p["id"] for p in data["mt"]]
-        assert "openai" in mt_ids
+        """DEPRECATED - See class docstring."""
+        pass
 
     def test_get_providers_without_auth(self, client):
-        """Test getting providers without authentication."""
-        response = client.get("/api/admin/providers")
-        assert response.status_code == 401
+        """DEPRECATED - See class docstring."""
+        pass
 
 
+@pytest.mark.skip(reason="Deprecated: Global STT settings endpoint replaced by language-based routing (Migration 006)")
 class TestAdminSTTSettingsUpdate:
-    """Test POST /api/admin/settings/stt endpoint."""
+    """
+    DEPRECATED TEST CLASS - /api/admin/settings/stt endpoint removed.
+
+    Replaced by language-based routing system (stt_routing_config table).
+    See Migration 006 for details.
+    New endpoints use per-language configuration.
+    """
 
     def test_update_stt_settings_as_admin(self, client, admin_token, system_settings):
-        """Test updating STT settings as admin."""
-        response = client.post(
-            "/api/admin/settings/stt",
-            headers={
-                "Authorization": f"Bearer {admin_token}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "stt_partial_provider_default": "deepgram",
-                "stt_final_provider_default": "elevenlabs"
-            }
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["message"] == "STT settings updated successfully"
-        assert len(data["updated"]) == 2
-
-        # Verify settings were updated
-        verify_response = client.get(
-            "/api/admin/settings/stt",
-            headers={"Authorization": f"Bearer {admin_token}"}
-        )
-        assert verify_response.status_code == 200
-        settings = verify_response.json()["settings"]
-        settings_dict = {s["key"]: s["value"] for s in settings}
-        assert settings_dict["stt_partial_provider_default"] == "deepgram"
-        assert settings_dict["stt_final_provider_default"] == "elevenlabs"
+        """DEPRECATED - See class docstring."""
+        pass
 
     def test_update_partial_provider_only(self, client, admin_token, system_settings):
-        """Test updating only partial provider."""
-        response = client.post(
-            "/api/admin/settings/stt",
-            headers={
-                "Authorization": f"Bearer {admin_token}",
-                "Content-Type": "application/json"
-            },
-            json={"stt_partial_provider_default": "local"}
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert "stt_partial_provider_default" in data["updated"]
+        """DEPRECATED - See class docstring."""
+        pass
 
     def test_update_final_provider_only(self, client, admin_token, system_settings):
-        """Test updating only final provider."""
-        response = client.post(
-            "/api/admin/settings/stt",
-            headers={
-                "Authorization": f"Bearer {admin_token}",
-                "Content-Type": "application/json"
-            },
-            json={"stt_final_provider_default": "none"}
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert "stt_final_provider_default" in data["updated"]
+        """DEPRECATED - See class docstring."""
+        pass
 
     def test_create_settings_if_not_exist(self, client, admin_token, setup_database):
-        """Test creating settings if they don't exist."""
-        response = client.post(
-            "/api/admin/settings/stt",
-            headers={
-                "Authorization": f"Bearer {admin_token}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "stt_partial_provider_default": "openai_chunked",
-                "stt_final_provider_default": "openai"
-            }
-        )
-        assert response.status_code == 200
-        assert response.json()["message"] == "STT settings updated successfully"
+        """DEPRECATED - See class docstring."""
+        pass
 
     def test_update_settings_without_auth(self, client, system_settings):
-        """Test updating settings without authentication."""
-        response = client.post(
-            "/api/admin/settings/stt",
-            headers={"Content-Type": "application/json"},
-            json={"stt_partial_provider_default": "deepgram"}
-        )
-        assert response.status_code == 401
+        """DEPRECATED - See class docstring."""
+        pass

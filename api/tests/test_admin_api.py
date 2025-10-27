@@ -175,39 +175,25 @@ class TestAdminModels:
         assert user.is_admin is False
         db.close()
 
+    @pytest.mark.skip(reason="Deprecated: Room-level STT provider fields removed in favor of language-based routing (Migration 006)")
     def test_room_has_stt_provider_fields(self, setup_database, admin_user):
-        """Test that Room model has STT provider override fields."""
-        db = TestingSessionLocal()
-        room = Room(
-            code="TEST123",
-            owner_id=admin_user.id,
-            stt_partial_provider="deepgram",
-            stt_final_provider="elevenlabs"
-        )
-        db.add(room)
-        db.commit()
-        db.refresh(room)
+        """
+        DEPRECATED TEST - Room model no longer has STT provider override fields.
 
-        assert hasattr(room, 'stt_partial_provider')
-        assert hasattr(room, 'stt_final_provider')
-        assert room.stt_partial_provider == "deepgram"
-        assert room.stt_final_provider == "elevenlabs"
-        db.close()
+        Replaced by language-based routing system (stt_routing_config table).
+        See Migration 006 for details.
+        """
+        pass
 
+    @pytest.mark.skip(reason="Deprecated: Room-level STT provider fields removed in favor of language-based routing (Migration 006)")
     def test_room_stt_providers_can_be_null(self, setup_database, admin_user):
-        """Test that STT provider fields can be NULL (use global default)."""
-        db = TestingSessionLocal()
-        room = Room(
-            code="TEST123",
-            owner_id=admin_user.id
-        )
-        db.add(room)
-        db.commit()
-        db.refresh(room)
+        """
+        DEPRECATED TEST - Room model no longer has STT provider override fields.
 
-        assert room.stt_partial_provider is None
-        assert room.stt_final_provider is None
-        db.close()
+        Replaced by language-based routing system (stt_routing_config table).
+        See Migration 006 for details.
+        """
+        pass
 
     def test_system_settings_model(self, setup_database):
         """Test SystemSettings model."""

@@ -11,6 +11,23 @@ from ..main import app
 from ..models import Base, User, Room, RoomCost
 from ..jwt_tools import JWT_SECRET, ALGO
 from jose import jwt
+from sqlalchemy import Column, Integer, String, Boolean, Text, ForeignKey
+
+
+# Define Segment model for testing (segments table exists in production but not in models.py)
+class Segment(Base):
+    __tablename__ = "segments"
+    id = Column(Integer, primary_key=True)
+    room_id = Column(Integer, ForeignKey("rooms.id"), nullable=False)
+    speaker_id = Column(String(64), nullable=False)
+    segment_id = Column(String(64), nullable=False)
+    revision = Column(Integer, nullable=False)
+    ts_iso = Column(String(40), nullable=False)
+    text = Column(Text, nullable=False)
+    lang = Column(String(8), nullable=False)
+    final = Column(Boolean, nullable=False)
+    stt_provider = Column(String(50))
+    latency_ms = Column(Integer)
 
 
 # Test database setup

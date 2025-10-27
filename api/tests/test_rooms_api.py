@@ -91,15 +91,19 @@ class TestRoomsAPI:
             code="test-room",
             owner_id=123,
             is_public=False,
+            recording=False,
             requires_login=False,
             max_participants=10,
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
+            admin_left_at=None
         )
 
         assert response.id == 1
         assert response.code == "test-room"
         assert response.owner_id == 123
+        assert response.recording == False
         assert isinstance(response.created_at, datetime)
+        assert response.admin_left_at is None
 
     def test_get_current_user_no_header(self):
         """Test user extraction fails without authorization header."""
@@ -385,6 +389,7 @@ class TestRoomLifecycleManagement:
             code="test-room",
             owner_id=123,
             is_public=False,
+            recording=False,
             requires_login=False,
             max_participants=10,
             created_at=datetime.utcnow(),
@@ -406,6 +411,7 @@ class TestRoomLifecycleManagement:
             code="test-room",
             owner_id=123,
             is_public=False,
+            recording=False,
             requires_login=False,
             max_participants=10,
             created_at=datetime.utcnow(),
@@ -452,12 +458,13 @@ class TestRoomLifecycleManagement:
         from api.rooms_api import RoomResponse
         from datetime import datetime
 
-        # Should work without admin_left_at
+        # Should work without admin_left_at (defaults to None)
         response = RoomResponse(
             id=1,
             code="test-room",
             owner_id=123,
             is_public=False,
+            recording=False,
             requires_login=False,
             max_participants=10,
             created_at=datetime.utcnow()

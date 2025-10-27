@@ -10,7 +10,15 @@ These tests verify the complete flow:
 These tests require a test database and should be run with pytest-asyncio.
 """
 
+import os
+# Set TEST_POSTGRES_DSN before importing the cleanup service
+os.environ["TEST_POSTGRES_DSN"] = os.getenv(
+    "TEST_POSTGRES_DSN",
+    "postgresql+asyncpg://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator_test"
+)
+
 import pytest
+import pytest_asyncio
 import asyncio
 from datetime import datetime, timedelta
 from sqlalchemy import select, text
@@ -21,91 +29,67 @@ from api.models import Room, RoomCost, User, Device, Event, RoomParticipant
 from api.services.room_cleanup_service import cleanup_abandoned_rooms, archive_room
 
 
+# Use shared fixtures from conftest.py
+# test_db_session and test_user fixtures are provided by conftest.py
+
+
+@pytest_asyncio.fixture
+async def abandoned_room(test_db_session, test_user):
+    """Create a room where admin left 45 minutes ago."""
+    room = Room(
+        code="test-aband",
+        owner_id=test_user.id,
+        admin_left_at=datetime.utcnow() - timedelta(minutes=45),
+        recording=False,
+        is_public=True,
+        requires_login=False,
+        max_participants=10
+    )
+    test_db_session.add(room)
+    await test_db_session.commit()
+    await test_db_session.refresh(room)
+    return room
+
+
+@pytest_asyncio.fixture
+async def empty_room_with_admin_left(test_db_session, test_user):
+    """Create an empty room where admin left 40 minutes ago."""
+    room = Room(
+        code="test-empty",
+        owner_id=test_user.id,
+        admin_left_at=datetime.utcnow() - timedelta(minutes=40),
+        recording=False,
+        is_public=False,
+        requires_login=False,
+        max_participants=5
+    )
+    test_db_session.add(room)
+    await test_db_session.commit()
+    await test_db_session.refresh(room)
+    return room
+
+
+@pytest_asyncio.fixture
+async def active_room(test_db_session, test_user):
+    """Create an active room where admin is present."""
+    room = Room(
+        code="test-active",
+        owner_id=test_user.id,
+        admin_left_at=None,  # Admin is present
+        recording=True,
+        is_public=True,
+        requires_login=True,
+        max_participants=20
+    )
+    test_db_session.add(room)
+    await test_db_session.commit()
+    await test_db_session.refresh(room)
+    return room
+
+
 @pytest.mark.integration
 class TestRoomCleanupIntegration:
     """Integration tests for room cleanup with real database."""
-
-    @pytest.fixture
-    async def test_db_session(self):
-        """Create a test database session."""
-        # Use a test database
-        import os
-        test_db_dsn = os.getenv(
-            "TEST_POSTGRES_DSN",
-            "postgresql+asyncpg://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator_test"
-        )
-
-        engine = create_async_engine(test_db_dsn, echo=False)
-        AsyncTestSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-        async with AsyncTestSession() as session:
-            yield session
-
-        await engine.dispose()
-
-    @pytest.fixture
-    async def test_user(self, test_db_session):
-        """Create a test user."""
-        user = User(
-            email="test@example.com",
-            hashed_password="hashed",
-            stt_quota_minutes=100.0
-        )
-        test_db_session.add(user)
-        await test_db_session.commit()
-        await test_db_session.refresh(user)
-        return user
-
-    @pytest.fixture
-    async def abandoned_room(self, test_db_session, test_user):
-        """Create a room where admin left 45 minutes ago."""
-        room = Room(
-            code="test-abandoned",
-            owner_id=test_user.id,
-            admin_left_at=datetime.utcnow() - timedelta(minutes=45),
-            recording=False,
-            is_public=True,
-            requires_login=False,
-            max_participants=10
-        )
-        test_db_session.add(room)
-        await test_db_session.commit()
-        await test_db_session.refresh(room)
-        return room
-
-    @pytest.fixture
-    async def empty_room_with_admin_left(self, test_db_session, test_user):
-        """Create an empty room where admin left 40 minutes ago."""
-        room = Room(
-            code="test-empty",
-            owner_id=test_user.id,
-            admin_left_at=datetime.utcnow() - timedelta(minutes=40),
-            recording=False,
-            is_public=False,
-            requires_login=False,
-            max_participants=5
-        )
-        test_db_session.add(room)
-        await test_db_session.commit()
-        await test_db_session.refresh(room)
-        return room
-
-    @pytest.fixture
-    async def active_room(self, test_db_session, test_user):
-        """Create an active room where admin is present."""
-        room = Room(
-            code="test-active",
-            owner_id=test_user.id,
-            admin_left_at=None,  # Admin is present
-            recording=True,
-            is_public=True,
-            requires_login=True,
-            max_participants=20
-        )
-        test_db_session.add(room)
-        await test_db_session.commit()
-        await test_db_session.refresh(room)
-        return room
 
     @pytest.mark.asyncio
     async def test_cleanup_deletes_abandoned_room(self, test_db_session, abandoned_room):
@@ -178,9 +162,7 @@ class TestRoomCleanupIntegration:
         # Create a device for the room
         device = Device(
             room_id=abandoned_room.id,
-            device_id="device-001",
-            device_type="browser",
-            user_agent="Mozilla/5.0"
+            name="test-device"
         )
         test_db_session.add(device)
         await test_db_session.commit()
@@ -204,7 +186,8 @@ class TestRoomCleanupIntegration:
         participant = RoomParticipant(
             room_id=abandoned_room.id,
             user_id=test_user.id,
-            display_name="Test User"
+            display_name="Test User",
+            spoken_language="en"
         )
         test_db_session.add(participant)
         await test_db_session.commit()
@@ -327,23 +310,6 @@ class TestAdminLeftAtBugFix:
     4. Mixed rooms
     """
 
-    @pytest.fixture
-    async def test_db_session(self):
-        """Create a test database session."""
-        import os
-        test_db_dsn = os.getenv(
-            "TEST_POSTGRES_DSN",
-            "postgresql+asyncpg://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator_test"
-        )
-
-        engine = create_async_engine(test_db_dsn, echo=False)
-        AsyncTestSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-        async with AsyncTestSession() as session:
-            yield session
-
-        await engine.dispose()
-
     @pytest.mark.asyncio
     async def test_empty_room_admin_left_at_is_set(self, test_db_session):
         """
@@ -352,11 +318,15 @@ class TestAdminLeftAtBugFix:
         This was the original bug - admin_left_at was NOT set for empty rooms.
         """
         from api.ws_manager import WSManager
+        from unittest.mock import AsyncMock, patch, MagicMock
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        import os
 
         # Create a test room
         from api.models import Room, User
 
-        user = User(email="admin@test.com", hashed_password="hash", stt_quota_minutes=100)
+        user = User(email="admin@test.com", password_hash="hash")
         test_db_session.add(user)
         await test_db_session.commit()
         await test_db_session.refresh(user)
@@ -370,16 +340,32 @@ class TestAdminLeftAtBugFix:
         await test_db_session.commit()
         await test_db_session.refresh(room)
 
-        # Simulate admin check with empty room
-        ws_manager = WSManager()
-        ws_manager.rooms["empty-test"] = set()  # Empty room
+        # Create sync session for test database (for WSManager to use)
+        test_db_url = os.getenv("TEST_POSTGRES_DSN", "postgresql+asyncpg://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator_test")
+        # Convert asyncpg URL to psycopg2 URL for sync engine
+        sync_test_db_url = test_db_url.replace("postgresql+asyncpg://", "postgresql://")
 
-        # This should set admin_left_at
-        await ws_manager._do_admin_check("empty-test")
+        sync_engine = create_engine(sync_test_db_url)
+        TestSessionLocal = sessionmaker(bind=sync_engine, autoflush=False, autocommit=False)
 
-        # Verify admin_left_at was set
-        await test_db_session.refresh(room)
-        assert room.admin_left_at is not None, "BUG: admin_left_at should be set for empty rooms"
+        # Mock SessionLocal to use test database
+        with patch('api.ws_manager.SessionLocal', TestSessionLocal):
+            # Simulate admin check with empty room
+            ws_manager = WSManager(
+                redis_url="redis://localhost:6379",
+                mt_base_url="http://localhost:8000"
+            )
+            ws_manager.rooms["empty-test"] = set()  # Empty room
+
+            # This should set admin_left_at
+            await ws_manager._do_admin_check("empty-test")
+
+        # Verify admin_left_at was set (query fresh from DB)
+        result = await test_db_session.execute(
+            select(Room).where(Room.code == "empty-test")
+        )
+        updated_room = result.scalar_one()
+        assert updated_room.admin_left_at is not None, "BUG: admin_left_at should be set for empty rooms"
 
     @pytest.mark.asyncio
     async def test_room_with_authenticated_users_admin_left_at_is_set(self, test_db_session):
@@ -390,12 +376,15 @@ class TestAdminLeftAtBugFix:
         """
         from api.ws_manager import WSManager
         from api.models import Room, User
-        from unittest.mock import Mock
+        from unittest.mock import Mock, patch
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        import os
 
         # Create test users
-        admin = User(email="admin@test.com", hashed_password="hash", stt_quota_minutes=100)
-        user1 = User(email="user1@test.com", hashed_password="hash", stt_quota_minutes=50)
-        user2 = User(email="user2@test.com", hashed_password="hash", stt_quota_minutes=50)
+        admin = User(email="admin2@test.com", password_hash="hash")
+        user1 = User(email="user1@test.com", password_hash="hash")
+        user2 = User(email="user2@test.com", password_hash="hash")
         test_db_session.add(admin)
         test_db_session.add(user1)
         test_db_session.add(user2)
@@ -405,7 +394,7 @@ class TestAdminLeftAtBugFix:
         await test_db_session.refresh(user2)
 
         room = Room(
-            code="auth-users-test",
+            code="auth-users",
             owner_id=admin.id,
             admin_left_at=None
         )
@@ -413,22 +402,37 @@ class TestAdminLeftAtBugFix:
         await test_db_session.commit()
         await test_db_session.refresh(room)
 
-        # Simulate admin check with authenticated users (not admin)
-        ws_manager = WSManager()
+        # Create sync session for test database (for WSManager to use)
+        test_db_url = os.getenv("TEST_POSTGRES_DSN", "postgresql+asyncpg://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator_test")
+        sync_test_db_url = test_db_url.replace("postgresql+asyncpg://", "postgresql://")
 
-        ws1 = Mock()
-        ws1.state.user = str(user1.id)
-        ws2 = Mock()
-        ws2.state.user = str(user2.id)
+        sync_engine = create_engine(sync_test_db_url)
+        TestSessionLocal = sessionmaker(bind=sync_engine, autoflush=False, autocommit=False)
 
-        ws_manager.rooms["auth-users-test"] = {ws1, ws2}
+        # Mock SessionLocal to use test database
+        with patch('api.ws_manager.SessionLocal', TestSessionLocal):
+            # Simulate admin check with authenticated users (not admin)
+            ws_manager = WSManager(
+                redis_url="redis://localhost:6379",
+                mt_base_url="http://localhost:8000"
+            )
 
-        # This should set admin_left_at (THIS WAS THE BUG)
-        await ws_manager._do_admin_check("auth-users-test")
+            ws1 = Mock()
+            ws1.state.user = str(user1.id)
+            ws2 = Mock()
+            ws2.state.user = str(user2.id)
 
-        # Verify admin_left_at was set
-        await test_db_session.refresh(room)
-        assert room.admin_left_at is not None, "BUG FIX: admin_left_at should be set when only authenticated users remain"
+            ws_manager.rooms["auth-users"] = {ws1, ws2}
+
+            # This should set admin_left_at (THIS WAS THE BUG)
+            await ws_manager._do_admin_check("auth-users")
+
+        # Verify admin_left_at was set (query fresh from DB)
+        result = await test_db_session.execute(
+            select(Room).where(Room.code == "auth-users")
+        )
+        updated_room = result.scalar_one()
+        assert updated_room.admin_left_at is not None, "BUG FIX: admin_left_at should be set when only authenticated users remain"
 
     @pytest.mark.asyncio
     async def test_cleanup_deletes_room_after_30_minutes(self, test_db_session):
@@ -445,13 +449,13 @@ class TestAdminLeftAtBugFix:
         from api.models import Room, User
 
         # Create test user and room
-        user = User(email="cleanup@test.com", hashed_password="hash", stt_quota_minutes=100)
+        user = User(email="cleanup@test.com", password_hash="hash")
         test_db_session.add(user)
         await test_db_session.commit()
         await test_db_session.refresh(user)
 
         room = Room(
-            code="cleanup-e2e-test",
+            code="cleanup-e2e",
             owner_id=user.id,
             admin_left_at=datetime.utcnow() - timedelta(minutes=35)  # 35 minutes ago
         )
