@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 export default function ParticipantsModal({ roomCode, token, isOpen, onClose }) {
+  const { t } = useTranslation();
   const [participants, setParticipants] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -46,7 +48,7 @@ export default function ParticipantsModal({ roomCode, token, isOpen, onClose }) 
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>
-          <h2 style={styles.title}>👥 Connected Participants</h2>
+          <h2 style={styles.title}>👥 {t('participants.connectedTitle')}</h2>
           <button style={styles.closeButton} onClick={onClose}>×</button>
         </div>
 
@@ -54,11 +56,11 @@ export default function ParticipantsModal({ roomCode, token, isOpen, onClose }) 
           {loading && participants.length === 0 ? (
             <div style={styles.loadingContainer}>
               <div style={styles.spinner}></div>
-              <p style={styles.loadingText}>Loading participants...</p>
+              <p style={styles.loadingText}>{t('participants.loadingParticipants')}</p>
             </div>
           ) : participants.length === 0 ? (
             <div style={styles.emptyState}>
-              <p style={styles.emptyText}>No participants connected yet</p>
+              <p style={styles.emptyText}>{t('participants.emptyState')}</p>
             </div>
           ) : (
             <div style={styles.participantList}>
@@ -66,7 +68,7 @@ export default function ParticipantsModal({ roomCode, token, isOpen, onClose }) 
                 <div key={index} style={styles.participantCard}>
                   <div style={styles.participantInfo}>
                     <div style={styles.participantName}>
-                      {participant.is_guest && <span style={styles.guestBadge}>GUEST</span>}
+                      {participant.is_guest && <span style={styles.guestBadge}>{t('participants.guestLabel')}</span>}
                       {participant.display_name || participant.email}
                     </div>
                     <div style={styles.participantMeta}>
@@ -77,9 +79,9 @@ export default function ParticipantsModal({ roomCode, token, isOpen, onClose }) 
                   </div>
                   <div style={styles.statusIndicator}>
                     {participant.is_speaking ? (
-                      <span style={styles.speakingBadge}>🎤 Speaking</span>
+                      <span style={styles.speakingBadge}>🎤 {t('participants.speaking')}</span>
                     ) : (
-                      <span style={styles.connectedBadge}>✓ Connected</span>
+                      <span style={styles.connectedBadge}>✓ {t('participants.connected')}</span>
                     )}
                   </div>
                 </div>

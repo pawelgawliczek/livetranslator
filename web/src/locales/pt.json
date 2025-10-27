@@ -22,7 +22,8 @@
     "account": "Conta",
     "subscription": "Assinatura",
     "billing": "Faturamento",
-    "history": "Histórico"
+    "history": "Histórico",
+    "back_to_rooms": "Voltar para salas"
   },
   "nav": {
     "rooms": "Salas",
@@ -118,7 +119,12 @@
     "loadingHistory": "Carregando histórico...",
     "noHistory": "Nenhum histórico disponível",
     "originalText": "Original",
-    "translatedText": "Tradução"
+    "translatedText": "Tradução",
+    "adminLeftWarning": "⚠️ O administrador da sala saiu",
+    "roomClosingIn": "A sala fechará em {countdown}",
+    "recordingDisabledWarning": "A gravação e a tradução serão desativadas em breve",
+    "pressToStart": "Pressione o microfone para começar",
+    "pushToTalk": "Pressione para falar"
   },
   "join": {
     "title": "Entrar na sala",
@@ -213,7 +219,33 @@
     "testMicrophone": "Testar microfone",
     "enableNotifications": "Ativar notificações",
     "soundEffects": "Efeitos sonoros",
-    "volume": "Volume"
+    "volume": "Volume",
+    "myLanguage": "Meu idioma",
+    "selectLanguage": "Selecione o idioma que você fala e deseja ler mensagens",
+    "languageLabel": "Falo e quero ler em",
+    "participants": "Participantes",
+    "invite": "Convidar",
+    "costs": "Custos",
+    "soundSettings": "Configurações de som",
+    "saveHistory": "Salvar histórico",
+    "publicRoom": "Sala pública",
+    "privateRoom": "Sala privada",
+    "roomAdminSettings": "Configurações de administrador da sala",
+    "signIn": "Entrar",
+    "signOut": "Sair",
+    "selectLanguageRequired": "As mensagens serão automaticamente traduzidas para o seu idioma.",
+    "soundSettingsTitle": "Configurações de som",
+    "status": "Status",
+    "audioInputLevel": "Nível de entrada de áudio",
+    "level": "Nível",
+    "threshold": "Limiar",
+    "noiseThreshold": "Limiar de ruído",
+    "moreSensitive": "Mais sensível (menor = capta sons mais baixos)",
+    "lessSensitive": "Menos sensível (maior = ignora sons baixos)",
+    "sensitivityHelp": "Ajuste a sensibilidade do microfone para detectar fala",
+    "stopTest": "Parar teste",
+    "testModeInstructions": "Modo de teste ativo - fale para ver os níveis de entrada",
+    "testModeReady": "Pronto para testar o microfone"
   },
   "errors": {
     "networkError": "Erro de rede. Verifique sua conexão.",
@@ -246,7 +278,19 @@
     "description": "Crie uma sala temporária para conversas rápidas",
     "createButton": "Criar sala rápida",
     "expiresIn": "Expira em 24 horas",
-    "created": "Sala rápida criada com sucesso!"
+    "created": "Sala rápida criada com sucesso!",
+    "creatingTitle": "Criando sala rápida...",
+    "settingUp": "Configurando sua sala...",
+    "error": "Erro",
+    "guestJoined": "Um convidado entrou",
+    "scanTitle": "Escanear para entrar",
+    "qrInstructions": "Escaneie este código QR com um smartphone para entrar na sala instantaneamente",
+    "roomLabel": "Sala",
+    "waitingForGuest": "Aguardando convidado...",
+    "connecting": "Conectando...",
+    "copyLink": "📋 Copiar link",
+    "enterNow": "Entrar agora",
+    "expiresInMinutes": "Expira em {minutes} minutos"
   },
   "participants": {
     "title": "Participantes",
@@ -256,7 +300,14 @@
     "muted": "Silenciado",
     "you": "Você",
     "host": "Host",
-    "guest": "Convidado"
+    "guest": "Convidado",
+    "connectedTitle": "Participantes conectados",
+    "loadingParticipants": "Carregando participantes...",
+    "emptyState": "Ainda não há participantes. Compartilhe o código da sala para convidar outros.",
+    "connected": "Conectado",
+    "panelTitle": "Participantes",
+    "empty": "Ninguém mais aqui ainda",
+    "guestLabel": "(convidado)"
   },
   "landing": {
     "title": "LiveTranslator",
@@ -328,5 +379,25 @@
     "createYourFirstRoom": "Crie sua primeira sala",
     "oneHourPerMonth": "1 hora por mês",
     "languageControlsBoth": "O idioma controla tanto a interface quanto o idioma de tradução"
+  },
+  "invite": {
+    "generatingInvite": "Gerando convite...",
+    "error": "Erro",
+    "title": "Convidar para a sala",
+    "qrCodeTab": "📱 Código QR",
+    "linkTab": "🔗 Link",
+    "emailTab": "✉️ E-mail",
+    "qrInstructions": "Escaneie este código QR com um smartphone para entrar na sala",
+    "downloadQR": "⬇️ Baixar código QR",
+    "linkInstructions": "Compartilhe este link para convidar alguém",
+    "emailInstructions": "Envie um convite por e-mail com o link de entrada",
+    "preview": "Visualizar:",
+    "emailBodyGreeting": "Junte-se a mim para uma conversa traduzida em tempo real!",
+    "emailBodyLink": "Clique neste link para entrar:",
+    "emailBodyExpiry": "Este convite expira em {minutes} minutos.",
+    "openEmail": "📧 Abrir app de e-mail",
+    "roomLabel": "Sala:",
+    "expiresLabel": "Expira:",
+    "emailSubject": "Entre na minha sala LiveTranslator"
   }
 }

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 export default function QuickRoomModal({ token, onClose }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [step, setStep] = useState("creating"); // creating, waiting, joining
   const [roomCode, setRoomCode] = useState(null);
@@ -166,13 +168,13 @@ export default function QuickRoomModal({ token, onClose }) {
       <div style={styles.overlay} onClick={onClose}>
         <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
           <div style={styles.modalHeader}>
-            <h2 style={styles.modalTitle}>Creating Quick Room...</h2>
+            <h2 style={styles.modalTitle}>{t('quickRoom.creatingTitle')}</h2>
             <button style={styles.closeButton} onClick={onClose}>✕</button>
           </div>
           <div style={styles.modalBody}>
             <div style={styles.loadingSpinner}>
               <div style={styles.spinner}></div>
-              <p style={styles.loadingText}>Setting up your room...</p>
+              <p style={styles.loadingText}>{t('quickRoom.settingUp')}</p>
             </div>
           </div>
         </div>
@@ -185,7 +187,7 @@ export default function QuickRoomModal({ token, onClose }) {
       <div style={styles.overlay} onClick={onClose}>
         <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
           <div style={styles.modalHeader}>
-            <h2 style={styles.modalTitle}>Error</h2>
+            <h2 style={styles.modalTitle}>{t('quickRoom.error')}</h2>
             <button style={styles.closeButton} onClick={onClose}>✕</button>
           </div>
           <div style={styles.modalBody}>
@@ -208,7 +210,7 @@ export default function QuickRoomModal({ token, onClose }) {
           <div style={styles.modalBody}>
             <div style={styles.loadingSpinner}>
               <div style={styles.spinner}></div>
-              <p style={styles.loadingText}>Guest joined! Entering room...</p>
+              <p style={styles.loadingText}>{t('quickRoom.guestJoined')}</p>
             </div>
           </div>
         </div>
@@ -220,14 +222,13 @@ export default function QuickRoomModal({ token, onClose }) {
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalHeader}>
-          <h2 style={styles.modalTitle}>Scan to Join</h2>
+          <h2 style={styles.modalTitle}>{t('quickRoom.scanTitle')}</h2>
           <button style={styles.closeButton} onClick={onClose}>✕</button>
         </div>
 
         <div style={styles.modalBody}>
           <p style={styles.instructionText}>
-            Share this QR code with someone to start translating together.
-            You'll both be automatically taken to the room when they scan it.
+            {t('quickRoom.qrInstructions')}
           </p>
 
           {inviteData && (
@@ -241,32 +242,32 @@ export default function QuickRoomModal({ token, onClose }) {
           )}
 
           <div style={styles.roomCodeContainer}>
-            <span style={styles.roomCodeLabel}>Room:</span>
+            <span style={styles.roomCodeLabel}>{t('quickRoom.roomLabel')}</span>
             <code style={styles.roomCode}>{roomCode}</code>
           </div>
 
           <div style={styles.wsStatus}>
             {wsConnected ? (
-              <span style={styles.statusConnected}>● Waiting for guest...</span>
+              <span style={styles.statusConnected}>● {t('quickRoom.waitingForGuest')}</span>
             ) : (
-              <span style={styles.statusDisconnected}>○ Connecting...</span>
+              <span style={styles.statusDisconnected}>○ {t('quickRoom.connecting')}</span>
             )}
           </div>
 
           <div style={styles.buttonGroup}>
             <button style={styles.secondaryButton} onClick={copyInviteLink}>
-              📋 Copy Link
+              {t('quickRoom.copyLink')}
             </button>
             <button
               style={styles.primaryButton}
               onClick={() => navigate(`/room/${roomCode}`)}
             >
-              Enter Room Now
+              {t('quickRoom.enterNow')}
             </button>
           </div>
 
           <p style={styles.expiryText}>
-            This invite expires in {inviteData?.expires_in_minutes || 30} minutes
+            {t('quickRoom.expiresInMinutes', { minutes: inviteData?.expires_in_minutes || 30 })}
           </p>
         </div>
       </div>

@@ -22,7 +22,8 @@
     "account": "계정",
     "subscription": "구독",
     "billing": "청구",
-    "history": "기록"
+    "history": "기록",
+    "back_to_rooms": "룸으로 돌아가기"
   },
   "nav": {
     "rooms": "룸",
@@ -118,7 +119,12 @@
     "loadingHistory": "기록 불러오는 중...",
     "noHistory": "사용 가능한 기록이 없습니다",
     "originalText": "원본",
-    "translatedText": "번역"
+    "translatedText": "번역",
+    "adminLeftWarning": "⚠️ 룸 관리자가 나갔습니다",
+    "roomClosingIn": "룸이 {countdown} 후에 닫힙니다",
+    "recordingDisabledWarning": "녹음 및 번역이 곧 비활성화됩니다",
+    "pressToStart": "마이크를 눌러 시작",
+    "pushToTalk": "눌러서 말하기"
   },
   "join": {
     "title": "룸 참가",
@@ -213,7 +219,33 @@
     "testMicrophone": "마이크 테스트",
     "enableNotifications": "알림 활성화",
     "soundEffects": "사운드 효과",
-    "volume": "볼륨"
+    "volume": "볼륨",
+    "myLanguage": "내 언어",
+    "selectLanguage": "귀하가 말하는 언어와 메시지를 읽고 싶은 언어를 선택하세요",
+    "languageLabel": "사용 언어",
+    "participants": "참가자",
+    "invite": "초대",
+    "costs": "비용",
+    "soundSettings": "사운드 설정",
+    "saveHistory": "기록 저장",
+    "publicRoom": "공개 룸",
+    "privateRoom": "비공개 룸",
+    "roomAdminSettings": "룸 관리자 설정",
+    "signIn": "로그인",
+    "signOut": "로그아웃",
+    "selectLanguageRequired": "메시지가 자동으로 귀하의 언어로 번역됩니다.",
+    "soundSettingsTitle": "사운드 설정",
+    "status": "상태",
+    "audioInputLevel": "오디오 입력 레벨",
+    "level": "레벨",
+    "threshold": "임계값",
+    "noiseThreshold": "노이즈 임계값",
+    "moreSensitive": "더 민감하게 (낮음 = 더 조용한 소리 감지)",
+    "lessSensitive": "덜 민감하게 (높음 = 조용한 소리 무시)",
+    "sensitivityHelp": "음성 감지를 위한 마이크 감도를 조정합니다",
+    "stopTest": "테스트 중지",
+    "testModeInstructions": "테스트 모드 활성화 - 말하면 입력 레벨을 볼 수 있습니다",
+    "testModeReady": "마이크 테스트 준비 완료"
   },
   "errors": {
     "networkError": "네트워크 오류. 연결을 확인하세요.",
@@ -246,7 +278,19 @@
     "description": "빠른 대화를 위한 임시 룸 만들기",
     "createButton": "빠른 룸 만들기",
     "expiresIn": "24시간 후 만료",
-    "created": "빠른 룸이 성공적으로 생성되었습니다!"
+    "created": "빠른 룸이 성공적으로 생성되었습니다!",
+    "creatingTitle": "빠른 룸 생성 중...",
+    "settingUp": "룸을 설정하는 중...",
+    "error": "오류",
+    "guestJoined": "게스트가 참가했습니다",
+    "scanTitle": "스캔하여 참가",
+    "qrInstructions": "스마트폰으로 이 QR 코드를 스캔하여 즉시 룸에 참가하세요",
+    "roomLabel": "룸",
+    "waitingForGuest": "게스트 참가 대기 중...",
+    "connecting": "연결 중...",
+    "copyLink": "📋 링크 복사",
+    "enterNow": "지금 입장",
+    "expiresInMinutes": "{minutes}분 후 만료"
   },
   "participants": {
     "title": "참가자",
@@ -256,7 +300,14 @@
     "muted": "음소거됨",
     "you": "귀하",
     "host": "호스트",
-    "guest": "게스트"
+    "guest": "게스트",
+    "connectedTitle": "연결된 참가자",
+    "loadingParticipants": "참가자 불러오는 중...",
+    "emptyState": "아직 참가자가 없습니다. 룸 코드를 공유하여 다른 사람을 초대하세요.",
+    "connected": "연결됨",
+    "panelTitle": "참가자",
+    "empty": "아직 아무도 없습니다",
+    "guestLabel": "(게스트)"
   },
   "landing": {
     "title": "LiveTranslator",
@@ -328,5 +379,25 @@
     "createYourFirstRoom": "첫 번째 룸 만들기",
     "oneHourPerMonth": "월 1시간",
     "languageControlsBoth": "언어는 UI와 번역 언어를 모두 제어합니다"
+  },
+  "invite": {
+    "generatingInvite": "초대 생성 중...",
+    "error": "오류",
+    "title": "룸에 초대",
+    "qrCodeTab": "📱 QR 코드",
+    "linkTab": "🔗 링크",
+    "emailTab": "✉️ 이메일",
+    "qrInstructions": "스마트폰으로 이 QR 코드를 스캔하여 룸에 참가하세요",
+    "downloadQR": "⬇️ QR 코드 다운로드",
+    "linkInstructions": "이 링크를 공유하여 누군가를 초대하세요",
+    "emailInstructions": "참가 링크가 포함된 이메일 초대장을 보내세요",
+    "preview": "미리보기:",
+    "emailBodyGreeting": "실시간 번역 대화에 참여하세요!",
+    "emailBodyLink": "이 링크를 클릭하여 참가하세요:",
+    "emailBodyExpiry": "이 초대는 {minutes}분 후에 만료됩니다.",
+    "openEmail": "📧 이메일 앱 열기",
+    "roomLabel": "룸:",
+    "expiresLabel": "만료:",
+    "emailSubject": "내 LiveTranslator 룸에 참가하세요"
   }
 }

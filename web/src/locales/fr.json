@@ -22,7 +22,8 @@
     "account": "Compte",
     "subscription": "Abonnement",
     "billing": "Facturation",
-    "history": "Historique"
+    "history": "Historique",
+    "back_to_rooms": "Retour aux salles"
   },
   "nav": {
     "rooms": "Salles",
@@ -118,7 +119,12 @@
     "loadingHistory": "Chargement de l'historique...",
     "noHistory": "Aucun historique disponible",
     "originalText": "Original",
-    "translatedText": "Traduction"
+    "translatedText": "Traduction",
+    "adminLeftWarning": "⚠️ L'administrateur de la salle est parti",
+    "roomClosingIn": "La salle fermera dans {countdown}",
+    "recordingDisabledWarning": "L'enregistrement et la traduction seront bientôt désactivés",
+    "pressToStart": "Appuyez sur le microphone pour commencer",
+    "pushToTalk": "Appuyez pour parler"
   },
   "join": {
     "title": "Rejoindre la salle",
@@ -213,7 +219,33 @@
     "testMicrophone": "Tester le microphone",
     "enableNotifications": "Activer les notifications",
     "soundEffects": "Effets sonores",
-    "volume": "Volume"
+    "volume": "Volume",
+    "myLanguage": "Ma langue",
+    "selectLanguage": "Sélectionnez la langue que vous parlez et dans laquelle vous souhaitez lire les messages",
+    "languageLabel": "Je parle et je veux lire en",
+    "participants": "Participants",
+    "invite": "Inviter",
+    "costs": "Coûts",
+    "soundSettings": "Paramètres sonores",
+    "saveHistory": "Enregistrer l'historique",
+    "publicRoom": "Salle publique",
+    "privateRoom": "Salle privée",
+    "roomAdminSettings": "Paramètres d'administrateur de salle",
+    "signIn": "Se connecter",
+    "signOut": "Se déconnecter",
+    "selectLanguageRequired": "Les messages seront automatiquement traduits dans votre langue.",
+    "soundSettingsTitle": "Paramètres sonores",
+    "status": "Statut",
+    "audioInputLevel": "Niveau d'entrée audio",
+    "level": "Niveau",
+    "threshold": "Seuil",
+    "noiseThreshold": "Seuil de bruit",
+    "moreSensitive": "Plus sensible (inférieur = capte les sons plus faibles)",
+    "lessSensitive": "Moins sensible (supérieur = ignore les sons faibles)",
+    "sensitivityHelp": "Ajustez la sensibilité du microphone pour détecter la parole",
+    "stopTest": "Arrêter le test",
+    "testModeInstructions": "Mode test actif - parlez pour voir les niveaux d'entrée",
+    "testModeReady": "Prêt à tester le microphone"
   },
   "errors": {
     "networkError": "Erreur réseau. Veuillez vérifier votre connexion.",
@@ -246,7 +278,19 @@
     "description": "Créez une salle temporaire pour des conversations rapides",
     "createButton": "Créer une salle rapide",
     "expiresIn": "Expire dans 24 heures",
-    "created": "Salle rapide créée avec succès !"
+    "created": "Salle rapide créée avec succès !",
+    "creatingTitle": "Création de salle rapide...",
+    "settingUp": "Configuration de votre salle...",
+    "error": "Erreur",
+    "guestJoined": "Un invité a rejoint",
+    "scanTitle": "Scanner pour rejoindre",
+    "qrInstructions": "Scannez ce code QR avec un smartphone pour rejoindre la salle instantanément",
+    "roomLabel": "Salle",
+    "waitingForGuest": "En attente de l'invité...",
+    "connecting": "Connexion...",
+    "copyLink": "📋 Copier le lien",
+    "enterNow": "Entrer maintenant",
+    "expiresInMinutes": "Expire dans {minutes} minutes"
   },
   "participants": {
     "title": "Participants",
@@ -256,7 +300,14 @@
     "muted": "Muet",
     "you": "Vous",
     "host": "Hôte",
-    "guest": "Invité"
+    "guest": "Invité",
+    "connectedTitle": "Participants connectés",
+    "loadingParticipants": "Chargement des participants...",
+    "emptyState": "Aucun participant pour le moment. Partagez le code de la salle pour inviter d'autres personnes.",
+    "connected": "Connecté",
+    "panelTitle": "Participants",
+    "empty": "Personne d'autre ici pour le moment",
+    "guestLabel": "(invité)"
   },
   "landing": {
     "title": "LiveTranslator",
@@ -328,5 +379,25 @@
     "createYourFirstRoom": "Créez votre première salle",
     "oneHourPerMonth": "1 heure par mois",
     "languageControlsBoth": "La langue contrôle à la fois l'interface utilisateur et la langue de traduction"
+  },
+  "invite": {
+    "generatingInvite": "Génération de l'invitation...",
+    "error": "Erreur",
+    "title": "Inviter à la salle",
+    "qrCodeTab": "📱 Code QR",
+    "linkTab": "🔗 Lien",
+    "emailTab": "✉️ E-mail",
+    "qrInstructions": "Scannez ce code QR avec un smartphone pour rejoindre la salle",
+    "downloadQR": "⬇️ Télécharger le code QR",
+    "linkInstructions": "Partagez ce lien pour inviter quelqu'un",
+    "emailInstructions": "Envoyez une invitation par e-mail avec le lien de participation",
+    "preview": "Aperçu :",
+    "emailBodyGreeting": "Rejoignez-moi pour une conversation traduite en temps réel !",
+    "emailBodyLink": "Cliquez sur ce lien pour rejoindre :",
+    "emailBodyExpiry": "Cette invitation expire dans {minutes} minutes.",
+    "openEmail": "📧 Ouvrir l'application e-mail",
+    "roomLabel": "Salle :",
+    "expiresLabel": "Expire :",
+    "emailSubject": "Rejoignez ma salle LiveTranslator"
   }
 }

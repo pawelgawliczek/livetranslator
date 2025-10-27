@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from "react-i18next";
 
 export default function SoundSettingsModal({
   isOpen,
@@ -10,6 +11,7 @@ export default function SoundSettingsModal({
   status,            // VAD status text
   onTest             // Callback to start/stop test mode
 }) {
+  const { t } = useTranslation();
   const canvasRef = useRef(null);
   const [localThreshold, setLocalThreshold] = useState(threshold);
   const [isTesting, setIsTesting] = useState(false);
@@ -138,7 +140,7 @@ export default function SoundSettingsModal({
               fontWeight: "600",
               color: "white"
             }}>
-              Sound Settings
+              {t('settings.soundSettingsTitle')}
             </h3>
           </div>
           <button
@@ -171,7 +173,7 @@ export default function SoundSettingsModal({
               fontWeight: "600",
               color: "#999"
             }}>
-              Status
+              {t('settings.status')}
             </div>
             <div style={{
               fontSize: "0.9rem",
@@ -196,7 +198,7 @@ export default function SoundSettingsModal({
               color: "#999",
               marginBottom: "0.75rem"
             }}>
-              Audio Input Level
+              {t('settings.audioInputLevel')}
             </div>
             <canvas
               ref={canvasRef}
@@ -216,12 +218,12 @@ export default function SoundSettingsModal({
               color: "#6b7280"
             }}>
               <span>
-                Level: <strong style={{ color: '#fff' }}>
+                {t('settings.level')} <strong style={{ color: '#fff' }}>
                   {(currentLevel * 100).toFixed(0)}%
                 </strong>
               </span>
               <span>
-                Threshold: <strong style={{ color: '#ef4444' }}>
+                {t('settings.threshold')} <strong style={{ color: '#ef4444' }}>
                   {(localThreshold * 100).toFixed(0)}%
                 </strong>
               </span>
@@ -236,7 +238,7 @@ export default function SoundSettingsModal({
               color: "#999",
               marginBottom: "0.75rem"
             }}>
-              Noise Threshold
+              {t('settings.noiseThreshold')}
             </div>
             <input
               type="range"
@@ -262,8 +264,8 @@ export default function SoundSettingsModal({
               fontSize: "0.75rem",
               color: "#6b7280"
             }}>
-              <span>More Sensitive</span>
-              <span>Less Sensitive</span>
+              <span>{t('settings.moreSensitive')}</span>
+              <span>{t('settings.lessSensitive')}</span>
             </div>
             <div style={{
               marginTop: "0.75rem",
@@ -271,7 +273,7 @@ export default function SoundSettingsModal({
               color: "#9ca3af",
               lineHeight: "1.4"
             }}>
-              Adjust if the microphone is picking up too much background noise or not detecting your voice properly.
+              {t('settings.sensitivityHelp')}
             </div>
           </div>
 
@@ -310,12 +312,12 @@ export default function SoundSettingsModal({
               {isTesting ? (
                 <>
                   <span>⏹</span>
-                  <span>Stop Test</span>
+                  <span>{t('settings.stopTest')}</span>
                 </>
               ) : (
                 <>
                   <span>🎤</span>
-                  <span>Test Microphone</span>
+                  <span>{t('settings.testMicrophone')}</span>
                 </>
               )}
             </button>
@@ -325,7 +327,7 @@ export default function SoundSettingsModal({
               color: "#6b7280",
               textAlign: "center"
             }}>
-              {isTesting ? "Speak to test your microphone and threshold settings" : "Start test mode to calibrate your microphone"}
+              {isTesting ? t('settings.testModeInstructions') : t('settings.testModeReady')}
             </div>
           </div>
         </div>

@@ -22,7 +22,8 @@
     "account": "الحساب",
     "subscription": "الاشتراك",
     "billing": "الفواتير",
-    "history": "السجل"
+    "history": "السجل",
+    "back_to_rooms": "العودة إلى الغرف"
   },
   "nav": {
     "rooms": "الغرف",
@@ -118,7 +119,12 @@
     "loadingHistory": "جاري تحميل السجل...",
     "noHistory": "لا يوجد سجل متاح",
     "originalText": "النص الأصلي",
-    "translatedText": "الترجمة"
+    "translatedText": "الترجمة",
+    "adminLeftWarning": "⚠️ مشرف الغرفة غادر",
+    "roomClosingIn": "ستغلق الغرفة خلال {countdown}",
+    "recordingDisabledWarning": "سيتم تعطيل التسجيل والترجمة قريباً",
+    "pressToStart": "اضغط على الميكروفون للبدء",
+    "pushToTalk": "اضغط للتحدث"
   },
   "join": {
     "title": "الانضمام إلى الغرفة",
@@ -213,7 +219,33 @@
     "testMicrophone": "اختبار الميكروفون",
     "enableNotifications": "تفعيل الإشعارات",
     "soundEffects": "التأثيرات الصوتية",
-    "volume": "مستوى الصوت"
+    "volume": "مستوى الصوت",
+    "myLanguage": "لغتي",
+    "selectLanguage": "اختر اللغة التي تتحدثها وتريد قراءة الرسائل بها",
+    "languageLabel": "أتحدث وأريد القراءة بـ",
+    "participants": "المشاركون",
+    "invite": "دعوة",
+    "costs": "التكاليف",
+    "soundSettings": "إعدادات الصوت",
+    "saveHistory": "حفظ السجل",
+    "publicRoom": "غرفة عامة",
+    "privateRoom": "غرفة خاصة",
+    "roomAdminSettings": "إعدادات مشرف الغرفة",
+    "signIn": "تسجيل الدخول",
+    "signOut": "تسجيل الخروج",
+    "selectLanguageRequired": "سيتم ترجمة الرسائل تلقائياً إلى لغتك.",
+    "soundSettingsTitle": "إعدادات الصوت",
+    "status": "الحالة",
+    "audioInputLevel": "مستوى إدخال الصوت",
+    "level": "المستوى",
+    "threshold": "العتبة",
+    "noiseThreshold": "عتبة الضوضاء",
+    "moreSensitive": "أكثر حساسية (أقل = يلتقط الأصوات الأكثر هدوءاً)",
+    "lessSensitive": "أقل حساسية (أعلى = يتجاهل الأصوات الهادئة)",
+    "sensitivityHelp": "اضبط مدى حساسية الميكروفون لاكتشاف الكلام",
+    "stopTest": "إيقاف الاختبار",
+    "testModeInstructions": "وضع الاختبار نشط - تحدث لرؤية مستويات الإدخال",
+    "testModeReady": "جاهز لاختبار الميكروفون"
   },
   "errors": {
     "networkError": "خطأ في الشبكة. يرجى التحقق من اتصالك.",
@@ -246,7 +278,19 @@
     "description": "إنشاء غرفة مؤقتة للمحادثات السريعة",
     "createButton": "إنشاء غرفة سريعة",
     "expiresIn": "تنتهي صلاحيتها خلال 24 ساعة",
-    "created": "تم إنشاء الغرفة السريعة بنجاح!"
+    "created": "تم إنشاء الغرفة السريعة بنجاح!",
+    "creatingTitle": "إنشاء غرفة سريعة...",
+    "settingUp": "إعداد غرفتك...",
+    "error": "خطأ",
+    "guestJoined": "انضم ضيف",
+    "scanTitle": "امسح للانضمام",
+    "qrInstructions": "امسح رمز الاستجابة السريعة هذا باستخدام هاتف ذكي للانضمام إلى الغرفة فوراً",
+    "roomLabel": "الغرفة",
+    "waitingForGuest": "في انتظار انضمام الضيف...",
+    "connecting": "جاري الاتصال...",
+    "copyLink": "📋 نسخ الرابط",
+    "enterNow": "ادخل الآن",
+    "expiresInMinutes": "تنتهي صلاحيته خلال {minutes} دقيقة"
   },
   "participants": {
     "title": "المشاركون",
@@ -256,7 +300,14 @@
     "muted": "مكتوم الصوت",
     "you": "أنت",
     "host": "المضيف",
-    "guest": "ضيف"
+    "guest": "ضيف",
+    "connectedTitle": "المشاركون المتصلون",
+    "loadingParticipants": "تحميل المشاركين...",
+    "emptyState": "لا يوجد مشاركون بعد. شارك رمز الغرفة لدعوة الآخرين.",
+    "connected": "متصل",
+    "panelTitle": "المشاركون",
+    "empty": "لا يوجد أحد آخر هنا بعد",
+    "guestLabel": "(ضيف)"
   },
   "landing": {
     "title": "LiveTranslator",
@@ -328,5 +379,25 @@
     "createYourFirstRoom": "قم بإنشاء غرفتك الأولى",
     "oneHourPerMonth": "ساعة واحدة في الشهر",
     "languageControlsBoth": "اللغة تتحكم في واجهة المستخدم ولغة الترجمة"
+  },
+  "invite": {
+    "generatingInvite": "إنشاء الدعوة...",
+    "error": "خطأ",
+    "title": "دعوة إلى الغرفة",
+    "qrCodeTab": "📱 رمز QR",
+    "linkTab": "🔗 الرابط",
+    "emailTab": "✉️ البريد الإلكتروني",
+    "qrInstructions": "امسح رمز الاستجابة السريعة هذا باستخدام هاتف ذكي للانضمام إلى الغرفة",
+    "downloadQR": "⬇️ تنزيل رمز QR",
+    "linkInstructions": "شارك هذا الرابط لدعوة شخص ما",
+    "emailInstructions": "أرسل دعوة بالبريد الإلكتروني مع رابط الانضمام",
+    "preview": "معاينة:",
+    "emailBodyGreeting": "انضم إلي لمحادثة مترجمة في الوقت الفعلي!",
+    "emailBodyLink": "انقر على هذا الرابط للانضمام:",
+    "emailBodyExpiry": "تنتهي صلاحية هذه الدعوة خلال {minutes} دقيقة.",
+    "openEmail": "📧 فتح تطبيق البريد الإلكتروني",
+    "roomLabel": "الغرفة:",
+    "expiresLabel": "تنتهي:",
+    "emailSubject": "انضم إلى غرفة LiveTranslator الخاصة بي"
   }
 }

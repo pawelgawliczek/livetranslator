@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 /**
  * Non-closable toast notification for admin absence with countdown timer.
@@ -11,6 +12,7 @@ import React from "react";
  * - Doesn't hide chat content (content flows below)
  */
 export default function AdminLeftToast({ timeRemaining, formatCountdown }) {
+  const { t } = useTranslation();
   if (timeRemaining === null || timeRemaining === undefined || timeRemaining <= 0) {
     return null;
   }
@@ -37,7 +39,7 @@ export default function AdminLeftToast({ timeRemaining, formatCountdown }) {
       }}
     >
         <div style={{ marginBottom: "0.25rem" }}>
-          ⚠️ Room admin has left
+          {t('room.adminLeftWarning')}
         </div>
         <div
           style={{
@@ -46,7 +48,7 @@ export default function AdminLeftToast({ timeRemaining, formatCountdown }) {
             opacity: 0.95,
           }}
         >
-          Room will close in {formatCountdown(timeRemaining)}
+          {t('room.roomClosingIn', { countdown: formatCountdown(timeRemaining) })}
         </div>
         {isUrgent && (
           <div
@@ -57,7 +59,7 @@ export default function AdminLeftToast({ timeRemaining, formatCountdown }) {
               marginTop: "0.25rem",
             }}
           >
-            Recording and translation will be disabled soon
+            {t('room.recordingDisabledWarning')}
           </div>
         )}
     </div>

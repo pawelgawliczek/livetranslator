@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 export default function InviteModal({ roomCode, onClose }) {
+  const { t } = useTranslation();
   const [inviteData, setInviteData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -41,11 +43,11 @@ export default function InviteModal({ roomCode, onClose }) {
 
   function shareViaEmail() {
     if (!inviteData) return;
-    const subject = encodeURIComponent("Join my LiveTranslator room");
+    const subject = encodeURIComponent(t('invite.emailSubject'));
     const body = encodeURIComponent(
-      `Join me for a real-time translated conversation!\n\n` +
-      `Click this link to join: ${inviteData.invite_url}\n\n` +
-      `This invite expires in ${inviteData.expires_in_minutes} minutes.`
+      `${t('invite.emailBodyGreeting')}\n\n` +
+      `${t('invite.emailBodyLink')} ${inviteData.invite_url}\n\n` +
+      t('invite.emailBodyExpiry', { minutes: inviteData.expires_in_minutes })
     );
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
   }
@@ -63,7 +65,7 @@ export default function InviteModal({ roomCode, onClose }) {
       <div style={styles.overlay} onClick={onClose}>
         <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
           <div style={styles.modalHeader}>
-            <h2 style={styles.modalTitle}>Generating Invite...</h2>
+            <h2 style={styles.modalTitle}>{t('invite.generatingInvite')}</h2>
             <button style={styles.closeButton} onClick={onClose}>✕</button>
           </div>
           <div style={styles.modalBody}>
@@ -81,7 +83,7 @@ export default function InviteModal({ roomCode, onClose }) {
       <div style={styles.overlay} onClick={onClose}>
         <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
           <div style={styles.modalHeader}>
-            <h2 style={styles.modalTitle}>Error</h2>
+            <h2 style={styles.modalTitle}>{t('invite.error')}</h2>
             <button style={styles.closeButton} onClick={onClose}>✕</button>
           </div>
           <div style={styles.modalBody}>
@@ -89,7 +91,7 @@ export default function InviteModal({ roomCode, onClose }) {
               {error}
             </p>
             <button style={styles.primaryButton} onClick={onClose}>
-              Close
+              {t('common.close')}
             </button>
           </div>
         </div>
@@ -101,7 +103,7 @@ export default function InviteModal({ roomCode, onClose }) {
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalHeader}>
-          <h2 style={styles.modalTitle}>Invite to Room</h2>
+          <h2 style={styles.modalTitle}>{t('invite.title')}</h2>
           <button style={styles.closeButton} onClick={onClose}>✕</button>
         </div>
 
@@ -115,7 +117,7 @@ export default function InviteModal({ roomCode, onClose }) {
               }}
               onClick={() => setShareMethod("qr")}
             >
-              📱 QR Code
+              {t('invite.qrCodeTab')}
             </button>
             <button
               style={{
@@ -124,7 +126,7 @@ export default function InviteModal({ roomCode, onClose }) {
               }}
               onClick={() => setShareMethod("link")}
             >
-              🔗 Link
+              {t('invite.linkTab')}
             </button>
             <button
               style={{
@@ -133,7 +135,7 @@ export default function InviteModal({ roomCode, onClose }) {
               }}
               onClick={() => setShareMethod("email")}
             >
-              ✉️ Email
+              {t('invite.emailTab')}
             </button>
           </div>
 
@@ -141,7 +143,7 @@ export default function InviteModal({ roomCode, onClose }) {
           {shareMethod === "qr" && inviteData && (
             <div style={styles.contentSection}>
               <p style={styles.instructionText}>
-                Scan this QR code with a smartphone to join the room
+                {t('invite.qrInstructions')}
               </p>
               <div style={styles.qrContainer}>
                 <img
@@ -151,7 +153,7 @@ export default function InviteModal({ roomCode, onClose }) {
                 />
               </div>
               <button style={styles.secondaryButton} onClick={downloadQR}>
-                ⬇️ Download QR Code
+                {t('invite.downloadQR')}
               </button>
             </div>
           )}
@@ -160,7 +162,7 @@ export default function InviteModal({ roomCode, onClose }) {
           {shareMethod === "link" && inviteData && (
             <div style={styles.contentSection}>
               <p style={styles.instructionText}>
-                Share this link to invite someone
+                {t('invite.linkInstructions')}
               </p>
               <div style={styles.linkContainer}>
                 <input
@@ -175,7 +177,7 @@ export default function InviteModal({ roomCode, onClose }) {
                 style={styles.primaryButton}
                 onClick={copyLink}
               >
-                {copied ? "✓ Copied!" : "📋 Copy Link"}
+                {copied ? "✓ Copied!" : t('rooms.copyCode')}
               </button>
             </div>
           )}
@@ -184,22 +186,22 @@ export default function InviteModal({ roomCode, onClose }) {
           {shareMethod === "email" && inviteData && (
             <div style={styles.contentSection}>
               <p style={styles.instructionText}>
-                Send an email invitation with the join link
+                {t('invite.emailInstructions')}
               </p>
               <div style={styles.emailPreview}>
-                <div style={styles.emailLabel}>Preview:</div>
+                <div style={styles.emailLabel}>{t('invite.preview')}</div>
                 <div style={styles.emailBody}>
-                  <p><strong>Join me for a real-time translated conversation!</strong></p>
-                  <p>Click this link to join: <br/>
+                  <p><strong>{t('invite.emailBodyGreeting')}</strong></p>
+                  <p>{t('invite.emailBodyLink')} <br/>
                     <code style={styles.inlineCode}>{inviteData.invite_url}</code>
                   </p>
                   <p style={{fontSize: "0.85rem", color: "#999"}}>
-                    This invite expires in {inviteData.expires_in_minutes} minutes.
+                    {t('invite.emailBodyExpiry', { minutes: inviteData.expires_in_minutes })}
                   </p>
                 </div>
               </div>
               <button style={styles.primaryButton} onClick={shareViaEmail}>
-                📧 Open Email Client
+                {t('invite.openEmail')}
               </button>
             </div>
           )}
@@ -207,11 +209,11 @@ export default function InviteModal({ roomCode, onClose }) {
           {/* Room info */}
           <div style={styles.roomInfo}>
             <div style={styles.roomInfoRow}>
-              <span style={styles.infoLabel}>Room:</span>
+              <span style={styles.infoLabel}>{t('invite.roomLabel')}</span>
               <code style={styles.infoValue}>{roomCode}</code>
             </div>
             <div style={styles.roomInfoRow}>
-              <span style={styles.infoLabel}>Expires:</span>
+              <span style={styles.infoLabel}>{t('invite.expiresLabel')}</span>
               <span style={styles.infoValue}>
                 {inviteData?.expires_in_minutes || 30} minutes
               </span>

@@ -22,7 +22,8 @@
     "account": "Konto",
     "subscription": "Subskrypcja",
     "billing": "Płatności",
-    "history": "Historia"
+    "history": "Historia",
+    "back_to_rooms": "Powrót do pokojów"
   },
   "nav": {
     "rooms": "Pokoje",
@@ -118,7 +119,12 @@
     "loadingHistory": "Ładowanie historii...",
     "noHistory": "Brak dostępnej historii",
     "originalText": "Oryginał",
-    "translatedText": "Tłumaczenie"
+    "translatedText": "Tłumaczenie",
+    "adminLeftWarning": "⚠️ Administrator pokoju opuścił pokój",
+    "roomClosingIn": "Pokój zostanie zamknięty za {countdown}",
+    "recordingDisabledWarning": "Nagrywanie i tłumaczenie zostaną wkrótce wyłączone",
+    "pressToStart": "Naciśnij mikrofon, aby rozpocząć",
+    "pushToTalk": "Naciśnij, aby mówić"
   },
   "join": {
     "title": "Dołącz do pokoju",
@@ -213,7 +219,33 @@
     "testMicrophone": "Testuj mikrofon",
     "enableNotifications": "Włącz powiadomienia",
     "soundEffects": "Efekty dźwiękowe",
-    "volume": "Głośność"
+    "volume": "Głośność",
+    "myLanguage": "Mój język",
+    "selectLanguage": "Wybierz język, którym mówisz i w którym chcesz czytać wiadomości",
+    "languageLabel": "Mówię i chcę czytać w języku",
+    "participants": "Uczestnicy",
+    "invite": "Zaproś",
+    "costs": "Koszty",
+    "soundSettings": "Ustawienia dźwięku",
+    "saveHistory": "Zapisz historię",
+    "publicRoom": "Pokój publiczny",
+    "privateRoom": "Pokój prywatny",
+    "roomAdminSettings": "Ustawienia administratora pokoju",
+    "signIn": "Zaloguj się",
+    "signOut": "Wyloguj się",
+    "selectLanguageRequired": "Wiadomości będą automatycznie tłumaczone na Twój język.",
+    "soundSettingsTitle": "Ustawienia dźwięku",
+    "status": "Status",
+    "audioInputLevel": "Poziom wejścia audio",
+    "level": "Poziom",
+    "threshold": "Próg",
+    "noiseThreshold": "Próg szumu",
+    "moreSensitive": "Bardziej czuły (niższy = wykrywa cichsze dźwięki)",
+    "lessSensitive": "Mniej czuły (wyższy = ignoruje ciche dźwięki)",
+    "sensitivityHelp": "Dostosuj czułość mikrofonu na wykrywanie mowy",
+    "stopTest": "Zatrzymaj test",
+    "testModeInstructions": "Tryb testowy aktywny - mów, aby zobaczyć poziomy wejścia",
+    "testModeReady": "Gotowy do testu mikrofonu"
   },
   "errors": {
     "networkError": "Błąd sieci. Sprawdź swoje połączenie.",
@@ -246,7 +278,19 @@
     "description": "Utwórz tymczasowy pokój dla szybkich rozmów",
     "createButton": "Utwórz szybki pokój",
     "expiresIn": "Wygasa za 24 godziny",
-    "created": "Szybki pokój utworzony pomyślnie!"
+    "created": "Szybki pokój utworzony pomyślnie!",
+    "creatingTitle": "Tworzenie szybkiego pokoju...",
+    "settingUp": "Konfigurowanie pokoju...",
+    "error": "Błąd",
+    "guestJoined": "Gość dołączył",
+    "scanTitle": "Zeskanuj, aby dołączyć",
+    "qrInstructions": "Zeskanuj ten kod QR smartfonem, aby natychmiast dołączyć do pokoju",
+    "roomLabel": "Pokój",
+    "waitingForGuest": "Oczekiwanie na gościa...",
+    "connecting": "Łączenie...",
+    "copyLink": "📋 Skopiuj link",
+    "enterNow": "Wejdź teraz",
+    "expiresInMinutes": "Wygasa za {minutes} minut"
   },
   "participants": {
     "title": "Uczestnicy",
@@ -256,13 +300,40 @@
     "muted": "Wyciszony",
     "you": "Ty",
     "host": "Gospodarz",
-    "guest": "Gość"
+    "guest": "Gość",
+    "connectedTitle": "Połączeni uczestnicy",
+    "loadingParticipants": "Ładowanie uczestników...",
+    "emptyState": "Brak uczestników. Udostępnij kod pokoju, aby zaprosić innych.",
+    "connected": "Połączony",
+    "panelTitle": "Uczestnicy",
+    "empty": "Nikt więcej tu nie jest",
+    "guestLabel": "(gość)"
   },
   "landing": {
     "title": "LiveTranslator",
     "subtitle": "Platforma wielojęzycznej współpracy głosowej w czasie rzeczywistym",
     "signIn": "Zaloguj się",
     "createAccount": "Utwórz konto"
+  },
+  "invite": {
+    "generatingInvite": "Generowanie zaproszenia...",
+    "error": "Błąd",
+    "title": "Zaproś do pokoju",
+    "qrCodeTab": "📱 Kod QR",
+    "linkTab": "🔗 Link",
+    "emailTab": "✉️ E-mail",
+    "qrInstructions": "Zeskanuj ten kod QR smartfonem, aby dołączyć do pokoju",
+    "downloadQR": "⬇️ Pobierz kod QR",
+    "linkInstructions": "Udostępnij ten link, aby zaprosić kogoś",
+    "emailInstructions": "Wyślij zaproszenie e-mail z linkiem do dołączenia",
+    "preview": "Podgląd:",
+    "emailBodyGreeting": "Dołącz do mnie na rozmowę z tłumaczeniem w czasie rzeczywistym!",
+    "emailBodyLink": "Kliknij ten link, aby dołączyć:",
+    "emailBodyExpiry": "To zaproszenie wygasa za {minutes} minut.",
+    "openEmail": "📧 Otwórz aplikację e-mail",
+    "roomLabel": "Pokój:",
+    "expiresLabel": "Wygasa:",
+    "emailSubject": "Dołącz do mojego pokoju LiveTranslator"
   },
   "joinPage": {
     "validatingInvite": "Sprawdzanie zaproszenia...",

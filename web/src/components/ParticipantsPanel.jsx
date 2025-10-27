@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 /**
  * Collapsible sidebar showing active participants.
@@ -15,6 +16,7 @@ export default function ParticipantsPanel({
   isOpen,
   onToggle,
 }) {
+  const { t } = useTranslation();
   return (
     <>
       <div
@@ -24,7 +26,7 @@ export default function ParticipantsPanel({
         }}
       >
         <div style={styles.header}>
-          <h3 style={styles.title}>Participants ({participants.length})</h3>
+          <h3 style={styles.title}>{t('participants.panelTitle')} ({participants.length})</h3>
           <button onClick={onToggle} style={styles.closeBtn}>
             ✕
           </button>
@@ -32,7 +34,7 @@ export default function ParticipantsPanel({
 
         <div style={styles.list}>
           {participants.length === 0 ? (
-            <div style={styles.emptyState}>No participants yet</div>
+            <div style={styles.emptyState}>{t('participants.empty')}</div>
           ) : (
             participants.map((p) => {
               const lang = languages.find((l) => l.code === p.language);
@@ -44,7 +46,7 @@ export default function ParticipantsPanel({
                       <span style={styles.name}>
                         {p.display_name}
                         {p.is_guest && (
-                          <span style={styles.guestBadge}>(guest)</span>
+                          <span style={styles.guestBadge}>{t('participants.guestLabel')}</span>
                         )}
                       </span>
                       <span style={styles.lang}>{lang?.name || p.language}</span>

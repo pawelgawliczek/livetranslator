@@ -22,7 +22,8 @@
     "account": "Account",
     "subscription": "Abbonamento",
     "billing": "Fatturazione",
-    "history": "Cronologia"
+    "history": "Cronologia",
+    "back_to_rooms": "Torna alle stanze"
   },
   "nav": {
     "rooms": "Stanze",
@@ -118,7 +119,12 @@
     "loadingHistory": "Caricamento cronologia...",
     "noHistory": "Nessuna cronologia disponibile",
     "originalText": "Originale",
-    "translatedText": "Traduzione"
+    "translatedText": "Traduzione",
+    "adminLeftWarning": "⚠️ L'amministratore della stanza se n'è andato",
+    "roomClosingIn": "La stanza si chiuderà tra {countdown}",
+    "recordingDisabledWarning": "La registrazione e la traduzione saranno presto disabilitate",
+    "pressToStart": "Premi il microfono per iniziare",
+    "pushToTalk": "Premi per parlare"
   },
   "join": {
     "title": "Entra nella stanza",
@@ -213,7 +219,33 @@
     "testMicrophone": "Testa microfono",
     "enableNotifications": "Abilita notifiche",
     "soundEffects": "Effetti sonori",
-    "volume": "Volume"
+    "volume": "Volume",
+    "myLanguage": "La mia lingua",
+    "selectLanguage": "Seleziona la lingua che parli e in cui vuoi leggere i messaggi",
+    "languageLabel": "Parlo e voglio leggere in",
+    "participants": "Partecipanti",
+    "invite": "Invita",
+    "costs": "Costi",
+    "soundSettings": "Impostazioni audio",
+    "saveHistory": "Salva cronologia",
+    "publicRoom": "Stanza pubblica",
+    "privateRoom": "Stanza privata",
+    "roomAdminSettings": "Impostazioni amministratore stanza",
+    "signIn": "Accedi",
+    "signOut": "Disconnetti",
+    "selectLanguageRequired": "I messaggi verranno automaticamente tradotti nella tua lingua.",
+    "soundSettingsTitle": "Impostazioni audio",
+    "status": "Stato",
+    "audioInputLevel": "Livello ingresso audio",
+    "level": "Livello",
+    "threshold": "Soglia",
+    "noiseThreshold": "Soglia rumore",
+    "moreSensitive": "Più sensibile (inferiore = rileva suoni più silenziosi)",
+    "lessSensitive": "Meno sensibile (superiore = ignora suoni silenziosi)",
+    "sensitivityHelp": "Regola la sensibilità del microfono nel rilevare il parlato",
+    "stopTest": "Ferma test",
+    "testModeInstructions": "Modalità test attiva - parla per vedere i livelli di ingresso",
+    "testModeReady": "Pronto per testare il microfono"
   },
   "errors": {
     "networkError": "Errore di rete. Controlla la tua connessione.",
@@ -246,7 +278,19 @@
     "description": "Crea una stanza temporanea per conversazioni rapide",
     "createButton": "Crea stanza rapida",
     "expiresIn": "Scade tra 24 ore",
-    "created": "Stanza rapida creata con successo!"
+    "created": "Stanza rapida creata con successo!",
+    "creatingTitle": "Creazione stanza rapida...",
+    "settingUp": "Configurazione della stanza...",
+    "error": "Errore",
+    "guestJoined": "Un ospite è entrato",
+    "scanTitle": "Scansiona per entrare",
+    "qrInstructions": "Scansiona questo codice QR con uno smartphone per entrare istantaneamente nella stanza",
+    "roomLabel": "Stanza",
+    "waitingForGuest": "In attesa dell'ospite...",
+    "connecting": "Connessione...",
+    "copyLink": "📋 Copia link",
+    "enterNow": "Entra ora",
+    "expiresInMinutes": "Scade tra {minutes} minuti"
   },
   "participants": {
     "title": "Partecipanti",
@@ -256,7 +300,14 @@
     "muted": "Silenziato",
     "you": "Tu",
     "host": "Host",
-    "guest": "Ospite"
+    "guest": "Ospite",
+    "connectedTitle": "Partecipanti connessi",
+    "loadingParticipants": "Caricamento partecipanti...",
+    "emptyState": "Nessun partecipante ancora. Condividi il codice della stanza per invitare altri.",
+    "connected": "Connesso",
+    "panelTitle": "Partecipanti",
+    "empty": "Nessun altro qui ancora",
+    "guestLabel": "(ospite)"
   },
   "landing": {
     "title": "LiveTranslator",
@@ -328,5 +379,25 @@
     "createYourFirstRoom": "Crea la tua prima stanza",
     "oneHourPerMonth": "1 ora al mese",
     "languageControlsBoth": "La lingua controlla sia l'interfaccia utente che la lingua di traduzione"
+  },
+  "invite": {
+    "generatingInvite": "Generazione invito...",
+    "error": "Errore",
+    "title": "Invita alla stanza",
+    "qrCodeTab": "📱 Codice QR",
+    "linkTab": "🔗 Link",
+    "emailTab": "✉️ Email",
+    "qrInstructions": "Scansiona questo codice QR con uno smartphone per entrare nella stanza",
+    "downloadQR": "⬇️ Scarica codice QR",
+    "linkInstructions": "Condividi questo link per invitare qualcuno",
+    "emailInstructions": "Invia un invito via email con il link per entrare",
+    "preview": "Anteprima:",
+    "emailBodyGreeting": "Unisciti a me per una conversazione tradotta in tempo reale!",
+    "emailBodyLink": "Clicca su questo link per entrare:",
+    "emailBodyExpiry": "Questo invito scade tra {minutes} minuti.",
+    "openEmail": "📧 Apri app email",
+    "roomLabel": "Stanza:",
+    "expiresLabel": "Scade:",
+    "emailSubject": "Unisciti alla mia stanza LiveTranslator"
   }
 }

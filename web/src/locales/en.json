@@ -22,7 +22,8 @@
     "account": "Account",
     "subscription": "Subscription",
     "billing": "Billing",
-    "history": "History"
+    "history": "History",
+    "back_to_rooms": "Back to Rooms"
   },
   "nav": {
     "rooms": "Rooms",
@@ -118,7 +119,12 @@
     "loadingHistory": "Loading history...",
     "noHistory": "No history available",
     "originalText": "Original",
-    "translatedText": "Translation"
+    "translatedText": "Translation",
+    "adminLeftWarning": "⚠️ Room admin has left",
+    "roomClosingIn": "Room will close in {countdown}",
+    "recordingDisabledWarning": "Recording and translation will be disabled soon",
+    "pressToStart": "Press the microphone to start",
+    "pushToTalk": "Push to talk"
   },
   "join": {
     "title": "Join Room",
@@ -213,7 +219,33 @@
     "testMicrophone": "Test Microphone",
     "enableNotifications": "Enable Notifications",
     "soundEffects": "Sound Effects",
-    "volume": "Volume"
+    "volume": "Volume",
+    "myLanguage": "My Language",
+    "selectLanguage": "Select the language you speak and want to read messages in",
+    "languageLabel": "I speak and want to read",
+    "participants": "Participants",
+    "invite": "Invite",
+    "costs": "Costs",
+    "soundSettings": "Sound Settings",
+    "saveHistory": "Save History",
+    "publicRoom": "Public Room",
+    "privateRoom": "Private Room",
+    "roomAdminSettings": "Room Admin Settings",
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
+    "selectLanguageRequired": "Messages will be automatically translated to your language.",
+    "soundSettingsTitle": "Sound Settings",
+    "status": "Status",
+    "audioInputLevel": "Audio Input Level",
+    "level": "Level",
+    "threshold": "Threshold",
+    "noiseThreshold": "Noise Threshold",
+    "moreSensitive": "More sensitive (lower = picks up quieter sounds)",
+    "lessSensitive": "Less sensitive (higher = ignores quiet sounds)",
+    "sensitivityHelp": "Adjust how sensitive the microphone is to detecting speech",
+    "stopTest": "Stop Test",
+    "testModeInstructions": "Test mode active - speak to see input levels",
+    "testModeReady": "Ready to test microphone"
   },
   "errors": {
     "networkError": "Network error. Please check your connection.",
@@ -246,7 +278,19 @@
     "description": "Create a temporary room for quick conversations",
     "createButton": "Create Quick Room",
     "expiresIn": "Expires in 24 hours",
-    "created": "Quick room created successfully!"
+    "created": "Quick room created successfully!",
+    "creatingTitle": "Creating Quick Room...",
+    "settingUp": "Setting up your room...",
+    "error": "Error",
+    "guestJoined": "A guest has joined",
+    "scanTitle": "Scan to Join",
+    "qrInstructions": "Scan this QR code with a smartphone to join the room instantly",
+    "roomLabel": "Room",
+    "waitingForGuest": "Waiting for guest to join...",
+    "connecting": "Connecting...",
+    "copyLink": "📋 Copy Link",
+    "enterNow": "Enter Now",
+    "expiresInMinutes": "Expires in {minutes} minutes"
   },
   "participants": {
     "title": "Participants",
@@ -256,13 +300,40 @@
     "muted": "Muted",
     "you": "You",
     "host": "Host",
-    "guest": "Guest"
+    "guest": "Guest",
+    "connectedTitle": "Connected Participants",
+    "loadingParticipants": "Loading participants...",
+    "emptyState": "No participants yet. Share the room code to invite others.",
+    "connected": "Connected",
+    "panelTitle": "Participants",
+    "empty": "No one else here yet",
+    "guestLabel": "(guest)"
   },
   "landing": {
     "title": "LiveTranslator",
     "subtitle": "Real-time multilingual speech collaboration platform",
     "signIn": "Sign In",
     "createAccount": "Create Account"
+  },
+  "invite": {
+    "generatingInvite": "Generating Invite...",
+    "error": "Error",
+    "title": "Invite to Room",
+    "qrCodeTab": "📱 QR Code",
+    "linkTab": "🔗 Link",
+    "emailTab": "✉️ Email",
+    "qrInstructions": "Scan this QR code with a smartphone to join the room",
+    "downloadQR": "⬇️ Download QR Code",
+    "linkInstructions": "Share this link to invite someone",
+    "emailInstructions": "Send an email invitation with the join link",
+    "preview": "Preview:",
+    "emailBodyGreeting": "Join me for a real-time translated conversation!",
+    "emailBodyLink": "Click this link to join:",
+    "emailBodyExpiry": "This invite expires in {minutes} minutes.",
+    "openEmail": "📧 Open Email App",
+    "roomLabel": "Room:",
+    "expiresLabel": "Expires:",
+    "emailSubject": "Join my LiveTranslator room"
   },
   "joinPage": {
     "validatingInvite": "Validating invite...",

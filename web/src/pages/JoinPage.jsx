@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Footer from "../components/Footer";
+import { getUserLanguage, setUserLanguage, syncLanguageWithProfile } from "../utils/languageSync";
 
 export default function JoinPage({ token, onLogin }) {
+  const { t } = useTranslation();
   const { inviteCode } = useParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState("validating"); // validating, valid, invalid, joining
   const [roomInfo, setRoomInfo] = useState(null);
   const [error, setError] = useState(null);
   const [displayName, setDisplayName] = useState("");
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState(() => getUserLanguage());
 
   const languages = [
     { code: "en", name: "English", flag: "🇬🇧" },
@@ -56,9 +59,24 @@ export default function JoinPage({ token, onLogin }) {
     }
   }
 
+  // Handle language change with persistent sync
+  async function handleLanguageChange(newLanguage) {
+    setLanguage(newLanguage);
+
+    // Sync language to UI and localStorage
+    setUserLanguage(newLanguage);
+
+    // If user is logged in, sync with backend profile
+    if (token) {
+      await syncLanguageWithProfile(token, newLanguage);
+    }
+
+    console.log('[JoinPage] Language changed to:', newLanguage);
+  }
+
   async function joinRoom() {
     if (!displayName.trim()) {
-      alert("Please enter your name");
+      alert(t('joinPage.yourName'));
       return;
     }
 
@@ -89,6 +107,13 @@ export default function JoinPage({ token, onLogin }) {
         sessionStorage.setItem('guest_display_name', displayName);
         sessionStorage.setItem('guest_language', language);
         sessionStorage.setItem('is_guest', 'true');
+
+        // Language is already synced via handleLanguageChange, but ensure it's set
+        // This allows guests to have persistent language preference across sessions
+        setUserLanguage(language);
+      } else {
+        // For logged-in users, ensure language is synced to profile
+        await syncLanguageWithProfile(token, language);
       }
 
       // Navigate to room
@@ -107,7 +132,7 @@ export default function JoinPage({ token, onLogin }) {
           <div style={styles.card}>
             <div style={styles.loadingSpinner}>
               <div style={styles.spinner}></div>
-              <p style={styles.loadingText}>Validating invite...</p>
+              <p style={styles.loadingText}>{t('joinPage.validatingInvite')}</p>
             </div>
           </div>
         </div>
@@ -122,13 +147,13 @@ export default function JoinPage({ token, onLogin }) {
         <div style={styles.content}>
           <div style={styles.card}>
             <div style={styles.errorIcon}>⚠️</div>
-            <h1 style={styles.title}>Invalid Invite</h1>
+            <h1 style={styles.title}>{t('joinPage.invalidInvite')}</h1>
             <p style={styles.errorText}>{error}</p>
             <button
               style={styles.primaryButton}
               onClick={() => navigate("/")}
             >
-              Go to Home
+              {t('joinPage.goToHome')}
             </button>
           </div>
         </div>
@@ -144,7 +169,7 @@ export default function JoinPage({ token, onLogin }) {
           <div style={styles.card}>
             <div style={styles.loadingSpinner}>
               <div style={styles.spinner}></div>
-              <p style={styles.loadingText}>Joining room...</p>
+              <p style={styles.loadingText}>{t('joinPage.joiningRoom')}</p>
             </div>
           </div>
         </div>
@@ -159,18 +184,18 @@ export default function JoinPage({ token, onLogin }) {
         <div style={styles.card}>
         <div style={styles.header}>
           <div style={styles.checkIcon}>✓</div>
-          <h1 style={styles.title}>Join Room</h1>
+          <h1 style={styles.title}>{t('joinPage.joinRoom')}</h1>
           <p style={styles.subtitle}>
-            You've been invited to join <strong>{roomInfo?.room_code}</strong>
+            {t('joinPage.youAreInvited')} <strong>{roomInfo?.room_code}</strong>
           </p>
         </div>
 
         <div style={styles.form}>
           <div style={styles.formGroup}>
-            <label style={styles.label}>Your Name</label>
+            <label style={styles.label}>{t('joinPage.yourName')}</label>
             <input
               type="text"
-              placeholder="Enter your display name"
+              placeholder={t('joinPage.enterDisplayName')}
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && joinRoom()}
@@ -180,10 +205,10 @@ export default function JoinPage({ token, onLogin }) {
           </div>
 
           <div style={styles.formGroup}>
-            <label style={styles.label}>Your Language</label>
+            <label style={styles.label}>{t('joinPage.yourLanguage')}</label>
             <select
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
+              onChange={(e) => handleLanguageChange(e.target.value)}
               style={styles.select}
             >
               {languages.map(lang => (
@@ -193,7 +218,7 @@ export default function JoinPage({ token, onLogin }) {
               ))}
             </select>
             <p style={styles.hint}>
-              Messages will be translated to your language
+              {t('joinPage.messagesTranslated')}
             </p>
           </div>
 
@@ -203,13 +228,13 @@ export default function JoinPage({ token, onLogin }) {
                 style={styles.primaryButton}
                 onClick={joinRoom}
               >
-                🚀 Join as Guest
+                🚀 {t('joinPage.joinAsGuest')}
               </button>
               <p style={styles.guestHint}>
-                You'll join anonymously with the name and language you chose above
+                {t('joinPage.guestNote')}
               </p>
               <div style={styles.divider}>
-                <span style={styles.dividerText}>or</span>
+                <span style={styles.dividerText}>{t('common.or')}</span>
               </div>
               <button
                 style={styles.secondaryButton}
@@ -223,10 +248,10 @@ export default function JoinPage({ token, onLogin }) {
                   navigate("/login");
                 }}
               >
-                🔐 Login to Join
+                🔐 {t('joinPage.loginToJoin')}
               </button>
               <p style={styles.loginHint}>
-                Login to save your conversation history and access other features
+                {t('joinPage.loginNote')}
               </p>
             </>
           ) : (
@@ -235,10 +260,10 @@ export default function JoinPage({ token, onLogin }) {
                 style={styles.primaryButton}
                 onClick={joinRoom}
               >
-                Join Room
+                {t('joinPage.joinRoom')}
               </button>
               <p style={styles.loginNote}>
-                Joining as {userEmail}
+                {t('joinPage.joiningAs')} {userEmail}
               </p>
             </>
           )}
@@ -247,12 +272,12 @@ export default function JoinPage({ token, onLogin }) {
         {roomInfo && (
           <div style={styles.roomInfo}>
             <div style={styles.roomInfoRow}>
-              <span style={styles.infoLabel}>Room:</span>
+              <span style={styles.infoLabel}>{t('joinPage.room')}:</span>
               <code style={styles.infoValue}>{roomInfo.room_code}</code>
             </div>
             {roomInfo.max_participants && (
               <div style={styles.roomInfoRow}>
-                <span style={styles.infoLabel}>Max participants:</span>
+                <span style={styles.infoLabel}>{t('joinPage.maxParticipants')}:</span>
                 <span style={styles.infoValue}>{roomInfo.max_participants}</span>
               </div>
             )}

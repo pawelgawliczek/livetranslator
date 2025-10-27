@@ -22,7 +22,8 @@
     "account": "アカウント",
     "subscription": "サブスクリプション",
     "billing": "請求",
-    "history": "履歴"
+    "history": "履歴",
+    "back_to_rooms": "ルームに戻る"
   },
   "nav": {
     "rooms": "ルーム",
@@ -118,7 +119,12 @@
     "loadingHistory": "履歴を読み込み中...",
     "noHistory": "利用可能な履歴がありません",
     "originalText": "原文",
-    "translatedText": "翻訳"
+    "translatedText": "翻訳",
+    "adminLeftWarning": "⚠️ ルーム管理者が退出しました",
+    "roomClosingIn": "ルームは {countdown} 後に閉じます",
+    "recordingDisabledWarning": "録音と翻訳はまもなく無効になります",
+    "pressToStart": "マイクを押して開始",
+    "pushToTalk": "押して話す"
   },
   "join": {
     "title": "ルームに参加",
@@ -213,7 +219,33 @@
     "testMicrophone": "マイクをテスト",
     "enableNotifications": "通知を有効にする",
     "soundEffects": "サウンドエフェクト",
-    "volume": "音量"
+    "volume": "音量",
+    "myLanguage": "使用言語",
+    "selectLanguage": "話す言語とメッセージを読む言語を選択してください",
+    "languageLabel": "話す言語と読みたい言語",
+    "participants": "参加者",
+    "invite": "招待",
+    "costs": "コスト",
+    "soundSettings": "サウンド設定",
+    "saveHistory": "履歴を保存",
+    "publicRoom": "公開ルーム",
+    "privateRoom": "非公開ルーム",
+    "roomAdminSettings": "ルーム管理者設定",
+    "signIn": "ログイン",
+    "signOut": "ログアウト",
+    "selectLanguageRequired": "メッセージは自動的にあなたの言語に翻訳されます。",
+    "soundSettingsTitle": "サウンド設定",
+    "status": "ステータス",
+    "audioInputLevel": "オーディオ入力レベル",
+    "level": "レベル",
+    "threshold": "しきい値",
+    "noiseThreshold": "ノイズしきい値",
+    "moreSensitive": "より敏感（低い = より静かな音を拾う）",
+    "lessSensitive": "より鈍感（高い = 静かな音を無視する）",
+    "sensitivityHelp": "マイクの音声検出感度を調整します",
+    "stopTest": "テスト停止",
+    "testModeInstructions": "テストモード有効 - 話すと入力レベルが表示されます",
+    "testModeReady": "マイクテストの準備完了"
   },
   "errors": {
     "networkError": "ネットワークエラー。接続を確認してください。",
@@ -246,7 +278,19 @@
     "description": "迅速な会話のための一時的なルームを作成",
     "createButton": "クイックルームを作成",
     "expiresIn": "24時間で期限切れ",
-    "created": "クイックルームが正常に作成されました！"
+    "created": "クイックルームが正常に作成されました！",
+    "creatingTitle": "クイックルームを作成中...",
+    "settingUp": "ルームをセットアップ中...",
+    "error": "エラー",
+    "guestJoined": "ゲストが参加しました",
+    "scanTitle": "スキャンして参加",
+    "qrInstructions": "スマートフォンでこのQRコードをスキャンして、すぐにルームに参加します",
+    "roomLabel": "ルーム",
+    "waitingForGuest": "ゲストの参加を待っています...",
+    "connecting": "接続中...",
+    "copyLink": "📋 リンクをコピー",
+    "enterNow": "今すぐ入る",
+    "expiresInMinutes": "{minutes} 分後に期限切れ"
   },
   "participants": {
     "title": "参加者",
@@ -256,7 +300,14 @@
     "muted": "ミュート",
     "you": "あなた",
     "host": "ホスト",
-    "guest": "ゲスト"
+    "guest": "ゲスト",
+    "connectedTitle": "接続中の参加者",
+    "loadingParticipants": "参加者を読み込み中...",
+    "emptyState": "まだ参加者がいません。ルームコードを共有して他の人を招待してください。",
+    "connected": "接続済み",
+    "panelTitle": "参加者",
+    "empty": "まだ誰もいません",
+    "guestLabel": "（ゲスト）"
   },
   "landing": {
     "title": "LiveTranslator",
@@ -328,5 +379,25 @@
     "createYourFirstRoom": "最初のルームを作成",
     "oneHourPerMonth": "月1時間",
     "languageControlsBoth": "言語は UI と翻訳言語の両方を制御します"
+  },
+  "invite": {
+    "generatingInvite": "招待を生成中...",
+    "error": "エラー",
+    "title": "ルームに招待",
+    "qrCodeTab": "📱 QRコード",
+    "linkTab": "🔗 リンク",
+    "emailTab": "✉️ メール",
+    "qrInstructions": "スマートフォンでこのQRコードをスキャンしてルームに参加",
+    "downloadQR": "⬇️ QRコードをダウンロード",
+    "linkInstructions": "このリンクを共有して誰かを招待",
+    "emailInstructions": "参加リンク付きのメール招待を送信",
+    "preview": "プレビュー：",
+    "emailBodyGreeting": "リアルタイム翻訳会話に参加してください！",
+    "emailBodyLink": "このリンクをクリックして参加：",
+    "emailBodyExpiry": "この招待は {minutes} 分後に期限切れになります。",
+    "openEmail": "📧 メールアプリを開く",
+    "roomLabel": "ルーム：",
+    "expiresLabel": "期限切れ：",
+    "emailSubject": "私のLiveTranslatorルームに参加してください"
   }
 }

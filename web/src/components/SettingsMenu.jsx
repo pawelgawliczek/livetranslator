@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 export default function SettingsMenu({
   isOpen,
@@ -20,6 +21,7 @@ export default function SettingsMenu({
   onTogglePublic,
   onShowRoomAdminSettings
 }) {
+  const { t } = useTranslation();
   if (!isOpen) return null;
 
   // Debug logging
@@ -39,36 +41,36 @@ export default function SettingsMenu({
   const menuItems = [
     {
       icon: "🌐",
-      label: "My Language",
-      value: myLanguage ? (languages.find(l => l.code === myLanguage)?.name || "English") : "Select...",
+      label: t('settings.myLanguage'),
+      value: myLanguage ? (languages.find(l => l.code === myLanguage)?.name || "English") : t('settings.selectLanguage'),
       onClick: onLanguageChange,
       hasSubMenu: true,
       disabled: !canChangeLanguage
     },
     {
       icon: "👥",
-      label: "Participants",
+      label: t('settings.participants'),
       onClick: onShowParticipants
     },
     {
       icon: "✉️",
-      label: "Invite",
+      label: t('settings.invite'),
       onClick: onShowInvite
     },
     {
       icon: "💰",
-      label: "Costs",
+      label: t('settings.costs'),
       onClick: onShowCosts
     },
     {
       icon: "🎙️",
-      label: "Sound Settings",
+      label: t('settings.soundSettings'),
       onClick: onShowSound
     },
     // Only show persistence toggle for logged-in users
     ...(!isGuest ? [{
       icon: "💾",
-      label: "Save History",
+      label: t('settings.saveHistory'),
       onClick: onTogglePersistence,
       isToggle: true,
       toggleValue: persistenceEnabled
@@ -76,7 +78,7 @@ export default function SettingsMenu({
     // Only show public/private toggle for room admins
     ...(isRoomAdmin ? [{
       icon: isPublic ? "🌍" : "🔒",
-      label: isPublic ? "Public Room" : "Private Room",
+      label: isPublic ? t('settings.publicRoom') : t('settings.privateRoom'),
       onClick: onTogglePublic,
       isToggle: true,
       toggleValue: isPublic
@@ -84,12 +86,12 @@ export default function SettingsMenu({
     // Only show Room Admin Settings for room admins (and not guests)
     ...(!isGuest && isRoomAdmin && onShowRoomAdminSettings ? [{
       icon: "⚙️",
-      label: "Room Admin Settings",
+      label: t('settings.roomAdminSettings'),
       onClick: onShowRoomAdminSettings
     }] : []),
     {
       icon: isGuest ? "🔑" : "🚪",
-      label: isGuest ? "Sign In" : "Sign Out",
+      label: isGuest ? t('settings.signIn') : t('settings.signOut'),
       onClick: isGuest ? () => window.location.href = "/login" : onLogout,
       color: isGuest ? "#3b82f6" : "#ef4444"
     }

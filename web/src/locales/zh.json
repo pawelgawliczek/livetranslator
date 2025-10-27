@@ -22,7 +22,8 @@
     "account": "账户",
     "subscription": "订阅",
     "billing": "账单",
-    "history": "历史"
+    "history": "历史",
+    "back_to_rooms": "返回房间"
   },
   "nav": {
     "rooms": "房间",
@@ -118,7 +119,12 @@
     "loadingHistory": "加载历史中...",
     "noHistory": "没有可用的历史记录",
     "originalText": "原文",
-    "translatedText": "翻译"
+    "translatedText": "翻译",
+    "adminLeftWarning": "⚠️ 房间管理员已离开",
+    "roomClosingIn": "房间将在 {countdown} 后关闭",
+    "recordingDisabledWarning": "录音和翻译即将被禁用",
+    "pressToStart": "按下麦克风开始",
+    "pushToTalk": "按住说话"
   },
   "join": {
     "title": "加入房间",
@@ -213,7 +219,33 @@
     "testMicrophone": "测试麦克风",
     "enableNotifications": "启用通知",
     "soundEffects": "音效",
-    "volume": "音量"
+    "volume": "音量",
+    "myLanguage": "我的语言",
+    "selectLanguage": "选择您说的语言和希望阅读消息的语言",
+    "languageLabel": "我说并想阅读",
+    "participants": "参与者",
+    "invite": "邀请",
+    "costs": "费用",
+    "soundSettings": "声音设置",
+    "saveHistory": "保存历史",
+    "publicRoom": "公开房间",
+    "privateRoom": "私密房间",
+    "roomAdminSettings": "房间管理员设置",
+    "signIn": "登录",
+    "signOut": "登出",
+    "selectLanguageRequired": "消息将自动翻译成您的语言。",
+    "soundSettingsTitle": "声音设置",
+    "status": "状态",
+    "audioInputLevel": "音频输入电平",
+    "level": "电平",
+    "threshold": "阈值",
+    "noiseThreshold": "噪音阈值",
+    "moreSensitive": "更敏感（较低 = 捕获更安静的声音）",
+    "lessSensitive": "较不敏感（较高 = 忽略安静的声音）",
+    "sensitivityHelp": "调整麦克风检测语音的敏感度",
+    "stopTest": "停止测试",
+    "testModeInstructions": "测试模式已激活 - 说话以查看输入电平",
+    "testModeReady": "准备测试麦克风"
   },
   "errors": {
     "networkError": "网络错误。请检查您的连接。",
@@ -246,7 +278,19 @@
     "description": "创建临时房间进行快速对话",
     "createButton": "创建快速房间",
     "expiresIn": "24 小时后过期",
-    "created": "快速房间创建成功！"
+    "created": "快速房间创建成功！",
+    "creatingTitle": "创建快速房间中...",
+    "settingUp": "正在设置您的房间...",
+    "error": "错误",
+    "guestJoined": "访客已加入",
+    "scanTitle": "扫描加入",
+    "qrInstructions": "用智能手机扫描此二维码即可立即加入房间",
+    "roomLabel": "房间",
+    "waitingForGuest": "等待访客加入...",
+    "connecting": "连接中...",
+    "copyLink": "📋 复制链接",
+    "enterNow": "立即进入",
+    "expiresInMinutes": "{minutes} 分钟后过期"
   },
   "participants": {
     "title": "参与者",
@@ -256,7 +300,14 @@
     "muted": "已静音",
     "you": "您",
     "host": "主持人",
-    "guest": "访客"
+    "guest": "访客",
+    "connectedTitle": "已连接的参与者",
+    "loadingParticipants": "加载参与者中...",
+    "emptyState": "暂无参与者。分享房间代码以邀请他人。",
+    "connected": "已连接",
+    "panelTitle": "参与者",
+    "empty": "目前还没有其他人",
+    "guestLabel": "（访客）"
   },
   "landing": {
     "title": "LiveTranslator",
@@ -328,5 +379,25 @@
     "createYourFirstRoom": "创建您的第一个房间",
     "oneHourPerMonth": "每月 1 小时",
     "languageControlsBoth": "语言同时控制 UI 和翻译语言"
+  },
+  "invite": {
+    "generatingInvite": "生成邀请中...",
+    "error": "错误",
+    "title": "邀请加入房间",
+    "qrCodeTab": "📱 二维码",
+    "linkTab": "🔗 链接",
+    "emailTab": "✉️ 电子邮件",
+    "qrInstructions": "用智能手机扫描此二维码加入房间",
+    "downloadQR": "⬇️ 下载二维码",
+    "linkInstructions": "分享此链接以邀请某人",
+    "emailInstructions": "发送带有加入链接的电子邮件邀请",
+    "preview": "预览：",
+    "emailBodyGreeting": "加入我进行实时翻译对话！",
+    "emailBodyLink": "点击此链接加入：",
+    "emailBodyExpiry": "此邀请将在 {minutes} 分钟后过期。",
+    "openEmail": "📧 打开电子邮件应用",
+    "roomLabel": "房间：",
+    "expiresLabel": "过期时间：",
+    "emailSubject": "加入我的 LiveTranslator 房间"
   }
 }

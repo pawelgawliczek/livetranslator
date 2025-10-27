@@ -1,13 +1,16 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import InviteModal from "../components/InviteModal";
 import SettingsMenu from "../components/SettingsMenu";
 import SoundSettingsModal from "../components/SoundSettingsModal";
 import NotificationToast from "../components/NotificationToast";
 import AdminLeftToast from "../components/AdminLeftToast";
 import ParticipantsPanel from "../components/ParticipantsPanel";
+import { getUserLanguage, setUserLanguage, syncLanguageWithProfile } from "../utils/languageSync";
 
 export default function RoomPage({ token, onLogout }) {
+  const { t } = useTranslation();
   const { roomId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -33,41 +36,6 @@ export default function RoomPage({ token, onLogout }) {
     return () => document.head.removeChild(style);
   }, []);
 
-  // Translations for "Refining quality..." in different languages
-  const getProcessingText = (lang) => {
-    const translations = {
-      'en': 'Refining quality...',
-      'es': 'Mejorando calidad...',
-      'fr': 'Amélioration de la qualité...',
-      'de': 'Qualität verbessern...',
-      'it': 'Miglioramento qualità...',
-      'pt': 'Melhorando qualidade...',
-      'ru': 'Улучшение качества...',
-      'zh': '提高质量中...',
-      'ja': '品質向上中...',
-      'ko': '품질 개선 중...',
-      'ar': '...تحسين الجودة',
-      'hi': 'गुणवत्ता में सुधार...',
-      'pl': 'Poprawa jakości...',
-      'nl': 'Kwaliteit verbeteren...',
-      'tr': 'Kalite iyileştiriliyor...',
-      'sv': 'Förbättrar kvalitet...',
-      'da': 'Forbedrer kvalitet...',
-      'fi': 'Parannetaan laatua...',
-      'no': 'Forbedrer kvalitet...',
-      'cs': 'Zlepšování kvality...',
-      'ro': 'Îmbunătățire calitate...',
-      'hu': 'Minőség javítása...',
-      'uk': 'Покращення якості...',
-      'el': 'Βελτίωση ποιότητας...',
-      'he': '...שיפור איכות',
-      'th': 'กำลังปรับปรุงคุณภาพ...',
-      'vi': 'Cải thiện chất lượng...',
-      'id': 'Meningkatkan kualitas...',
-      'ms': 'Meningkatkan kualiti...',
-    };
-    return translations[lang] || translations['en'];
-  };
 
   // Check if this is a guest session
   const isGuest = sessionStorage.getItem('is_guest') === 'true';
@@ -93,7 +61,8 @@ export default function RoomPage({ token, onLogout }) {
   const [showSoundSettings, setShowSoundSettings] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [myLanguage, setMyLanguage] = useState(() => {
-    const stored = isGuest ? guestLang : localStorage.getItem('lt_my_language');
+    // For guests, use their session language; for logged-in users, use unified language
+    const stored = isGuest ? guestLang : getUserLanguage();
     // If no language stored, we'll force selection via modal
     return stored || null;
   });
@@ -217,12 +186,7 @@ export default function RoomPage({ token, onLogout }) {
     }
   }, [myLanguage]);
 
-  // Save language preference to localStorage
-  useEffect(() => {
-    if (!isGuest && myLanguage) {
-      localStorage.setItem('lt_my_language', myLanguage);
-    }
-  }, [myLanguage, isGuest]);
+  // Note: Language persistence is now handled by handleLanguageChange using the unified sync system
 
   useEffect(() => {
     localStorage.setItem('lt_push_to_talk', pushToTalk.toString());
@@ -399,6 +363,28 @@ export default function RoomPage({ token, onLogout }) {
     } else {
       navigate("/rooms");
     }
+  };
+
+  // Handle language change with unified sync
+  const handleLanguageChange = async (newLanguage) => {
+    // Update local state
+    setMyLanguage(newLanguage);
+
+    // For logged-in users, sync language to UI, localStorage, and backend
+    if (!isGuest) {
+      setUserLanguage(newLanguage);
+
+      // Sync with backend profile if user has token
+      if (token) {
+        await syncLanguageWithProfile(token, newLanguage);
+      }
+    } else {
+      // For guests, update session storage and also sync to localStorage for next visit
+      sessionStorage.setItem('guest_language', newLanguage);
+      setUserLanguage(newLanguage);
+    }
+
+    console.log('[RoomPage] Language changed to:', newLanguage);
   };
 
   // Load history on mount and when my language changes
@@ -1610,19 +1596,20 @@ export default function RoomPage({ token, onLogout }) {
           }}
           onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{margin: "0 0 1rem 0", fontSize: "1.2rem"}}>My Language</h3>
+            <h3 style={{margin: "0 0 1rem 0", fontSize: "1.2rem"}}>{t('settings.myLanguage')}</h3>
             <p style={{margin: "0 0 1rem 0", fontSize: "0.85rem", color: "#999"}}>
-              Select the language you speak and want to read messages in.
-              Messages will be automatically translated to your language.
+              {t('settings.selectLanguage')}
+              {' '}
+              {t('settings.selectLanguageRequired')}
             </p>
 
             <div style={{marginBottom: "1.5rem"}}>
               <label style={{display: "block", fontSize: "0.85rem", color: "#999", marginBottom: "0.5rem"}}>
-                I speak and want to read
+                {t('settings.languageLabel')}
               </label>
               <select
                 value={myLanguage}
-                onChange={(e) => setMyLanguage(e.target.value)}
+                onChange={(e) => handleLanguageChange(e.target.value)}
                 style={{
                   width: "100%",
                   padding: "0.85rem",
@@ -1773,7 +1760,7 @@ export default function RoomPage({ token, onLogout }) {
             margin: "auto",
             fontSize: "0.9rem"
           }}>
-            Press the microphone to start
+            {t('room.pressToStart')}
           </div>
         )}
 
@@ -1882,7 +1869,7 @@ export default function RoomPage({ token, onLogout }) {
                       gap: "0.4rem"
                     }}>
                       <span className="processing-spinner">⚙️</span>
-                      <span>{getProcessingText(myLanguage || 'en')}</span>
+                      <span>{t('room.refiningQuality')}</span>
                     </div>
                   )}
                   {/* Original text - small font below */}
@@ -1968,7 +1955,7 @@ export default function RoomPage({ token, onLogout }) {
                           gap: "0.4rem"
                         }}>
                           <span className="processing-spinner">⚙️</span>
-                          <span>{getProcessingText(myLanguage || 'en')}</span>
+                          <span>{t('room.refiningQuality')}</span>
                         </div>
                       )}
                     </>
@@ -2016,7 +2003,7 @@ export default function RoomPage({ token, onLogout }) {
                 height: "18px"
               }}
             />
-            Push to talk
+            {t('room.pushToTalk')}
           </label>
 
           {/* Network Status Indicator - Inline */}

@@ -22,7 +22,8 @@
     "account": "Konto",
     "subscription": "Abonnement",
     "billing": "Abrechnung",
-    "history": "Verlauf"
+    "history": "Verlauf",
+    "back_to_rooms": "Zurück zu den Räumen"
   },
   "nav": {
     "rooms": "Räume",
@@ -118,7 +119,12 @@
     "loadingHistory": "Verlauf wird geladen...",
     "noHistory": "Kein Verlauf verfügbar",
     "originalText": "Original",
-    "translatedText": "Übersetzung"
+    "translatedText": "Übersetzung",
+    "adminLeftWarning": "⚠️ Raumadministrator hat den Raum verlassen",
+    "roomClosingIn": "Raum wird in {countdown} geschlossen",
+    "recordingDisabledWarning": "Aufnahme und Übersetzung werden bald deaktiviert",
+    "pressToStart": "Drücken Sie das Mikrofon, um zu starten",
+    "pushToTalk": "Drücken, um zu sprechen"
   },
   "join": {
     "title": "Raum beitreten",
@@ -213,7 +219,33 @@
     "testMicrophone": "Mikrofon testen",
     "enableNotifications": "Benachrichtigungen aktivieren",
     "soundEffects": "Soundeffekte",
-    "volume": "Lautstärke"
+    "volume": "Lautstärke",
+    "myLanguage": "Meine Sprache",
+    "selectLanguage": "Wählen Sie die Sprache, die Sie sprechen und in der Sie Nachrichten lesen möchten",
+    "languageLabel": "Ich spreche und möchte lesen in",
+    "participants": "Teilnehmer",
+    "invite": "Einladen",
+    "costs": "Kosten",
+    "soundSettings": "Soundeinstellungen",
+    "saveHistory": "Verlauf speichern",
+    "publicRoom": "Öffentlicher Raum",
+    "privateRoom": "Privater Raum",
+    "roomAdminSettings": "Raumadministrator-Einstellungen",
+    "signIn": "Anmelden",
+    "signOut": "Abmelden",
+    "selectLanguageRequired": "Nachrichten werden automatisch in Ihre Sprache übersetzt.",
+    "soundSettingsTitle": "Soundeinstellungen",
+    "status": "Status",
+    "audioInputLevel": "Audio-Eingangspegel",
+    "level": "Pegel",
+    "threshold": "Schwellenwert",
+    "noiseThreshold": "Rauschschwelle",
+    "moreSensitive": "Empfindlicher (niedriger = nimmt leisere Geräusche auf)",
+    "lessSensitive": "Weniger empfindlich (höher = ignoriert leise Geräusche)",
+    "sensitivityHelp": "Passen Sie an, wie empfindlich das Mikrofon auf Sprache reagiert",
+    "stopTest": "Test beenden",
+    "testModeInstructions": "Testmodus aktiv - sprechen Sie, um Eingangspegel zu sehen",
+    "testModeReady": "Bereit zum Testen des Mikrofons"
   },
   "errors": {
     "networkError": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung.",
@@ -246,7 +278,19 @@
     "description": "Erstellen Sie einen temporären Raum für schnelle Gespräche",
     "createButton": "Schnellraum erstellen",
     "expiresIn": "Läuft in 24 Stunden ab",
-    "created": "Schnellraum erfolgreich erstellt!"
+    "created": "Schnellraum erfolgreich erstellt!",
+    "creatingTitle": "Schnellraum wird erstellt...",
+    "settingUp": "Raum wird eingerichtet...",
+    "error": "Fehler",
+    "guestJoined": "Ein Gast ist beigetreten",
+    "scanTitle": "Scannen zum Beitreten",
+    "qrInstructions": "Scannen Sie diesen QR-Code mit einem Smartphone, um sofort dem Raum beizutreten",
+    "roomLabel": "Raum",
+    "waitingForGuest": "Warten auf Gast...",
+    "connecting": "Verbinden...",
+    "copyLink": "📋 Link kopieren",
+    "enterNow": "Jetzt beitreten",
+    "expiresInMinutes": "Läuft in {minutes} Minuten ab"
   },
   "participants": {
     "title": "Teilnehmer",
@@ -256,7 +300,14 @@
     "muted": "Stummgeschaltet",
     "you": "Sie",
     "host": "Gastgeber",
-    "guest": "Gast"
+    "guest": "Gast",
+    "connectedTitle": "Verbundene Teilnehmer",
+    "loadingParticipants": "Teilnehmer laden...",
+    "emptyState": "Noch keine Teilnehmer. Teilen Sie den Raumcode, um andere einzuladen.",
+    "connected": "Verbunden",
+    "panelTitle": "Teilnehmer",
+    "empty": "Noch niemand sonst hier",
+    "guestLabel": "(Gast)"
   },
   "landing": {
     "title": "LiveTranslator",
@@ -328,5 +379,25 @@
     "createYourFirstRoom": "Erstellen Sie Ihren ersten Raum",
     "oneHourPerMonth": "1 Stunde pro Monat",
     "languageControlsBoth": "Die Sprache steuert sowohl die Benutzeroberfläche als auch die Übersetzungssprache"
+  },
+  "invite": {
+    "generatingInvite": "Einladung wird generiert...",
+    "error": "Fehler",
+    "title": "Zum Raum einladen",
+    "qrCodeTab": "📱 QR-Code",
+    "linkTab": "🔗 Link",
+    "emailTab": "✉️ E-Mail",
+    "qrInstructions": "Scannen Sie diesen QR-Code mit einem Smartphone, um dem Raum beizutreten",
+    "downloadQR": "⬇️ QR-Code herunterladen",
+    "linkInstructions": "Teilen Sie diesen Link, um jemanden einzuladen",
+    "emailInstructions": "Senden Sie eine E-Mail-Einladung mit dem Beitrittslink",
+    "preview": "Vorschau:",
+    "emailBodyGreeting": "Nehmen Sie an einem Echtzeit-übersetzten Gespräch mit mir teil!",
+    "emailBodyLink": "Klicken Sie auf diesen Link, um beizutreten:",
+    "emailBodyExpiry": "Diese Einladung läuft in {minutes} Minuten ab.",
+    "openEmail": "📧 E-Mail-App öffnen",
+    "roomLabel": "Raum:",
+    "expiresLabel": "Läuft ab:",
+    "emailSubject": "Treten Sie meinem LiveTranslator-Raum bei"
   }
 }

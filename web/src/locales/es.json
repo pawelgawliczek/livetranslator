@@ -22,7 +22,8 @@
     "account": "Cuenta",
     "subscription": "Suscripción",
     "billing": "Facturación",
-    "history": "Historial"
+    "history": "Historial",
+    "back_to_rooms": "Volver a las salas"
   },
   "nav": {
     "rooms": "Salas",
@@ -118,7 +119,12 @@
     "loadingHistory": "Cargando historial...",
     "noHistory": "No hay historial disponible",
     "originalText": "Original",
-    "translatedText": "Traducción"
+    "translatedText": "Traducción",
+    "adminLeftWarning": "⚠️ El administrador de la sala se ha ido",
+    "roomClosingIn": "La sala se cerrará en {countdown}",
+    "recordingDisabledWarning": "La grabación y la traducción se desactivarán pronto",
+    "pressToStart": "Presione el micrófono para comenzar",
+    "pushToTalk": "Presione para hablar"
   },
   "join": {
     "title": "Unirse a la sala",
@@ -213,7 +219,33 @@
     "testMicrophone": "Probar micrófono",
     "enableNotifications": "Habilitar notificaciones",
     "soundEffects": "Efectos de sonido",
-    "volume": "Volumen"
+    "volume": "Volumen",
+    "myLanguage": "Mi idioma",
+    "selectLanguage": "Seleccione el idioma que habla y en el que desea leer mensajes",
+    "languageLabel": "Hablo y quiero leer en",
+    "participants": "Participantes",
+    "invite": "Invitar",
+    "costs": "Costos",
+    "soundSettings": "Configuración de sonido",
+    "saveHistory": "Guardar historial",
+    "publicRoom": "Sala pública",
+    "privateRoom": "Sala privada",
+    "roomAdminSettings": "Configuración de administrador de sala",
+    "signIn": "Iniciar sesión",
+    "signOut": "Cerrar sesión",
+    "selectLanguageRequired": "Los mensajes se traducirán automáticamente a su idioma.",
+    "soundSettingsTitle": "Configuración de sonido",
+    "status": "Estado",
+    "audioInputLevel": "Nivel de entrada de audio",
+    "level": "Nivel",
+    "threshold": "Umbral",
+    "noiseThreshold": "Umbral de ruido",
+    "moreSensitive": "Más sensible (menor = capta sonidos más silenciosos)",
+    "lessSensitive": "Menos sensible (mayor = ignora sonidos silenciosos)",
+    "sensitivityHelp": "Ajuste la sensibilidad del micrófono para detectar el habla",
+    "stopTest": "Detener prueba",
+    "testModeInstructions": "Modo de prueba activo - hable para ver los niveles de entrada",
+    "testModeReady": "Listo para probar el micrófono"
   },
   "errors": {
     "networkError": "Error de red. Por favor, verifique su conexión.",
@@ -246,7 +278,19 @@
     "description": "Cree una sala temporal para conversaciones rápidas",
     "createButton": "Crear sala rápida",
     "expiresIn": "Expira en 24 horas",
-    "created": "¡Sala rápida creada exitosamente!"
+    "created": "¡Sala rápida creada exitosamente!",
+    "creatingTitle": "Creando sala rápida...",
+    "settingUp": "Configurando su sala...",
+    "error": "Error",
+    "guestJoined": "Un invitado se ha unido",
+    "scanTitle": "Escanear para unirse",
+    "qrInstructions": "Escanee este código QR con un teléfono inteligente para unirse a la sala al instante",
+    "roomLabel": "Sala",
+    "waitingForGuest": "Esperando a que se una el invitado...",
+    "connecting": "Conectando...",
+    "copyLink": "📋 Copiar enlace",
+    "enterNow": "Entrar ahora",
+    "expiresInMinutes": "Expira en {minutes} minutos"
   },
   "participants": {
     "title": "Participantes",
@@ -256,7 +300,14 @@
     "muted": "Silenciado",
     "you": "Usted",
     "host": "Anfitrión",
-    "guest": "Invitado"
+    "guest": "Invitado",
+    "connectedTitle": "Participantes conectados",
+    "loadingParticipants": "Cargando participantes...",
+    "emptyState": "Aún no hay participantes. Comparta el código de la sala para invitar a otros.",
+    "connected": "Conectado",
+    "panelTitle": "Participantes",
+    "empty": "Todavía no hay nadie más aquí",
+    "guestLabel": "(invitado)"
   },
   "landing": {
     "title": "LiveTranslator",
@@ -328,5 +379,25 @@
     "createYourFirstRoom": "Cree su primera sala",
     "oneHourPerMonth": "1 hora por mes",
     "languageControlsBoth": "El idioma controla tanto la interfaz como el idioma de traducción"
+  },
+  "invite": {
+    "generatingInvite": "Generando invitación...",
+    "error": "Error",
+    "title": "Invitar a la sala",
+    "qrCodeTab": "📱 Código QR",
+    "linkTab": "🔗 Enlace",
+    "emailTab": "✉️ Correo electrónico",
+    "qrInstructions": "Escanee este código QR con un teléfono inteligente para unirse a la sala",
+    "downloadQR": "⬇️ Descargar código QR",
+    "linkInstructions": "Comparta este enlace para invitar a alguien",
+    "emailInstructions": "Envíe una invitación por correo electrónico con el enlace para unirse",
+    "preview": "Vista previa:",
+    "emailBodyGreeting": "¡Únase a mí para una conversación traducida en tiempo real!",
+    "emailBodyLink": "Haga clic en este enlace para unirse:",
+    "emailBodyExpiry": "Esta invitación expira en {minutes} minutos.",
+    "openEmail": "📧 Abrir aplicación de correo",
+    "roomLabel": "Sala:",
+    "expiresLabel": "Expira:",
+    "emailSubject": "Únase a mi sala de LiveTranslator"
   }
 }
