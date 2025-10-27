@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import QuickRoomModal from "../components/QuickRoomModal";
+import RoomsMenu from "../components/RoomsMenu";
 import LanguageSelector from "../components/LanguageSelector";
 import Footer from "../components/Footer";
 
@@ -15,6 +16,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showQuickRoom, setShowQuickRoom] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   
   // Check for token in URL (from Google OAuth redirect)
   useEffect(() => {
@@ -124,49 +126,31 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <LanguageSelector token={token} />
-            {isAdmin && (
-              <button
-                onClick={() => navigate("/admin")}
-                style={{
-                  padding: "0.75rem 1.5rem",
-                  background: "#f59e0b",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "600"
-                }}
-              >
-                🛠️ Admin
-              </button>
-            )}
             <button
-              onClick={() => navigate("/profile")}
+              onClick={() => setShowMenu(true)}
               style={{
-                padding: "0.75rem 1.5rem",
-                background: "#6366f1",
+                padding: "0.75rem 1rem",
+                background: "#2a2a2a",
                 color: "white",
-                border: "none",
+                border: "1px solid #444",
                 borderRadius: "8px",
                 cursor: "pointer",
-                fontWeight: "600"
+                fontSize: "1.25rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = "#3a3a3a";
+                e.currentTarget.style.borderColor = "#666";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = "#2a2a2a";
+                e.currentTarget.style.borderColor = "#444";
               }}
             >
-              {t('common.profile')}
-            </button>
-            <button
-              onClick={onLogout}
-              style={{
-                padding: "0.75rem 1.5rem",
-                background: "#dc2626",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "600"
-              }}
-            >
-              {t('common.logout')}
+              ⚙️
             </button>
           </div>
         </div>
@@ -369,6 +353,17 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
           onClose={() => setShowQuickRoom(false)}
         />
       )}
+
+      {/* Rooms Menu */}
+      <RoomsMenu
+        isOpen={showMenu}
+        onClose={() => setShowMenu(false)}
+        isAdmin={isAdmin}
+        onAdminClick={() => navigate("/admin")}
+        onProfileClick={() => navigate("/profile")}
+        onLogout={onLogout}
+      />
+
       <Footer />
     </div>
   );
