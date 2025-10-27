@@ -318,6 +318,20 @@ export default function ProfilePage({ token, onLogout }) {
               </div>
             </div>
 
+            <div style={styles.infoGroup}>
+              <div style={styles.infoLabel}>Created by</div>
+              <div style={styles.infoValue}>
+                <a
+                  href="https://pawelgawliczek.cloud/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#667eea", textDecoration: "none" }}
+                >
+                  Pawel Gawliczek @ 2025
+                </a>
+              </div>
+            </div>
+
             <div style={styles.divider}></div>
 
             <h3 style={styles.subsectionTitle}>{t('profile.changePassword')}</h3>

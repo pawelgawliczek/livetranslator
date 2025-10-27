@@ -12,7 +12,19 @@ export default function Footer() {
         flexShrink: 0,
       }}
     >
-      Created by Paweł Gawliczek @ 2025
+      Created by{" "}
+      <a
+        href="https://pawelgawliczek.cloud/"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          color: "#667eea",
+          textDecoration: "none",
+        }}
+      >
+        Pawel Gawliczek
+      </a>{" "}
+      @ 2025
     </footer>
   );
 }
