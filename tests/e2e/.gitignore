@@ -1,0 +1,21 @@
+# Playwright artifacts (generated during test runs)
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Node modules (if installed locally)
+node_modules/
+
+# Playwright browsers
+.ms-playwright/
+
+# Test traces
+*.zip
+
+# Screenshots and videos
+*.png
+*.webm
+*.mp4
+
+# Logs
+*.log

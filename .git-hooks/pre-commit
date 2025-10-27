@@ -1,0 +1,170 @@
+#!/bin/bash
+#
+# Pre-commit hook for LiveTranslator
+# Runs tests before allowing commit
+#
+# Test Levels (controlled by TEST_LEVEL env var):
+#   - fast: Unit tests only (~10s)
+#   - standard: Unit + Integration tests (~30s) [DEFAULT]
+#   - full: Unit + Integration + E2E tests (~2-3min)
+#   - skip: No tests (use with caution!)
+#
+# Usage:
+#   Normal commit: git commit -m "message"
+#   Fast tests only: TEST_LEVEL=fast git commit -m "message"
+#   Full tests: TEST_LEVEL=full git commit -m "message"
+#   Skip tests: git commit --no-verify -m "message"
+#   Or: TEST_LEVEL=skip git commit -m "message"
+#
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Get test level from environment or use default
+TEST_LEVEL=${TEST_LEVEL:-standard}
+
+echo ""
+echo -e "${BLUE}🔍 Running pre-commit tests (level: $TEST_LEVEL)${NC}"
+echo ""
+
+# Function to run unit/fast tests
+run_unit_tests() {
+    echo -e "${YELLOW}📋 Running fast tests (non-integration)...${NC}"
+    # Run all tests excluding integration-marked tests
+    if docker compose exec -T api pytest api/tests/ -v --tb=short -m "not integration"; then
+        echo -e "${GREEN}✅ Fast tests passed${NC}"
+        return 0
+    else
+        echo -e "${RED}❌ Fast tests failed${NC}"
+        return 1
+    fi
+}
+
+# Function to run integration tests
+run_integration_tests() {
+    echo ""
+    echo -e "${YELLOW}🔗 Running integration tests...${NC}"
+    # Integration tests have @pytest.mark.integration
+    if docker compose exec -T api pytest api/tests/ -v --tb=short -m integration; then
+        echo -e "${GREEN}✅ Integration tests passed${NC}"
+        return 0
+    else
+        echo -e "${RED}❌ Integration tests failed${NC}"
+        return 1
+    fi
+}
+
+# Function to run E2E tests
+run_e2e_tests() {
+    echo ""
+    echo -e "${YELLOW}🎭 Running E2E tests...${NC}"
+    if ./run-e2e-tests.sh; then
+        echo -e "${GREEN}✅ E2E tests passed${NC}"
+        return 0
+    else
+        echo -e "${RED}❌ E2E tests failed${NC}"
+        return 1
+    fi
+}
+
+# Main test execution based on level
+case "$TEST_LEVEL" in
+    fast)
+        echo -e "${BLUE}⚡ Fast mode: Unit tests only${NC}"
+        echo ""
+        if ! run_unit_tests; then
+            echo ""
+            echo -e "${RED}╔═══════════════════════════════════════════════════════╗${NC}"
+            echo -e "${RED}║  ❌ COMMIT BLOCKED: Unit tests failed                ║${NC}"
+            echo -e "${RED}╚═══════════════════════════════════════════════════════╝${NC}"
+            echo ""
+            echo "Fix the failing tests and try again."
+            echo "To skip tests (not recommended): git commit --no-verify"
+            echo ""
+            exit 1
+        fi
+        ;;
+
+    standard)
+        echo -e "${BLUE}🔧 Standard mode: Unit + Integration tests${NC}"
+        echo ""
+        TESTS_PASSED=true
+
+        if ! run_unit_tests; then
+            TESTS_PASSED=false
+        fi
+
+        if ! run_integration_tests; then
+            TESTS_PASSED=false
+        fi
+
+        if [ "$TESTS_PASSED" = false ]; then
+            echo ""
+            echo -e "${RED}╔═══════════════════════════════════════════════════════╗${NC}"
+            echo -e "${RED}║  ❌ COMMIT BLOCKED: Tests failed                     ║${NC}"
+            echo -e "${RED}╚═══════════════════════════════════════════════════════╝${NC}"
+            echo ""
+            echo "Fix the failing tests and try again."
+            echo "To skip tests (not recommended): git commit --no-verify"
+            echo ""
+            exit 1
+        fi
+        ;;
+
+    full)
+        echo -e "${BLUE}🚀 Full mode: Unit + Integration + E2E tests${NC}"
+        echo ""
+        TESTS_PASSED=true
+
+        if ! run_unit_tests; then
+            TESTS_PASSED=false
+        fi
+
+        if ! run_integration_tests; then
+            TESTS_PASSED=false
+        fi
+
+        if ! run_e2e_tests; then
+            TESTS_PASSED=false
+        fi
+
+        if [ "$TESTS_PASSED" = false ]; then
+            echo ""
+            echo -e "${RED}╔═══════════════════════════════════════════════════════╗${NC}"
+            echo -e "${RED}║  ❌ COMMIT BLOCKED: Tests failed                     ║${NC}"
+            echo -e "${RED}╚═══════════════════════════════════════════════════════╝${NC}"
+            echo ""
+            echo "Fix the failing tests and try again."
+            echo "To skip tests (not recommended): git commit --no-verify"
+            echo ""
+            exit 1
+        fi
+        ;;
+
+    skip)
+        echo -e "${YELLOW}⚠️  Skipping tests (TEST_LEVEL=skip)${NC}"
+        echo ""
+        ;;
+
+    *)
+        echo -e "${RED}❌ Invalid TEST_LEVEL: $TEST_LEVEL${NC}"
+        echo "Valid levels: fast, standard, full, skip"
+        echo ""
+        exit 1
+        ;;
+esac
+
+# Success message
+echo ""
+echo -e "${GREEN}╔═══════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║  ✅ All tests passed! Proceeding with commit...       ║${NC}"
+echo -e "${GREEN}╚═══════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+exit 0

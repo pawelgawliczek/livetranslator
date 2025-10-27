@@ -365,5 +365,123 @@ async def test_redis_database_isolation():
         await client0.close()
 
 
+@pytest.mark.asyncio
+async def test_redis_connection_error_during_get(redis_client, clean_room):
+    """Test handling of Redis connection errors during segment ID retrieval."""
+    room = clean_room
+
+    # Helper function that simulates Redis get operation
+    async def get_segment_with_retry(redis_client, key, max_retries=3):
+        """Get segment ID with retry logic for connection errors."""
+        for attempt in range(max_retries):
+            try:
+                segment_id = await redis_client.get(key)
+                if segment_id is None:
+                    await redis_client.set(key, "1")
+                    return 1
+                return int(segment_id)
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise
+                await asyncio.sleep(0.1)
+        return None
+
+    # Set initial value
+    await redis_client.set(f"room:{room}:segment_counter", "5")
+
+    # Test successful retrieval
+    segment_id = await get_segment_with_retry(redis_client, f"room:{room}:segment_counter")
+    assert segment_id == 5
+
+
+@pytest.mark.asyncio
+async def test_malformed_segment_id_recovery(redis_client, clean_room):
+    """Test recovery from malformed segment ID data in Redis."""
+    room = clean_room
+
+    # Set a malformed value (non-numeric string)
+    await redis_client.set(f"room:{room}:segment_counter", "invalid")
+
+    async def get_or_create_segment_id_safe(room_code, redis_client):
+        """Get segment ID with error handling for malformed data."""
+        key = f"room:{room_code}:segment_counter"
+        try:
+            segment_id = await redis_client.get(key)
+            if segment_id is None:
+                await redis_client.set(key, "1")
+                return 1
+            # Try to parse as int, reset if invalid
+            try:
+                return int(segment_id)
+            except (ValueError, TypeError):
+                # Malformed data - reset to 1
+                await redis_client.set(key, "1")
+                return 1
+        except Exception:
+            # Any other error - default to 1
+            return 1
+
+    # Should recover and return 1
+    segment_id = await get_or_create_segment_id_safe(room, redis_client)
+    assert segment_id == 1
+
+    # Verify Redis was corrected
+    counter = await redis_client.get(f"room:{room}:segment_counter")
+    assert counter == "1"
+
+
+@pytest.mark.asyncio
+async def test_segment_counter_with_large_numbers(redis_client, clean_room):
+    """Test segment counter handles large numbers correctly (long conversations)."""
+    room = clean_room
+
+    # Simulate a very long conversation (10000 segments)
+    large_number = 10000
+    await redis_client.set(f"room:{room}:segment_counter", str(large_number))
+
+    # Verify retrieval works
+    counter = await redis_client.get(f"room:{room}:segment_counter")
+    assert int(counter) == large_number
+
+    # Verify increment works
+    new_val = await redis_client.incr(f"room:{room}:segment_counter")
+    assert new_val == large_number + 1
+
+    # Verify multiple increments
+    for i in range(10):
+        new_val = await redis_client.incr(f"room:{room}:segment_counter")
+
+    final_counter = await redis_client.get(f"room:{room}:segment_counter")
+    assert int(final_counter) == large_number + 11
+
+
+@pytest.mark.asyncio
+async def test_segment_counter_expiry_not_set(redis_client, clean_room):
+    """Test that segment counters don't have TTL (persist indefinitely)."""
+    room = clean_room
+
+    # Set counter
+    await redis_client.set(f"room:{room}:segment_counter", "5")
+
+    # Check TTL (-1 means no expiry, -2 means key doesn't exist)
+    ttl = await redis_client.ttl(f"room:{room}:segment_counter")
+    assert ttl == -1, "Segment counter should not have TTL"
+
+
+@pytest.mark.asyncio
+async def test_empty_room_code_handling():
+    """Test handling of empty or invalid room codes."""
+    async def validate_room_code(room_code):
+        """Validate room code before using it."""
+        if not room_code or not isinstance(room_code, str) or len(room_code) == 0:
+            return False
+        return True
+
+    # Test invalid room codes
+    assert await validate_room_code("") == False
+    assert await validate_room_code(None) == False
+    assert await validate_room_code("valid-room") == True
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

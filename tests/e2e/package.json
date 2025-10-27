@@ -1,0 +1,23 @@
+{
+  "name": "livetranslator-e2e-tests",
+  "version": "1.0.0",
+  "description": "E2E tests for LiveTranslator using Playwright",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report",
+    "codegen": "playwright codegen"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  },
+  "keywords": [
+    "e2e",
+    "testing",
+    "playwright",
+    "livetranslator"
+  ]
+}

@@ -40,13 +40,13 @@ export default function QuickRoomModal({ token, onClose }) {
           console.log('[QuickRoom] Received message:', msg);
 
           // Detect when another participant joins
-          if (msg.type === "participant_joined" && msg.user_email) {
-            // Check if it's not us joining (compare with our email from token)
+          if (msg.type === "user_joined" && msg.triggered_by_user_id) {
+            // Check if it's not us joining (compare with our user ID from token)
             try {
               const payload = JSON.parse(atob(token.split('.')[1]));
-              const myEmail = payload.email;
+              const myUserId = payload.sub || payload.user_id;
 
-              if (msg.user_email !== myEmail) {
+              if (msg.triggered_by_user_id !== myUserId) {
                 // Guest has joined, auto-navigate to room
                 console.log('[QuickRoom] Guest joined! Navigating to room...');
                 setStep("joining");

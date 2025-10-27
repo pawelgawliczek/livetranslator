@@ -15,6 +15,13 @@ x-common-deploy: &common_deploy
         cpus: "2.0"
         memory: 2048M
 
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "20m"
+    max-file: "5"
+    compress: "true"
+
 networks:
   stack_appnet:
     external: true
@@ -41,6 +48,7 @@ services:
   postgres:
     image: postgres:16
     networks: [stack_appnet]
+    logging: *default-logging
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-livetranslator}
       POSTGRES_USER: ${POSTGRES_USER:-livetranslator}
@@ -56,6 +64,7 @@ services:
   redis:
     image: redis:7
     networks: [stack_appnet]
+    logging: *default-logging
     command: ["redis-server","--appendonly","yes","--dir","/data"]
     volumes:
       - redis_data:/data
@@ -71,6 +80,7 @@ services:
       context: ./api
       dockerfile: Dockerfile
     <<: *common_deploy
+    logging: *default-logging
     env_file: [.env]
     environment:
       <<: *common_env
@@ -112,6 +122,7 @@ services:
       context: ./workers/stt
       dockerfile: Dockerfile
     <<: *common_deploy
+    logging: *default-logging
     environment:
       PYTHONUNBUFFERED: "1"
       <<: *common_env
@@ -145,6 +156,7 @@ services:
     build:
       context: ./workers/mt
       dockerfile: Dockerfile
+    logging: *default-logging
     environment:
       <<: *common_env
       MODELS_DIR: /models
@@ -166,6 +178,7 @@ services:
       context: ./web
       dockerfile: Dockerfile
     restart: always
+    logging: *default-logging
     networks: [stack_appnet]
 
   stt_router:
@@ -173,6 +186,7 @@ services:
       context: ./api/routers/stt
       dockerfile: Dockerfile
     restart: always
+    logging: *default-logging
     environment:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: redis://redis:6379/5
@@ -207,6 +221,7 @@ services:
       context: ./api/routers/mt
       dockerfile: Dockerfile
     restart: always
+    logging: *default-logging
     environment:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: redis://redis:6379/5
@@ -245,6 +260,7 @@ services:
       context: ./api/services
       dockerfile: Dockerfile
     restart: always
+    logging: *default-logging
     environment:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: redis://redis:6379/5
@@ -263,6 +279,7 @@ services:
       context: ./api/services
       dockerfile: Dockerfile
     restart: always
+    logging: *default-logging
     environment:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: redis://redis:6379/5
@@ -278,6 +295,7 @@ services:
   room_cleanup:
     image: livetranslator-api:latest
     restart: always
+    logging: *default-logging
     environment:
       <<: *common_env
       PYTHONUNBUFFERED: "1"
@@ -289,3 +307,23 @@ services:
       api: { condition: service_started }
     networks: [stack_appnet]
     command: ["python", "-m", "api.services.room_cleanup_service"]
+
+  # E2E Testing with Playwright (on-demand only, not part of default stack)
+  playwright:
+    profiles: ["test"]  # Only runs when explicitly called with --profile test
+    image: mcr.microsoft.com/playwright:v1.40.0-jammy
+    working_dir: /tests
+    networks: [stack_appnet]
+    environment:
+      BASE_URL: https://livetranslator.pawelgawliczek.cloud
+      WS_URL: wss://livetranslator.pawelgawliczek.cloud
+      API_URL: http://api:8000
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    volumes:
+      - ./tests/e2e:/tests:rw
+      - ./tests/e2e/playwright-report:/tests/playwright-report:rw
+      - ./tests/e2e/test-results:/tests/test-results:rw
+    depends_on:
+      api: { condition: service_healthy }
+      web: { condition: service_started }
+    command: npx playwright test --workers=1
