@@ -71,13 +71,13 @@ export default function LandingPage() {
           {t('landing.subtitle')}
         </p>
 
-        {/* Features Grid - Compact for mobile */}
+        {/* Features - Single column on mobile */}
         <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          display: "flex",
+          flexDirection: "column",
           gap: "0.75rem",
           width: "100%",
-          maxWidth: "900px",
+          maxWidth: "360px",
           marginBottom: "1.25rem"
         }}>
           <div style={{
@@ -130,7 +130,15 @@ export default function LandingPage() {
         </div>
 
         {/* CTA Buttons */}
-        <div style={{display: "flex", gap: "0.75rem", flexWrap: "wrap", justifyContent: "center", marginBottom: "1rem"}}>
+        <div style={{
+          display: "flex",
+          gap: "0.75rem",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          marginBottom: "1rem",
+          width: "100%",
+          maxWidth: "360px"
+        }}>
           <button
             onClick={() => navigate("/login")}
             style={{
@@ -142,7 +150,7 @@ export default function LandingPage() {
               fontSize: "1rem",
               fontWeight: "600",
               cursor: "pointer",
-              minWidth: "130px",
+              flex: "1 1 160px",
               boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
             }}
           >
@@ -160,7 +168,7 @@ export default function LandingPage() {
               fontSize: "1rem",
               fontWeight: "600",
               cursor: "pointer",
-              minWidth: "130px"
+              flex: "1 1 160px"
             }}
           >
             {t('landing.createAccount')}
