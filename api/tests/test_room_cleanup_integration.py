@@ -98,7 +98,7 @@ class TestRoomCleanupIntegration:
         room_code = abandoned_room.code
 
         # Run cleanup
-        await cleanup_abandoned_rooms()
+        await cleanup_abandoned_rooms(test_db_session)
 
         # Verify room was deleted
         result = await test_db_session.execute(
@@ -122,7 +122,7 @@ class TestRoomCleanupIntegration:
         room_id = empty_room_with_admin_left.id
 
         # Run cleanup
-        await cleanup_abandoned_rooms()
+        await cleanup_abandoned_rooms(test_db_session)
 
         # Verify room was deleted
         result = await test_db_session.execute(
@@ -137,7 +137,7 @@ class TestRoomCleanupIntegration:
         room_id = active_room.id
 
         # Run cleanup
-        await cleanup_abandoned_rooms()
+        await cleanup_abandoned_rooms(test_db_session)
 
         # Verify room still exists
         result = await test_db_session.execute(
@@ -170,7 +170,7 @@ class TestRoomCleanupIntegration:
         room_id = abandoned_room.id
 
         # Run cleanup
-        await cleanup_abandoned_rooms()
+        await cleanup_abandoned_rooms(test_db_session)
 
         # Verify devices were deleted
         result = await test_db_session.execute(
@@ -195,7 +195,7 @@ class TestRoomCleanupIntegration:
         room_id = abandoned_room.id
 
         # Run cleanup
-        await cleanup_abandoned_rooms()
+        await cleanup_abandoned_rooms(test_db_session)
 
         # Verify room_participants were deleted
         result = await test_db_session.execute(
@@ -211,7 +211,7 @@ class TestRoomCleanupIntegration:
         room_id = abandoned_room.id
 
         # Run cleanup
-        await cleanup_abandoned_rooms()
+        await cleanup_abandoned_rooms(test_db_session)
 
         # Verify room was deleted
         result = await test_db_session.execute(
@@ -245,7 +245,7 @@ class TestRoomCleanupIntegration:
         await test_db_session.commit()
 
         # Run cleanup
-        await cleanup_abandoned_rooms()
+        await cleanup_abandoned_rooms(test_db_session)
 
         # Verify room was deleted
         result = await test_db_session.execute(
@@ -289,7 +289,7 @@ class TestRoomCleanupIntegration:
         await test_db_session.commit()
 
         # Run cleanup
-        await cleanup_abandoned_rooms()
+        await cleanup_abandoned_rooms(test_db_session)
 
         # Verify archive includes cost data
         result = await test_db_session.execute(
@@ -366,6 +366,10 @@ class TestAdminLeftAtBugFix:
             # This should set admin_left_at
             await ws_manager._do_admin_check("empty-test")
 
+        # Flush and expire the session to ensure we see the latest from database
+        await test_db_session.commit()
+        test_db_session.expire_all()  # expire_all is not async
+
         # Verify admin_left_at was set (query fresh from DB)
         result = await test_db_session.execute(
             select(Room).where(Room.code == "empty-test")
@@ -433,6 +437,10 @@ class TestAdminLeftAtBugFix:
             # This should set admin_left_at (THIS WAS THE BUG)
             await ws_manager._do_admin_check("auth-users")
 
+        # Flush and expire the session to ensure we see the latest from database
+        await test_db_session.commit()
+        test_db_session.expire_all()  # expire_all is not async
+
         # Verify admin_left_at was set (query fresh from DB)
         result = await test_db_session.execute(
             select(Room).where(Room.code == "auth-users")
@@ -473,7 +481,7 @@ class TestAdminLeftAtBugFix:
         room_code = room.code
 
         # Run cleanup
-        await cleanup_abandoned_rooms()
+        await cleanup_abandoned_rooms(test_db_session)
 
         # Verify room was deleted
         result = await test_db_session.execute(

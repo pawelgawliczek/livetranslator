@@ -90,8 +90,8 @@ async def archive_room(session, room_id: int, room_code: str, owner_id: int, cre
         costs_result = await session.execute(
             text("""
                 SELECT
-                    SUM(CASE WHEN pipeline = 'stt_final' THEN units ELSE 0 END) / 60.0 as stt_minutes,
-                    SUM(CASE WHEN pipeline = 'stt_final' THEN amount_usd ELSE 0 END) as stt_cost,
+                    SUM(CASE WHEN pipeline = 'stt' THEN units ELSE 0 END) / 60.0 as stt_minutes,
+                    SUM(CASE WHEN pipeline = 'stt' THEN amount_usd ELSE 0 END) as stt_cost,
                     SUM(CASE WHEN pipeline = 'mt' THEN amount_usd ELSE 0 END) as mt_cost
                 FROM room_costs
                 WHERE room_id = :room_code
@@ -202,9 +202,16 @@ async def mark_stale_zombie_rooms():
             await session.rollback()
 
 
-async def cleanup_abandoned_rooms():
-    """Archive and delete rooms where admin has been absent for more than the threshold"""
-    async with AsyncSessionLocal() as session:
+async def cleanup_abandoned_rooms(session=None):
+    """
+    Archive and delete rooms where admin has been absent for more than the threshold.
+
+    Args:
+        session: Optional AsyncSession. If provided, uses this session (for tests).
+                 If None, creates own session (for production).
+    """
+    # Helper function to do the actual cleanup work
+    async def _do_cleanup(sess):
         try:
             # Calculate cutoff time
             cutoff_time = datetime.utcnow() - timedelta(minutes=ADMIN_ABSENT_THRESHOLD_MINUTES)
@@ -226,7 +233,7 @@ async def cleanup_abandoned_rooms():
                 rooms_table.c.admin_left_at < cutoff_time,
                 rooms_table.c.recording == False  # Don't cleanup rooms with Save History enabled
             )
-            result = await session.execute(stmt)
+            result = await sess.execute(stmt)
             abandoned_rooms = result.all()
 
             if abandoned_rooms:
@@ -240,7 +247,7 @@ async def cleanup_abandoned_rooms():
 
                     # Archive room data before deletion
                     archived = await archive_room(
-                        session,
+                        sess,
                         room.id,
                         room.code,
                         room.owner_id,
@@ -255,19 +262,28 @@ async def cleanup_abandoned_rooms():
                         # Delete the room (CASCADE will handle related records)
                         from sqlalchemy import delete
                         delete_stmt = delete(rooms_table).where(rooms_table.c.id == room.id)
-                        await session.execute(delete_stmt)
+                        await sess.execute(delete_stmt)
                         print(f"[Room Cleanup]   ✓ Deleted room {room.code}")
                     else:
                         print(f"[Room Cleanup]   ⚠ Skipped deletion due to archive failure")
 
-                await session.commit()
+                await sess.commit()
                 print(f"[Room Cleanup] ✓ Completed cleanup of {len(abandoned_rooms)} rooms")
             else:
                 print(f"[Room Cleanup] No abandoned rooms found")
 
         except Exception as e:
             print(f"[Room Cleanup] ✗ Error during cleanup: {e}")
-            await session.rollback()
+            await sess.rollback()
+            raise  # Re-raise for tests to catch
+
+    # If session provided (tests), use it directly without context manager
+    if session is not None:
+        await _do_cleanup(session)
+    else:
+        # Production: create our own session with context manager
+        async with AsyncSessionLocal() as session:
+            await _do_cleanup(session)
 
 async def cleanup_loop():
     """Run cleanup periodically"""
