@@ -124,7 +124,11 @@
     "roomClosingIn": "ルームは {countdown} 後に閉じます",
     "recordingDisabledWarning": "録音と翻訳はまもなく無効になります",
     "pressToStart": "マイクを押して開始",
-    "pushToTalk": "押して話す"
+    "pushToTalk": "押して話す",
+    "start": "開始",
+    "stop": "停止",
+    "recording": "録音中",
+    "holdToSpeak": "押して話す"
   },
   "join": {
     "title": "ルームに参加",

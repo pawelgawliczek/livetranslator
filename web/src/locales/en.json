@@ -124,7 +124,11 @@
     "roomClosingIn": "Room will close in {countdown}",
     "recordingDisabledWarning": "Recording and translation will be disabled soon",
     "pressToStart": "Press the microphone to start",
-    "pushToTalk": "Push to talk"
+    "pushToTalk": "Push to talk",
+    "start": "Start",
+    "stop": "Stop",
+    "recording": "Recording",
+    "holdToSpeak": "Hold to Speak"
   },
   "join": {
     "title": "Join Room",

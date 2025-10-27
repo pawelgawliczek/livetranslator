@@ -124,7 +124,11 @@
     "roomClosingIn": "房间将在 {countdown} 后关闭",
     "recordingDisabledWarning": "录音和翻译即将被禁用",
     "pressToStart": "按下麦克风开始",
-    "pushToTalk": "按住说话"
+    "pushToTalk": "按住说话",
+    "start": "开始",
+    "stop": "停止",
+    "recording": "录音中",
+    "holdToSpeak": "按住说话"
   },
   "join": {
     "title": "加入房间",

@@ -124,7 +124,11 @@
     "roomClosingIn": "ستغلق الغرفة خلال {countdown}",
     "recordingDisabledWarning": "سيتم تعطيل التسجيل والترجمة قريباً",
     "pressToStart": "اضغط على الميكروفون للبدء",
-    "pushToTalk": "اضغط للتحدث"
+    "pushToTalk": "اضغط للتحدث",
+    "start": "ابدأ",
+    "stop": "توقف",
+    "recording": "تسجيل",
+    "holdToSpeak": "اضغط للتحدث"
   },
   "join": {
     "title": "الانضمام إلى الغرفة",

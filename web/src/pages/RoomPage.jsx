@@ -67,7 +67,16 @@ export default function RoomPage({ token, onLogout }) {
     return stored || null;
   });
   const [pushToTalk, setPushToTalk] = useState(() => {
-    return localStorage.getItem('lt_push_to_talk') === 'true';
+    // Check if user has a saved preference
+    const savedPreference = localStorage.getItem('lt_push_to_talk');
+    if (savedPreference !== null) {
+      return savedPreference === 'true';
+    }
+
+    // Default based on device type: mobile = enabled, desktop = disabled
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                     (navigator.maxTouchPoints && navigator.maxTouchPoints > 1);
+    return isMobile;
   });
   const [persistenceEnabled, setPersistenceEnabled] = useState(false); // Will be loaded from database
   const [persistenceInitialized, setPersistenceInitialized] = useState(false);
@@ -90,6 +99,8 @@ export default function RoomPage({ token, onLogout }) {
   const [showParticipantsPanel, setShowParticipantsPanel] = useState(false);
   const notificationDebounce = useRef(new Map()); // Track last notification time per user
   const myLanguageRef = useRef(myLanguage); // Ref to always have current language value in closures
+  const pushToTalkRef = useRef(pushToTalk); // Ref for push-to-talk mode in audio processor
+  const isPressingRef = useRef(isPressing); // Ref for button press state in audio processor
 
   // Network quality monitoring
   const [networkQuality, setNetworkQuality] = useState('unknown'); // 'high', 'medium', 'low', 'unknown'
@@ -396,6 +407,16 @@ export default function RoomPage({ token, onLogout }) {
   useEffect(() => {
     myLanguageRef.current = myLanguage;
   }, [myLanguage]);
+
+  // Keep pushToTalkRef in sync with pushToTalk state
+  useEffect(() => {
+    pushToTalkRef.current = pushToTalk;
+  }, [pushToTalk]);
+
+  // Keep isPressingRef in sync with isPressing state
+  useEffect(() => {
+    isPressingRef.current = isPressing;
+  }, [isPressing]);
 
   // Send language update to server when it changes
   useEffect(() => {
@@ -1043,8 +1064,96 @@ export default function RoomPage({ token, onLogout }) {
       ringBufferRef.current = new Float32Array(0);
       lastPartialSentRef.current = 0;
 
+      // Track previous pressing state to detect button release
+      let wasPressing = false;
+      let debugLoggedOnce = false; // Only log once to avoid spam
+
       processor.onaudioprocess = (e) => {
         if (!isRecordingRef.current || !wsRef.current) return;
+
+        // In push-to-talk mode, only process audio when button is pressed
+        if (pushToTalkRef.current && !isPressingRef.current) {
+          // Log debug info once
+          if (!debugLoggedOnce) {
+            console.log('[Push-to-Talk] Audio processor active but button not pressed - blocking audio processing');
+            console.log('[Push-to-Talk] pushToTalk:', pushToTalkRef.current, 'isPressing:', isPressingRef.current);
+            debugLoggedOnce = true;
+          }
+          // Detect button release - send finalization if we were just pressing
+          if (wasPressing && isSpeakingRef.current) {
+            console.log('[Push-to-Talk] Button released - finalizing transcription');
+
+            // Send any remaining buffered audio
+            if (partialBufferRef.current.length > 0) {
+              try {
+                const pcm16 = floatTo16(partialBufferRef.current);
+                const b64 = btoa(String.fromCharCode(...new Uint8Array(pcm16.buffer)));
+
+                wsRef.current.send(JSON.stringify({
+                  type: "audio_chunk_partial",
+                  roomId: roomId,
+                  device: "web",
+                  segment_hint: currentSegmentHintRef.current,
+                  seq: seqRef.current++,
+                  pcm16_base64: b64,
+                  language: myLanguage || "auto"
+                }));
+                console.log("[Push-to-Talk] Sent final audio chunk");
+              } catch (e) {
+                console.error("[Push-to-Talk] Failed to send final chunk:", e);
+              }
+            }
+
+            // Send audio_end to trigger finalization
+            wsRef.current.send(JSON.stringify({
+              type: "audio_end",
+              roomId: roomId,
+              device: "web"
+            }));
+            console.log('[Push-to-Talk] Sent audio_end for finalization');
+
+            // Clear audio buffers but keep transcription state so partial messages stay visible
+            partialBufferRef.current = new Float32Array(0);
+            ringBufferRef.current = new Float32Array(0);
+
+            // Reset speech detection state for next press
+            isSpeakingRef.current = false;
+            speechFramesRef.current = 0;
+            silenceFramesRef.current = 0;
+
+            // Keep currentSegmentHintRef until backend finalizes (don't null it)
+            // This allows the partial message to stay visible while processing
+
+            setVadStatus("✅ Processing...");
+            setTimeout(() => {
+              setVadStatus("👂 Listening...");
+              // Clear segment hint after a delay, once backend has likely processed
+              currentSegmentHintRef.current = null;
+            }, 2000);
+          }
+
+          wasPressing = false;
+
+          // Still update audio level visualization even when not recording
+          const inputData = e.inputBuffer.getChannelData(0);
+          let sum = 0;
+          for (let i = 0; i < inputData.length; i++) {
+            sum += inputData[i] * inputData[i];
+          }
+          const rms = Math.sqrt(sum / inputData.length);
+          audioLevelRef.current = rms;
+          setAudioLevel(rms);
+          return;
+        }
+
+        // Track that we're currently pressing (for next frame)
+        if (pushToTalkRef.current) {
+          wasPressing = isPressingRef.current;
+          // Reset debug flag when button is pressed so we can log next time it's released
+          if (isPressingRef.current) {
+            debugLoggedOnce = false;
+          }
+        }
 
         const inputData = e.inputBuffer.getChannelData(0);
 
@@ -1078,7 +1187,15 @@ export default function RoomPage({ token, onLogout }) {
           silenceFramesRef.current = 0;
 
           // Start speaking after SPEECH_THRESHOLD frames
+          // In push-to-talk mode, ONLY start if button is being pressed
           if (!isSpeakingRef.current && speechFramesRef.current >= SPEECH_THRESHOLD) {
+            // Double-check: in push-to-talk mode, button must be pressed to start speech
+            if (pushToTalkRef.current && !isPressingRef.current) {
+              console.log('[VAD] ⚠️ Blocked speech start - push-to-talk enabled but button not pressed');
+              speechFramesRef.current = 0; // Reset counter
+              return; // Don't start speech detection
+            }
+
             console.log('[VAD] 🎤 Speech started');
             setVadStatus("🎤 Speaking...");
             isSpeakingRef.current = true;
@@ -1995,10 +2112,13 @@ export default function RoomPage({ token, onLogout }) {
             <input
               type="checkbox"
               checked={pushToTalk}
-              onChange={(e) => setPushToTalk(e.target.checked)}
-              disabled={status !== "idle"}
+              onChange={(e) => {
+                const newValue = e.target.checked;
+                setPushToTalk(newValue);
+                console.log('[Push-to-Talk] Toggle:', newValue ? 'ENABLED' : 'DISABLED');
+              }}
               style={{
-                cursor: status === "idle" ? "pointer" : "not-allowed",
+                cursor: "pointer",
                 width: "18px",
                 height: "18px"
               }}
@@ -2035,17 +2155,18 @@ export default function RoomPage({ token, onLogout }) {
         {/* Microphone button */}
         <button
           onClick={status === "idle" ? start : stop}
-          onTouchStart={pushToTalk && status === "streaming" ? () => setIsPressing(true) : undefined}
-          onTouchEnd={pushToTalk && status === "streaming" ? () => setIsPressing(false) : undefined}
+          onTouchStart={pushToTalk && status === "streaming" ? (e) => { e.preventDefault(); setIsPressing(true); } : undefined}
+          onTouchEnd={pushToTalk && status === "streaming" ? (e) => { e.preventDefault(); setIsPressing(false); } : undefined}
           onMouseDown={pushToTalk && status === "streaming" ? () => setIsPressing(true) : undefined}
           onMouseUp={pushToTalk && status === "streaming" ? () => setIsPressing(false) : undefined}
+          onContextMenu={(e) => e.preventDefault()}
           style={{
             width: "100%",
             height: "56px",
             borderRadius: "28px",
-            background: status === "idle" 
-              ? "#16a34a" 
-              : (pushToTalk && isPressing) 
+            background: status === "idle"
+              ? "#16a34a"
+              : (pushToTalk && isPressing)
                 ? "#dc2626"
                 : "#dc2626",
             color: "white",
@@ -2058,15 +2179,21 @@ export default function RoomPage({ token, onLogout }) {
             justifyContent: "center",
             gap: "0.5rem",
             boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
-            WebkitTapHighlightColor: "transparent"
+            WebkitTapHighlightColor: "transparent",
+            touchAction: "manipulation",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            MozUserSelect: "none",
+            msUserSelect: "none",
+            WebkitTouchCallout: "none"
           }}
         >
           {status === "idle" ? (
-            <>🎤 Start</>
+            <>🎤 {t('room.start')}</>
           ) : pushToTalk ? (
-            isPressing ? <>🔴 Recording</> : <>👆 Hold to Speak</>
+            isPressing ? <>🔴 {t('room.recording')}</> : <>👆 {t('room.holdToSpeak')}</>
           ) : (
-            <>⏹ Stop</>
+            <>⏹ {t('room.stop')}</>
           )}
         </button>
       </div>

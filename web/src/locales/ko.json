@@ -124,7 +124,11 @@
     "roomClosingIn": "룸이 {countdown} 후에 닫힙니다",
     "recordingDisabledWarning": "녹음 및 번역이 곧 비활성화됩니다",
     "pressToStart": "마이크를 눌러 시작",
-    "pushToTalk": "눌러서 말하기"
+    "pushToTalk": "눌러서 말하기",
+    "start": "시작",
+    "stop": "중지",
+    "recording": "녹음중",
+    "holdToSpeak": "눌러서 말하기"
   },
   "join": {
     "title": "룸 참가",

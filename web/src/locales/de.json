@@ -124,7 +124,11 @@
     "roomClosingIn": "Raum wird in {countdown} geschlossen",
     "recordingDisabledWarning": "Aufnahme und Übersetzung werden bald deaktiviert",
     "pressToStart": "Drücken Sie das Mikrofon, um zu starten",
-    "pushToTalk": "Drücken, um zu sprechen"
+    "pushToTalk": "Drücken, um zu sprechen",
+    "start": "Start",
+    "stop": "Stopp",
+    "recording": "Aufnahme",
+    "holdToSpeak": "Halten zum Sprechen"
   },
   "join": {
     "title": "Raum beitreten",

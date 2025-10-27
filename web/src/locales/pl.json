@@ -124,7 +124,11 @@
     "roomClosingIn": "Pokój zostanie zamknięty za {countdown}",
     "recordingDisabledWarning": "Nagrywanie i tłumaczenie zostaną wkrótce wyłączone",
     "pressToStart": "Naciśnij mikrofon, aby rozpocząć",
-    "pushToTalk": "Naciśnij, aby mówić"
+    "pushToTalk": "Naciśnij, aby mówić",
+    "start": "Start",
+    "stop": "Stop",
+    "recording": "Nagrywanie",
+    "holdToSpeak": "Przytrzymaj aby mówić"
   },
   "join": {
     "title": "Dołącz do pokoju",
