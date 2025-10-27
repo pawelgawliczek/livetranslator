@@ -15,11 +15,20 @@ from unittest.mock import Mock, AsyncMock, patch, MagicMock
 import asyncio
 import json
 
+# Check if google.cloud is available
+try:
+    import google.cloud
+    GOOGLE_CLOUD_AVAILABLE = True
+except ImportError:
+    GOOGLE_CLOUD_AVAILABLE = False
+
 
 @pytest.fixture
 def mock_db_pool():
     """Mock asyncpg database pool for routing config."""
-    mock_pool = AsyncMock()
+    from unittest.mock import MagicMock
+
+    mock_pool = MagicMock()
     mock_conn = AsyncMock()
 
     # Mock database query for ar-EG routing
@@ -33,7 +42,14 @@ def mock_db_pool():
         return None
 
     mock_conn.fetchrow = mock_fetchrow
-    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+    # Create a proper async context manager
+    async_context_manager = AsyncMock()
+    async_context_manager.__aenter__.return_value = mock_conn
+    async_context_manager.__aexit__.return_value = None
+
+    # Make acquire() return the async context manager (not awaitable)
+    mock_pool.acquire.return_value = async_context_manager
     return mock_pool
 
 
@@ -43,12 +59,8 @@ class TestArabicRoutingConfiguration:
     @pytest.mark.asyncio
     async def test_arabic_routes_to_google_v2(self, mock_db_pool):
         """Test that ar-EG routes to google_v2 as primary provider."""
-        import sys
-        import os
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../routers/stt'))
-
         with patch('api.routers.stt.language_router._db_pool', mock_db_pool):
-            from language_router import get_stt_provider_for_language
+            from api.routers.stt.language_router import get_stt_provider_for_language
 
             config = await get_stt_provider_for_language(
                 language="ar-EG",
@@ -64,12 +76,8 @@ class TestArabicRoutingConfiguration:
     @pytest.mark.asyncio
     async def test_arabic_language_normalization(self, mock_db_pool):
         """Test that 'ar' is normalized to 'ar-EG'."""
-        import sys
-        import os
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../routers/stt'))
-
         with patch('api.routers.stt.language_router._db_pool', mock_db_pool):
-            from language_router import get_stt_provider_for_language, _normalize_language
+            from api.routers.stt.language_router import get_stt_provider_for_language, _normalize_language
 
             # Test normalization function
             assert _normalize_language("ar") == "ar-EG"
@@ -91,10 +99,7 @@ class TestArabicStreamingWorkflow:
     @pytest.mark.asyncio
     async def test_arabic_partial_to_final_flow(self):
         """Test complete flow from partial to final with audio_end."""
-        import sys
-        import os
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../routers/stt'))
-        from streaming_manager import StreamingConnection
+        from api.routers.stt.streaming_manager import StreamingConnection
 
         # Track results
         partial_results = []
@@ -154,10 +159,7 @@ class TestArabicStreamingWorkflow:
     @pytest.mark.asyncio
     async def test_arabic_explicit_final_from_google(self):
         """Test handling explicit final result from Google."""
-        import sys
-        import os
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../routers/stt'))
-        from streaming_manager import StreamingConnection
+        from api.routers.stt.streaming_manager import StreamingConnection
 
         final_results = []
 
@@ -195,15 +197,16 @@ class TestAudioFormatConfiguration:
     @pytest.mark.asyncio
     async def test_explicit_linear16_encoding(self):
         """Test that Google is configured with explicit LINEAR16 encoding."""
-        import sys
-        import os
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../routers/stt'))
+        pytest.importorskip("google.cloud", reason="google.cloud not installed")
+        # Import first so module is loaded
+        from api.routers.stt import google_streaming
 
-        with patch('api.routers.stt.google_streaming.speech') as mock_speech:
-            with patch('api.routers.stt.google_streaming.GOOGLE_APPLICATION_CREDENTIALS', '/fake/creds.json'):
-                with patch('api.routers.stt.google_streaming.GOOGLE_CLOUD_PROJECT', 'test-project'):
-                    with patch('api.routers.stt.google_streaming.GOOGLE_CLOUD_LOCATION', 'eu'):
-                        from google_streaming import GoogleStreamingClient
+        with patch.object(google_streaming, 'speech') as mock_speech:
+            with patch.object(google_streaming, 'GOOGLE_APPLICATION_CREDENTIALS', '/fake/creds.json'):
+                with patch.object(google_streaming, 'GOOGLE_CLOUD_PROJECT', 'test-project'):
+                    with patch.object(google_streaming, 'GOOGLE_CLOUD_LOCATION', 'eu'):
+                        # Re-import to use patched values
+                        from api.routers.stt.google_streaming import GoogleStreamingClient
 
                         # The fix uses ExplicitDecodingConfig instead of AutoDetectDecodingConfig
                         # Verify the enum is available
@@ -221,15 +224,14 @@ class TestDiarizationConfiguration:
     @pytest.mark.asyncio
     async def test_diarization_disabled_for_arabic_streaming(self):
         """Test that diarization is NOT enabled for Arabic streaming (partial mode)."""
-        import sys
-        import os
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../routers/stt'))
+        pytest.importorskip("google.cloud", reason="google.cloud not installed")
+        from api.routers.stt import google_streaming
 
-        with patch('api.routers.stt.google_streaming.speech'):
-            with patch('api.routers.stt.google_streaming.GOOGLE_APPLICATION_CREDENTIALS', '/fake/creds.json'):
-                with patch('api.routers.stt.google_streaming.GOOGLE_CLOUD_PROJECT', 'test-project'):
-                    with patch('api.routers.stt.google_streaming.GOOGLE_CLOUD_LOCATION', 'eu'):
-                        from google_streaming import GoogleStreamingClient
+        with patch.object(google_streaming, 'speech'):
+            with patch.object(google_streaming, 'GOOGLE_APPLICATION_CREDENTIALS', '/fake/creds.json'):
+                with patch.object(google_streaming, 'GOOGLE_CLOUD_PROJECT', 'test-project'):
+                    with patch.object(google_streaming, 'GOOGLE_CLOUD_LOCATION', 'eu'):
+                        from api.routers.stt.google_streaming import GoogleStreamingClient
 
                         client = GoogleStreamingClient()
 
@@ -249,15 +251,14 @@ class TestDiarizationConfiguration:
     @pytest.mark.asyncio
     async def test_diarization_can_be_enabled_for_finals(self):
         """Test that diarization CAN be enabled for final mode if needed."""
-        import sys
-        import os
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../routers/stt'))
+        pytest.importorskip("google.cloud", reason="google.cloud not installed")
+        from api.routers.stt import google_streaming
 
-        with patch('api.routers.stt.google_streaming.speech'):
-            with patch('api.routers.stt.google_streaming.GOOGLE_APPLICATION_CREDENTIALS', '/fake/creds.json'):
-                with patch('api.routers.stt.google_streaming.GOOGLE_CLOUD_PROJECT', 'test-project'):
-                    with patch('api.routers.stt.google_streaming.GOOGLE_CLOUD_LOCATION', 'eu'):
-                        from google_streaming import GoogleStreamingClient
+        with patch.object(google_streaming, 'speech'):
+            with patch.object(google_streaming, 'GOOGLE_APPLICATION_CREDENTIALS', '/fake/creds.json'):
+                with patch.object(google_streaming, 'GOOGLE_CLOUD_PROJECT', 'test-project'):
+                    with patch.object(google_streaming, 'GOOGLE_CLOUD_LOCATION', 'eu'):
+                        from api.routers.stt.google_streaming import GoogleStreamingClient
 
                         client = GoogleStreamingClient()
 

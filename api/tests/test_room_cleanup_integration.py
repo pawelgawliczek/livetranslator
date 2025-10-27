@@ -234,9 +234,11 @@ class TestRoomCleanupIntegration:
         # Create room costs
         cost = RoomCost(
             room_id=room_code,  # Note: room_costs uses room_code (string), not FK
-            pipeline="stt_final",
+            pipeline="stt",
+            mode="final",
             provider="speechmatics",
             units=120,  # 120 seconds
+            unit_type="seconds",
             amount_usd=0.012
         )
         test_db_session.add(cost)
@@ -266,16 +268,20 @@ class TestRoomCleanupIntegration:
         # Create room costs
         cost1 = RoomCost(
             room_id=room_code,
-            pipeline="stt_final",
+            pipeline="stt",
+            mode="final",
             provider="speechmatics",
             units=180,  # 3 minutes
+            unit_type="seconds",
             amount_usd=0.018
         )
         cost2 = RoomCost(
             room_id=room_code,
             pipeline="mt",
+            mode="translate",
             provider="google",
             units=1000,  # 1000 tokens
+            unit_type="characters",
             amount_usd=0.002
         )
         test_db_session.add(cost1)

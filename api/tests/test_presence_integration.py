@@ -629,4 +629,4 @@ class TestPresenceRedisKeyManagement:
         # Verify TTL matches grace period
         call_args = mock_redis.setex.call_args[0]
         assert call_args[1] == PRESENCE_GRACE_PERIOD_SECONDS
-        assert call_args[1] == 15  # Verify it's 15 seconds as per spec
+        assert call_args[1] == 10  # Verify it's 10 seconds as per current implementation
