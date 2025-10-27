@@ -33,125 +33,156 @@ export default function LandingPage() {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: "1rem 1rem 0.5rem 1rem",
+        padding: "0.5rem 1.25rem 0.5rem 1.25rem",
         maxWidth: "1200px",
         margin: "0 auto",
-        width: "100%"
+        width: "100%",
+        boxSizing: "border-box"
       }}>
         {/* Main Title */}
         <div style={{
           background: "rgba(255,255,255,0.15)",
-          padding: "0.4rem 1rem",
+          padding: "0.35rem 0.9rem",
           borderRadius: "50px",
-          marginBottom: "0.75rem",
-          fontSize: "0.8rem",
+          marginBottom: "0.5rem",
+          fontSize: "0.75rem",
           fontWeight: "600",
-          backdropFilter: "blur(10px)"
+          backdropFilter: "blur(10px)",
+          maxWidth: "100%",
+          boxSizing: "border-box"
         }}>
           🌍 Real-time Translation Platform
         </div>
 
         <h1 style={{
-          fontSize: "clamp(2rem, 8vw, 4rem)",
+          fontSize: "clamp(1.8rem, 8vw, 4rem)",
           fontWeight: "bold",
-          marginBottom: "0.5rem",
+          marginBottom: "0.4rem",
           textAlign: "center",
-          lineHeight: "1.1"
+          lineHeight: "1.1",
+          width: "100%",
+          boxSizing: "border-box"
         }}>
           {t('landing.title')}
         </h1>
 
         <p style={{
-          fontSize: "clamp(0.95rem, 3vw, 1.5rem)",
-          marginBottom: "1rem",
+          fontSize: "clamp(0.9rem, 3vw, 1.5rem)",
+          marginBottom: "0.75rem",
           textAlign: "center",
-          maxWidth: "700px",
-          lineHeight: "1.4"
+          maxWidth: "100%",
+          lineHeight: "1.3",
+          boxSizing: "border-box"
         }}>
           {t('landing.subtitle')}
         </p>
 
-        {/* Features - Single column on mobile */}
+        {/* Features - Compact single column */}
         <div style={{
           display: "flex",
           flexDirection: "column",
-          gap: "0.75rem",
+          gap: "0.4rem",
           width: "100%",
-          maxWidth: "360px",
-          marginBottom: "1.25rem"
+          maxWidth: "100%",
+          marginBottom: "0.6rem"
         }}>
           <div style={{
             background: "rgba(255,255,255,0.15)",
-            padding: "0.75rem",
-            borderRadius: "10px",
-            textAlign: "center",
-            backdropFilter: "blur(10px)"
+            padding: "0.6rem 0.75rem",
+            borderRadius: "8px",
+            backdropFilter: "blur(10px)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.35rem",
+            boxSizing: "border-box",
+            textAlign: "center"
           }}>
-            <div style={{fontSize: "1.75rem", marginBottom: "0.25rem"}}>🗣️</div>
-            <h3 style={{fontSize: "0.9rem", fontWeight: "600", marginBottom: "0.25rem"}}>
-              Real-time Speech
-            </h3>
-            <p style={{fontSize: "0.75rem", opacity: 0.9, lineHeight: "1.3"}}>
-              Instant translation
-            </p>
+            <div style={{fontSize: "1.4rem", lineHeight: 1}}>🗣️</div>
+            <div>
+              <h3 style={{fontSize: "0.85rem", fontWeight: "600", marginBottom: "0.1rem", margin: 0}}>
+                Real-time Speech
+              </h3>
+              <p style={{fontSize: "0.7rem", opacity: 0.9, lineHeight: "1.2", margin: 0}}>
+                Instant translation
+              </p>
+            </div>
           </div>
 
           <div style={{
             background: "rgba(255,255,255,0.15)",
-            padding: "0.75rem",
-            borderRadius: "10px",
-            textAlign: "center",
-            backdropFilter: "blur(10px)"
+            padding: "0.6rem 0.75rem",
+            borderRadius: "8px",
+            backdropFilter: "blur(10px)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.35rem",
+            boxSizing: "border-box",
+            textAlign: "center"
           }}>
-            <div style={{fontSize: "1.75rem", marginBottom: "0.25rem"}}>🌐</div>
-            <h3 style={{fontSize: "0.9rem", fontWeight: "600", marginBottom: "0.25rem"}}>
-              12+ Languages
-            </h3>
-            <p style={{fontSize: "0.75rem", opacity: 0.9, lineHeight: "1.3"}}>
-              Worldwide support
-            </p>
+            <div style={{fontSize: "1.4rem", lineHeight: 1}}>🌐</div>
+            <div>
+              <h3 style={{fontSize: "0.85rem", fontWeight: "600", marginBottom: "0.1rem", margin: 0}}>
+                12+ Languages
+              </h3>
+              <p style={{fontSize: "0.7rem", opacity: 0.9, lineHeight: "1.2", margin: 0}}>
+                Worldwide support
+              </p>
+            </div>
           </div>
 
           <div style={{
             background: "rgba(255,255,255,0.15)",
-            padding: "0.75rem",
-            borderRadius: "10px",
-            textAlign: "center",
-            backdropFilter: "blur(10px)"
+            padding: "0.6rem 0.75rem",
+            borderRadius: "8px",
+            backdropFilter: "blur(10px)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.35rem",
+            boxSizing: "border-box",
+            textAlign: "center"
           }}>
-            <div style={{fontSize: "1.75rem", marginBottom: "0.25rem"}}>👥</div>
-            <h3 style={{fontSize: "0.9rem", fontWeight: "600", marginBottom: "0.25rem"}}>
-              Multi-participant
-            </h3>
-            <p style={{fontSize: "0.75rem", opacity: 0.9, lineHeight: "1.3"}}>
-              Connect anyone
-            </p>
+            <div style={{fontSize: "1.4rem", lineHeight: 1}}>👥</div>
+            <div>
+              <h3 style={{fontSize: "0.85rem", fontWeight: "600", marginBottom: "0.1rem", margin: 0}}>
+                Multi-participant
+              </h3>
+              <p style={{fontSize: "0.7rem", opacity: 0.9, lineHeight: "1.2", margin: 0}}>
+                Connect anyone
+              </p>
+            </div>
           </div>
         </div>
 
         {/* CTA Buttons */}
         <div style={{
           display: "flex",
-          gap: "0.75rem",
+          gap: "0.6rem",
           flexWrap: "wrap",
           justifyContent: "center",
-          marginBottom: "1rem",
+          marginBottom: "0.6rem",
           width: "100%",
-          maxWidth: "360px"
+          boxSizing: "border-box"
         }}>
           <button
             onClick={() => navigate("/login")}
             style={{
-              padding: "0.85rem 1.5rem",
+              padding: "0.75rem 1.3rem",
               background: "white",
               color: "#667eea",
               border: "none",
               borderRadius: "10px",
-              fontSize: "1rem",
+              fontSize: "0.95rem",
               fontWeight: "600",
               cursor: "pointer",
-              flex: "1 1 160px",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+              flex: "1 1 130px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              boxSizing: "border-box"
             }}
           >
             {t('landing.signIn')}
@@ -160,15 +191,16 @@ export default function LandingPage() {
           <button
             onClick={() => navigate("/signup")}
             style={{
-              padding: "0.85rem 1.5rem",
+              padding: "0.75rem 1.3rem",
               background: "rgba(255,255,255,0.2)",
               color: "white",
               border: "2px solid white",
               borderRadius: "10px",
-              fontSize: "1rem",
+              fontSize: "0.95rem",
               fontWeight: "600",
               cursor: "pointer",
-              flex: "1 1 160px"
+              flex: "1 1 130px",
+              boxSizing: "border-box"
             }}
           >
             {t('landing.createAccount')}
@@ -177,8 +209,8 @@ export default function LandingPage() {
 
         {/* Creator Info */}
         <div style={{
-          marginTop: "0.5rem",
-          fontSize: "0.8rem",
+          marginTop: "0.25rem",
+          fontSize: "0.75rem",
           opacity: 0.9,
           textAlign: "center"
         }}>
