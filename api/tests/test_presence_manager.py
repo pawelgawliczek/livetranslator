@@ -271,6 +271,34 @@ class TestPresenceManagerLanguageChange:
         assert event is None
         assert not mock_redis.hset.called
 
+    @pytest.mark.asyncio
+    async def test_user_changed_language_same_language_no_event(self, presence_manager, mock_redis):
+        """Test that setting the same language doesn't trigger an event."""
+        room_id = "test-room"
+        user_id = "user123"
+        language = "en"
+
+        # Simulate existing user with language "en"
+        existing_data = {
+            "display_name": "John Doe",
+            "language": language,
+            "is_guest": False,
+            "state": "active",
+            "joined_at": datetime.utcnow().isoformat(),
+            "last_seen": datetime.utcnow().isoformat()
+        }
+        mock_redis.hget.return_value = json.dumps(existing_data).encode()
+
+        # Try to change to the same language
+        event = await presence_manager.user_changed_language(
+            room_id, user_id, language
+        )
+
+        # Verify None is returned (no event broadcast)
+        assert event is None
+        # Verify no state update was made (no hset call)
+        assert not mock_redis.hset.called
+
 
 class TestPresenceManagerSnapshot:
     """Test suite for presence snapshot generation."""
@@ -519,29 +547,54 @@ class TestPresenceManagerConcurrency:
         room_id = "test-room"
         user_id = "user123"
 
-        user_data = {
-            "display_name": "John Doe",
-            "language": "en",
-            "is_guest": False,
-            "state": "active",
-            "joined_at": datetime.utcnow().isoformat(),
-            "last_seen": datetime.utcnow().isoformat()
-        }
-        mock_redis.hget.return_value = json.dumps(user_data).encode()
+        # Create initial user data
+        current_language = ["en"]  # Use list to allow mutation in closure
 
-        # Rapid language changes
+        def get_user_data(*args):
+            user_data = {
+                "display_name": "John Doe",
+                "language": current_language[0],
+                "is_guest": False,
+                "state": "active",
+                "joined_at": datetime.utcnow().isoformat(),
+                "last_seen": datetime.utcnow().isoformat()
+            }
+            return json.dumps(user_data).encode()
+
+        def set_user_data(*args):
+            # Update current language when hset is called
+            if len(args) >= 3:
+                data = json.loads(args[2])
+                current_language[0] = data["language"]
+
+        mock_redis.hget.side_effect = get_user_data
+        mock_redis.hset.side_effect = set_user_data
+
+        # Rapid language changes - now with realistic state updates
         languages = ["en", "pl", "ar", "en", "pl"]
-        tasks = [
-            presence_manager.user_changed_language(room_id, user_id, lang)
-            for lang in languages
-        ]
+        events = []
+        for lang in languages:
+            event = await presence_manager.user_changed_language(room_id, user_id, lang)
+            events.append(event)
 
-        events = await asyncio.gather(*tasks)
+        # First change: en -> en = no change, should be None
+        assert events[0] is None
+        # Second change: en -> pl = change, should have event
+        assert events[1] is not None
+        assert events[1]["new_language"] == "pl"
+        # Third change: pl -> ar = change, should have event
+        assert events[2] is not None
+        assert events[2]["new_language"] == "ar"
+        # Fourth change: ar -> en = change, should have event
+        assert events[3] is not None
+        assert events[3]["new_language"] == "en"
+        # Fifth change: en -> pl = change, should have event
+        assert events[4] is not None
+        assert events[4]["new_language"] == "pl"
 
-        # Verify all changes were processed
-        assert len(events) == 5
-        assert all(e is not None for e in events)
-        assert mock_redis.hset.call_count == 5
+        # Should have 4 actual changes (not 5)
+        assert sum(1 for e in events if e is not None) == 4
+        assert mock_redis.hset.call_count == 4
 
 
 class TestPresenceManagerEdgeCases:

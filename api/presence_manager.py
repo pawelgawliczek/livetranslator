@@ -189,6 +189,16 @@ class PresenceManager:
         user_data = json.loads(user_data_str)
         old_language = user_data.get("language")
 
+        # If language hasn't actually changed, don't broadcast event
+        if old_language == new_language:
+            self.log.debug(
+                "language_unchanged_skipping_broadcast",
+                room=room_id,
+                user=user_id,
+                language=new_language
+            )
+            return None
+
         # Update language and last_seen
         user_data["language"] = new_language
         user_data["last_seen"] = datetime.utcnow().isoformat()
