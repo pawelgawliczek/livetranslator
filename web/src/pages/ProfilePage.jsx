@@ -622,7 +622,7 @@ const styles = {
   container: {
     minHeight: "100vh",
     background: "#0a0a0a",
-    padding: "20px 20px 10px 20px",
+    padding: "1rem",
     display: "flex",
     flexDirection: "column"
   },
@@ -635,20 +635,21 @@ const styles = {
   header: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "30px",
+    alignItems: "flex-start",
+    marginBottom: "1.5rem",
     flexWrap: "wrap",
-    gap: "10px"
+    gap: "1rem"
   },
   title: {
     color: "white",
-    fontSize: "32px",
+    fontSize: "clamp(1.5rem, 5vw, 2rem)",
     fontWeight: "bold",
     margin: 0
   },
   headerButtons: {
     display: "flex",
-    gap: "10px"
+    gap: "0.5rem",
+    flexWrap: "wrap"
   },
   backButton: {
     padding: "10px 20px",
@@ -686,36 +687,41 @@ const styles = {
   },
   tabs: {
     display: "flex",
-    gap: "10px",
-    marginBottom: "20px",
-    flexWrap: "wrap"
+    gap: "0.5rem",
+    marginBottom: "1rem",
+    flexWrap: "wrap",
+    overflowX: "auto"
   },
   tab: {
-    padding: "12px 24px",
+    padding: "0.75rem 1rem",
     background: "rgba(255,255,255,0.2)",
     color: "white",
     border: "none",
     borderRadius: "8px",
     cursor: "pointer",
-    fontSize: "14px",
+    fontSize: "0.875rem",
     fontWeight: "500",
-    transition: "all 0.2s"
+    transition: "all 0.2s",
+    whiteSpace: "nowrap",
+    flex: "0 0 auto"
   },
   tabActive: {
-    padding: "12px 24px",
+    padding: "0.75rem 1rem",
     background: "#1a1a1a",
     color: "#667eea",
     border: "none",
     borderRadius: "8px",
     cursor: "pointer",
-    fontSize: "14px",
+    fontSize: "0.875rem",
     fontWeight: "600",
-    transition: "all 0.2s"
+    transition: "all 0.2s",
+    whiteSpace: "nowrap",
+    flex: "0 0 auto"
   },
   content: {
     background: "#1a1a1a",
     borderRadius: "12px",
-    padding: "30px",
+    padding: "clamp(1rem, 4vw, 2rem)",
     minHeight: "400px"
   },
   section: {
@@ -936,25 +942,29 @@ const styles = {
     color: "#667eea"
   },
   table: {
-    overflowX: "auto"
+    overflowX: "auto",
+    width: "100%",
+    marginTop: "1rem"
   },
   tableElement: {
     width: "100%",
-    borderCollapse: "collapse"
+    borderCollapse: "collapse",
+    minWidth: "600px"
   },
   th: {
     textAlign: "left",
-    padding: "12px",
+    padding: "0.75rem",
     background: "#2a2a2a",
     fontWeight: "600",
-    fontSize: "12px",
+    fontSize: "0.75rem",
     color: "#6b7280",
-    borderBottom: "2px solid #e5e7eb"
+    borderBottom: "2px solid #333",
+    whiteSpace: "nowrap"
   },
   td: {
-    padding: "12px",
-    borderBottom: "1px solid #e5e7eb",
-    fontSize: "14px",
+    padding: "0.75rem",
+    borderBottom: "1px solid #333",
+    fontSize: "0.875rem",
     color: "white"
   },
   actionButton: {

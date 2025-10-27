@@ -257,7 +257,7 @@ const styles = {
     borderBottom: "1px solid #333"
   },
   modalTitle: {
-    fontSize: "1.5rem",
+    fontSize: "clamp(1.25rem, 4vw, 1.5rem)",
     margin: 0,
     color: "white"
   },
@@ -279,19 +279,22 @@ const styles = {
     gap: "0.5rem",
     marginBottom: "1.5rem",
     borderBottom: "1px solid #333",
-    paddingBottom: "0.5rem"
+    paddingBottom: "0.5rem",
+    flexWrap: "wrap"
   },
   tab: {
-    flex: 1,
-    padding: "0.75rem 1rem",
+    flex: "1 1 90px",
+    minWidth: "90px",
+    padding: "0.75rem 0.5rem",
     background: "transparent",
     color: "#999",
     border: "none",
     borderRadius: "8px 8px 0 0",
     cursor: "pointer",
-    fontSize: "0.9rem",
+    fontSize: "0.875rem",
     fontWeight: "500",
-    transition: "all 0.2s"
+    transition: "all 0.2s",
+    textAlign: "center"
   },
   tabActive: {
     background: "#2a2a2a",
@@ -314,8 +317,8 @@ const styles = {
     marginBottom: "1.5rem"
   },
   qrCode: {
-    width: "280px",
-    height: "280px",
+    width: "min(280px, 70vw)",
+    height: "min(280px, 70vw)",
     borderRadius: "12px",
     border: "2px solid #333",
     background: "white",

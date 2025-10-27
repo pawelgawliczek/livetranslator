@@ -108,7 +108,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
     }}>
       <div style={{
         flex: 1,
-        padding: "2rem 2rem 1rem 2rem"
+        padding: "1rem"
       }}>
         <div style={{
           maxWidth: "800px",
@@ -117,14 +117,16 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
         <div style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "2rem"
+          alignItems: "flex-start",
+          marginBottom: "1.5rem",
+          gap: "1rem",
+          flexWrap: "wrap"
         }}>
-          <div>
-            <h1 style={{fontSize: "2rem", marginBottom: "0.5rem"}}>{t('rooms.title')}</h1>
-            <p style={{color: "#999", fontSize: "0.9rem"}}>{t('common.login')} {userEmail}</p>
+          <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+            <h1 style={{fontSize: "clamp(1.5rem, 5vw, 2rem)", marginBottom: "0.5rem"}}>{t('rooms.title')}</h1>
+            <p style={{color: "#999", fontSize: "0.9rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"}}>{t('common.login')} {userEmail}</p>
           </div>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexShrink: 0 }}>
             <LanguageSelector token={token} />
             <button
               onClick={() => setShowMenu(true)}
@@ -139,7 +141,9 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                transition: "all 0.2s"
+                transition: "all 0.2s",
+                minWidth: "48px",
+                minHeight: "48px"
               }}
               onMouseEnter={e => {
                 e.currentTarget.style.background = "#3a3a3a";
@@ -208,7 +212,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
             {t('common.or')} {t('rooms.createRoom').toLowerCase()}
           </div>
 
-          <div style={{display: "flex", gap: "1rem"}}>
+          <div style={{display: "flex", gap: "0.75rem", flexWrap: "wrap"}}>
             <input
               type="text"
               placeholder={t('rooms.roomName') + "..."}
@@ -216,7 +220,8 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
               onChange={e => setNewRoomName(e.target.value)}
               onKeyDown={e => e.key === "Enter" && createRoom()}
               style={{
-                flex: 1,
+                flex: "1 1 200px",
+                minWidth: "200px",
                 padding: "0.75rem",
                 background: "#2a2a2a",
                 border: "1px solid #444",
@@ -234,7 +239,9 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
                 border: "none",
                 borderRadius: "8px",
                 cursor: "pointer",
-                fontWeight: "600"
+                fontWeight: "600",
+                flex: "0 1 auto",
+                whiteSpace: "nowrap"
               }}
             >
               {t('rooms.createRoom')}

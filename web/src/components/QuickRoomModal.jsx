@@ -307,7 +307,7 @@ const styles = {
     borderBottom: "1px solid #333"
   },
   modalTitle: {
-    fontSize: "1.5rem",
+    fontSize: "clamp(1.25rem, 4vw, 1.5rem)",
     margin: 0,
     color: "white"
   },
@@ -337,8 +337,8 @@ const styles = {
     marginBottom: "1.5rem"
   },
   qrCode: {
-    width: "280px",
-    height: "280px",
+    width: "min(280px, 70vw)",
+    height: "min(280px, 70vw)",
     borderRadius: "12px",
     border: "2px solid #333",
     background: "white",
@@ -377,10 +377,12 @@ const styles = {
   buttonGroup: {
     display: "flex",
     gap: "0.75rem",
-    marginBottom: "1rem"
+    marginBottom: "1rem",
+    flexWrap: "wrap"
   },
   primaryButton: {
-    flex: 1,
+    flex: "1 1 150px",
+    minWidth: "150px",
     padding: "0.875rem 1.5rem",
     background: "#3b82f6",
     color: "white",
@@ -392,7 +394,8 @@ const styles = {
     transition: "background 0.2s"
   },
   secondaryButton: {
-    flex: 1,
+    flex: "1 1 150px",
+    minWidth: "150px",
     padding: "0.875rem 1.5rem",
     background: "#2a2a2a",
     color: "white",
