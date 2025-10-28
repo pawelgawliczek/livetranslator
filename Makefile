@@ -1,4 +1,5 @@
 .PHONY: test test-unit test-integration test-e2e test-quick test-coverage test-setup test-clean test-hooks help
+.PHONY: db-migrate db-migrate-test db-status db-status-test db-reset-test
 
 # Default target
 help:
@@ -16,6 +17,13 @@ help:
 	@echo "  make test-e2e           Run E2E tests"
 	@echo "  make test-quick         Run quick tests (for pre-commit)"
 	@echo "  make test-coverage      Run tests with coverage report"
+	@echo ""
+	@echo "Database Migrations:"
+	@echo "  make db-migrate         Apply pending migrations to production DB"
+	@echo "  make db-migrate-test    Apply pending migrations to test DB"
+	@echo "  make db-status          Check migration status (production DB)"
+	@echo "  make db-status-test     Check migration status (test DB)"
+	@echo "  make db-reset-test      Reset test DB (DANGER: drops all tables)"
 	@echo ""
 	@echo "Services:"
 	@echo "  make test-start         Start test services"
@@ -127,3 +135,50 @@ format:
 	@echo "✨ Formatting code..."
 	cd api && python -m black .
 	cd web && npm run format
+
+# Database Migration Commands
+db-migrate:
+	@echo "🗄️  Applying migrations to production database..."
+	docker compose exec api python /app/scripts/db/migrate.py \
+		--database livetranslator \
+		--user lt_user \
+		--password CHANGE_ME_BEFORE_DEPLOY \
+		--host postgres
+
+db-migrate-test:
+	@echo "🗄️  Applying migrations to test database..."
+	docker compose exec api python /app/scripts/db/migrate.py \
+		--database livetranslator_test \
+		--user lt_user \
+		--password CHANGE_ME_BEFORE_DEPLOY \
+		--host postgres
+
+db-status:
+	@echo "📊 Checking migration status (production database)..."
+	docker compose exec api python /app/scripts/db/migrate.py \
+		--database livetranslator \
+		--user lt_user \
+		--password CHANGE_ME_BEFORE_DEPLOY \
+		--host postgres \
+		--status
+
+db-status-test:
+	@echo "📊 Checking migration status (test database)..."
+	docker compose exec api python /app/scripts/db/migrate.py \
+		--database livetranslator_test \
+		--user lt_user \
+		--password CHANGE_ME_BEFORE_DEPLOY \
+		--host postgres \
+		--status
+
+db-reset-test:
+	@echo "⚠️  WARNING: This will DROP ALL TABLES in the test database!"
+	@echo "Press Ctrl+C to cancel, or Enter to continue..."
+	@read confirm
+	@echo "🗄️  Resetting test database..."
+	docker compose exec api python /app/scripts/db/migrate.py \
+		--database livetranslator_test \
+		--user lt_user \
+		--password CHANGE_ME_BEFORE_DEPLOY \
+		--host postgres \
+		--reset

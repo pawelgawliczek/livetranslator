@@ -9,6 +9,8 @@ This module provides common fixtures for:
 """
 
 import os
+import sys
+import subprocess
 import pytest
 import pytest_asyncio
 from unittest.mock import Mock, AsyncMock
@@ -21,10 +23,60 @@ os.environ.setdefault(
     "postgresql+asyncpg://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator_test"
 )
 
+# Track if migrations have been verified this session
+_migrations_verified = False
+
+
+def verify_test_database_schema():
+    """
+    Verify test database has all migrations applied.
+    Runs once per test session.
+    """
+    global _migrations_verified
+
+    if _migrations_verified:
+        return
+
+    print("\n🔍 Verifying test database schema...")
+
+    # Run migration script to check and apply migrations
+    result = subprocess.run(
+        [
+            sys.executable,
+            "/app/scripts/db/migrate.py",
+            "--database", "livetranslator_test",
+            "--user", "lt_user",
+            "--password", os.getenv("POSTGRES_PASSWORD", "CHANGE_ME_BEFORE_DEPLOY"),
+            "--host", "postgres"
+        ],
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0:
+        print(f"\n❌ Failed to apply migrations:\n{result.stdout}\n{result.stderr}")
+        raise RuntimeError("Test database migration failed")
+
+    # Check if there were any pending migrations
+    if "Pending: 0" in result.stdout or "Database is up to date" in result.stdout:
+        print("✅ Test database schema is up to date")
+    else:
+        print("✅ Applied pending migrations to test database")
+
+    _migrations_verified = True
+
+
+# Session-scoped fixture to verify migrations once
+@pytest_asyncio.fixture(scope="session")
+async def verify_migrations():
+    """Session-scoped fixture to verify migrations once before all tests."""
+    verify_test_database_schema()
+    yield
+
 
 # Database Fixtures
 @pytest_asyncio.fixture(scope="function")
-async def test_db_engine():
+async def test_db_engine(verify_migrations):
     """Create a test database engine."""
     test_db_dsn = os.getenv("TEST_POSTGRES_DSN")
     engine = create_async_engine(test_db_dsn, echo=False)
@@ -46,26 +98,48 @@ async def test_db_session(test_db_engine):
     )
 
     async with AsyncTestSession() as session:
-        # Clean up all data BEFORE the test
+        # Clean up all data BEFORE the test (preserve schema_migrations)
         try:
-            await session.execute(
-                text("TRUNCATE users, rooms, devices, room_participants, "
-                     "room_costs, room_archive CASCADE")
+            # Get all table names dynamically (excluding schema_migrations)
+            result = await session.execute(
+                text("""
+                    SELECT tablename FROM pg_tables
+                    WHERE schemaname = 'public'
+                    AND tablename != 'schema_migrations'
+                    ORDER BY tablename;
+                """)
             )
-            await session.commit()
+            tables = [row[0] for row in result.fetchall()]
+
+            if tables:
+                await session.execute(
+                    text(f"TRUNCATE {', '.join(tables)} CASCADE")
+                )
+                await session.commit()
         except Exception as e:
             print(f"Pre-test cleanup error: {e}")
             await session.rollback()
 
         yield session
 
-        # Clean up all data after the test
+        # Clean up all data after the test (preserve schema_migrations)
         try:
-            await session.execute(
-                text("TRUNCATE users, rooms, devices, room_participants, "
-                     "room_costs, room_archive CASCADE")
+            # Get all table names dynamically (excluding schema_migrations)
+            result = await session.execute(
+                text("""
+                    SELECT tablename FROM pg_tables
+                    WHERE schemaname = 'public'
+                    AND tablename != 'schema_migrations'
+                    ORDER BY tablename;
+                """)
             )
-            await session.commit()
+            tables = [row[0] for row in result.fetchall()]
+
+            if tables:
+                await session.execute(
+                    text(f"TRUNCATE {', '.join(tables)} CASCADE")
+                )
+                await session.commit()
         except Exception as e:
             print(f"Post-test cleanup error: {e}")
             await session.rollback()
