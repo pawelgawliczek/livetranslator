@@ -18,7 +18,7 @@ import google_backend
 import amazon_backend
 
 # Import debug tracker
-from api.services.debug_tracker import append_mt_debug_info
+from debug_tracker import append_mt_debug_info
 
 # Config
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/5")

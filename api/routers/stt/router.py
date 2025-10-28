@@ -39,7 +39,7 @@ from language_router import get_stt_provider_for_language, init_db_pool, clear_c
 from streaming_manager import get_streaming_manager
 
 # Import debug tracker
-from api.services.debug_tracker import create_stt_debug_info
+from debug_tracker import create_stt_debug_info
 
 # Import all provider backends
 from openai_backend import transcribe_audio_chunk as openai_transcribe
