@@ -38,6 +38,9 @@ from language_router import get_stt_provider_for_language, init_db_pool, clear_c
 # Import streaming manager
 from streaming_manager import get_streaming_manager
 
+# Import debug tracker
+from api.services.debug_tracker import create_stt_debug_info
+
 # Import all provider backends
 from openai_backend import transcribe_audio_chunk as openai_transcribe
 try:
@@ -504,13 +507,15 @@ async def router_loop():
                         quality_tier=stored_quality_tier
                     )
 
-                    # Transcribe with final provider
+                    # Transcribe with final provider (measure latency)
+                    start_time = time.time()
                     result = await transcribe_with_provider(
                         audio_b64=audio_b64,
                         provider=provider_config["provider"],
                         language=stored_language_hint,
                         config=provider_config["config"]
                     )
+                    latency_ms = int((time.time() - start_time) * 1000)
 
                     stt_event = {
                         "type": "stt_final",
@@ -542,6 +547,25 @@ async def router_loop():
                     }
                     await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
                     print(f"[STT Router] 💰 Cost tracked: {duration_sec:.1f}s ({provider_config['provider']}) seg={segment_id}")
+
+                    # Track debug info (fire-and-forget)
+                    await create_stt_debug_info(
+                        redis=r,
+                        segment_id=segment_id,
+                        room_code=room,
+                        stt_data={
+                            "provider": provider_config["provider"],
+                            "language": stored_language_hint,
+                            "mode": "final",
+                            "latency_ms": latency_ms,
+                            "audio_duration_sec": duration_sec,
+                            "text": result["text"]
+                        },
+                        routing_info={
+                            "routing_reason": f"{stored_language_hint}/final/{stored_quality_tier} → {provider_config['provider']} (primary)",
+                            "fallback_triggered": provider_config.get("fallback", False)
+                        }
+                    )
 
                     # Clear partial session
                     if room in partial_sessions:
@@ -626,6 +650,26 @@ async def router_loop():
                         await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
                         print(f"[STT Router] 💰 [{timestamp:.3f}] Cost tracked: {audio_duration:.1f}s ({session['provider']}) seg={session['segment_id']}")
 
+                        # Track debug info (fire-and-forget)
+                        final_text = streaming_conn.finalized_text if streaming_conn and streaming_conn.finalized_text else last_partial_text
+                        await create_stt_debug_info(
+                            redis=r,
+                            segment_id=session["segment_id"],
+                            room_code=room,
+                            stt_data={
+                                "provider": session["provider"],
+                                "language": session.get("detected_lang", session.get("language_hint", "auto")),
+                                "mode": "streaming",
+                                "latency_ms": 0,  # N/A for streaming mode (real-time)
+                                "audio_duration_sec": audio_duration,
+                                "text": final_text
+                            },
+                            routing_info={
+                                "routing_reason": f"{session.get('language_hint', 'auto')}/streaming/{session.get('quality_tier', 'standard')} → {session['provider']} (streaming)",
+                                "fallback_triggered": session.get("fallback", False)
+                            }
+                        )
+
                         # Save accumulated text before resetting - use for content-based blocking of late finals
                         # Use accumulated_text (not finalized_text) because it includes partials that may arrive as late finals
                         # This will be used to block late AddTranscript events that arrive after the new segment starts
@@ -707,12 +751,15 @@ async def router_loop():
                                 quality_tier=quality_tier
                             )
 
+                            # Measure latency for quality refinement
+                            refine_start_time = time.time()
                             result = await transcribe_with_provider(
                                 audio_b64=full_audio_b64,
                                 provider=provider_config["provider"],
                                 language=language_hint,
                                 config=provider_config["config"]
                             )
+                            refine_latency_ms = int((time.time() - refine_start_time) * 1000)
 
                             final_text = result["text"].strip()
                             detected_lang = result.get("language", session.get("detected_lang", "auto"))
@@ -767,6 +814,25 @@ async def router_loop():
                             }
                             await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
                             print(f"[STT Router] 💰 Cost tracked: {audio_duration:.1f}s ({provider_config['provider']}) seg={session['segment_id']}")
+
+                            # Track debug info (fire-and-forget)
+                            await create_stt_debug_info(
+                                redis=r,
+                                segment_id=session["segment_id"],
+                                room_code=room,
+                                stt_data={
+                                    "provider": provider_config["provider"],
+                                    "language": language_hint,
+                                    "mode": "final",
+                                    "latency_ms": refine_latency_ms,
+                                    "audio_duration_sec": audio_duration,
+                                    "text": final_text
+                                },
+                                routing_info={
+                                    "routing_reason": f"{language_hint}/final/{quality_tier} → {provider_config['provider']} (quality refinement)",
+                                    "fallback_triggered": provider_config.get("fallback", False)
+                                }
+                            )
 
                             # Add to conversation history
                             if final_text and len(final_text) > 10:

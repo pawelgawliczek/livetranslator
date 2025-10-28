@@ -17,6 +17,9 @@ import deepl_backend
 import google_backend
 import amazon_backend
 
+# Import debug tracker
+from api.services.debug_tracker import append_mt_debug_info
+
 # Config
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/5")
 STT_EVENTS = os.getenv("STT_EVENTS_CHANNEL", "stt_events")
@@ -385,13 +388,22 @@ async def router_loop():
                                 from_cache = True
                                 print(f"[MT Router] 💾 Cache hit: {src_lang}→{tgt_normalized} ({len(text)} chars)")
 
+                        # Measure latency and check if throttled
+                        import time
+                        was_throttled = is_arabic_translation and not is_final and (room, segment, tgt_normalized) in arabic_translation_throttle
+                        throttle_delay_ms = 0
+
                         if not from_cache:
-                            # Use database-driven routing with fallback
+                            # Use database-driven routing with fallback (measure latency)
+                            translate_start_time = time.time()
                             translation_result = await translate_with_fallback(text, src_lang, tgt_normalized, quality_tier)
+                            latency_ms = int((time.time() - translate_start_time) * 1000)
 
                             # Cache partial translations for reuse
                             if not is_final and cache_key:
                                 partial_translation_cache[cache_key] = translation_result
+                        else:
+                            latency_ms = 0  # Cached, no latency
 
                         translated = translation_result["text"]
                         backend_name = translation_result["provider"]
@@ -444,6 +456,30 @@ async def router_loop():
                             }
                             await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
                             print(f"[MT Router] 💰 Cost tracked: {translation_result['tokens']} tokens ({backend_name}) seg={segment}")
+
+                        # Track debug info (fire-and-forget) - always track, even for cached
+                        if not from_cache:  # Only track non-cached translations
+                            await append_mt_debug_info(
+                                redis=r,
+                                segment_id=segment,
+                                mt_data={
+                                    "src_lang": src_lang,
+                                    "tgt_lang": tgt_normalized,
+                                    "provider": backend_name,
+                                    "latency_ms": latency_ms,
+                                    "text": translated,
+                                    "char_count": translation_result.get("char_count"),
+                                    "input_tokens": translation_result.get("input_tokens"),
+                                    "output_tokens": translation_result.get("output_tokens")
+                                },
+                                routing_info={
+                                    "routing_reason": f"{src_lang}→{tgt_normalized}/{quality_tier} → {backend_name} ({'fallback' if translation_result.get('fallback') else 'primary'})",
+                                    "fallback_triggered": translation_result.get("fallback", False),
+                                    "throttled": was_throttled,
+                                    "throttle_delay_ms": throttle_delay_ms,
+                                    "throttle_reason": f"Arabic {'partial' if not is_final else 'final'} throttling (max 1 req/{ARABIC_THROTTLE_SECONDS}s)" if was_throttled else None
+                                }
+                            )
 
                     except Exception as e:
                         print(f"[MT Router] ✗ Translation error {src_lang}→{tgt_normalized}: {e}")
