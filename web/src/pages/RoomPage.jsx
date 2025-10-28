@@ -7,6 +7,7 @@ import SoundSettingsModal from "../components/SoundSettingsModal";
 import NotificationToast from "../components/NotificationToast";
 import AdminLeftToast from "../components/AdminLeftToast";
 import ParticipantsPanel from "../components/ParticipantsPanel";
+import MessageDebugModal from "../components/MessageDebugModal";
 import { getUserLanguage, setUserLanguage, syncLanguageWithProfile } from "../utils/languageSync";
 
 export default function RoomPage({ token, onLogout }) {
@@ -2551,6 +2552,14 @@ export default function RoomPage({ token, onLogout }) {
           )}
         </div>
       )}
+
+      {/* Message Debug Modal */}
+      <MessageDebugModal
+        isOpen={debugModalOpen}
+        onClose={() => setDebugModalOpen(false)}
+        segmentId={debugSegmentId}
+        token={token}
+      />
     </div>
   );
 }
