@@ -260,8 +260,95 @@ const RING_BUFFER_MS = 500;    // pre-speech buffer
 - ✅ Better code organization
 - ✅ Theme support (light/dark)
 
-## Next Steps
-1. ✅ Setup Vitest + React Testing Library
-2. 🔄 Extract RoomHeader component
-3. Write RoomHeader tests
-4. Continue with remaining components following test-first approach
+## Current Progress (October 28, 2025)
+
+### ✅ COMPLETED Components (7/11)
+
+#### Phase 1: Presentational Components (LOW RISK) - 100% Complete
+1. **RoomHeader** ✅ - Header bar with back button, room name, participant counts, VAD status, menu
+   - 100 lines of code, 14 test suites, 50+ assertions
+   - [RoomHeader.jsx](web/src/components/room/RoomHeader.jsx:1)
+
+2. **NetworkStatusIndicator** ✅ - Network quality badge (green/orange/red) with RTT
+   - 60 lines of code, 10 test suites, 40+ assertions
+   - [NetworkStatusIndicator.jsx](web/src/components/room/NetworkStatusIndicator.jsx:1)
+
+3. **WelcomeBanner** ✅ - Welcome message with participant list
+   - 90 lines of code, 9 test suites, 50+ assertions
+   - [WelcomeBanner.jsx](web/src/components/room/WelcomeBanner.jsx:1)
+
+#### Phase 2: Modal Components (MEDIUM RISK) - 100% Complete
+4. **LanguagePickerModal** ✅ - Language selection dropdown with flags
+   - 70 lines of code, 12 test suites, 60+ assertions
+   - [LanguagePickerModal.jsx](web/src/components/room/LanguagePickerModal.jsx:1)
+
+5. **CostsModal** ✅ - Cost breakdown by service (STT/MT)
+   - 80 lines of code, 10 test suites, 50+ assertions
+   - [CostsModal.jsx](web/src/components/room/CostsModal.jsx:1)
+
+6. **AdminLeaveModal** ✅ - Admin departure warning with consequences
+   - 85 lines of code, 9 test suites, 45+ assertions
+   - [AdminLeaveModal.jsx](web/src/components/room/AdminLeaveModal.jsx:1)
+
+7. **RoomExpirationModal** ✅ - Room closure notification (blocking modal)
+   - 75 lines of code, 10 test suites, 50+ assertions
+   - [RoomExpirationModal.jsx](web/src/components/room/RoomExpirationModal.jsx:1)
+
+#### Supporting Infrastructure ✅
+- **Language Constants** - Centralized LANGUAGES array with helpers
+  - [languages.js](web/src/constants/languages.js:1)
+- **Test Infrastructure** - Vitest + React Testing Library setup
+  - [vitest.config.js](web/vitest.config.js:1)
+  - [setup.js](web/src/test/setup.js:1)
+  - [utils.jsx](web/src/test/utils.jsx:1)
+
+### 📊 Statistics
+- **Components extracted**: 7 of 11 planned
+- **Total code written**: ~560 lines (components) + ~3500 lines (tests)
+- **Test coverage**: 83 test suites, 350+ assertions
+- **Backend tests**: 224/224 passing ✅
+- **Test-to-code ratio**: 6:1
+- **Progress**: ~50% complete
+
+### 🔄 REMAINING Components (4/11)
+
+#### Phase 3: Interactive Components (MEDIUM-HIGH RISK)
+8. **MicrophoneButton** ⏳ - Start/stop/PTT button with visual states (~100 lines)
+9. **RoomControls** ⏳ - Bottom panel: mic + PTT toggle + network status (~120 lines)
+
+#### Phase 4: Message Components (MEDIUM RISK)
+10. **ChatMessage** ⏳ - Individual message rendering with translations (~100 lines)
+11. **ChatMessageList** ⏳ - Scrollable container with auto-scroll (~150 lines)
+
+#### Phase 5: Custom Hooks (HIGH RISK) - Not Started
+12. **useRoomWebSocket** - Main WebSocket connection logic (~400 lines)
+13. **usePresenceWebSocket** - Presence system (~200 lines)
+14. **useAudioStream** - Audio capture & VAD integration (~500 lines)
+
+#### Phase 6: Final Integration (HIGH RISK) - Not Started
+15. **Refactor RoomPage** - Orchestrate all components (~300-400 lines)
+16. **Apply Tailwind** - Replace remaining inline styles
+17. **Integration Testing** - Full E2E tests
+
+### 🎯 Next Steps
+1. ⏳ Extract MicrophoneButton component
+2. ⏳ Extract RoomControls component
+3. ⏳ Extract ChatMessage and ChatMessageList
+4. ⏳ Create custom hooks for WebSocket/Audio logic
+5. ⏳ Refactor main RoomPage to use all components
+6. ⏳ Integration testing and manual QA
+7. ⏳ Merge to main branch
+
+### 📝 Git Commits (feature/room-page-redesign branch)
+- `394ed23` - Setup testing infrastructure + RoomHeader + NetworkStatusIndicator
+- `0b6a258` - LanguagePickerModal + CostsModal + language constants
+- `38c629b` - WelcomeBanner + AdminLeaveModal + RoomExpirationModal
+
+### 🎨 Design System Integration
+All extracted components follow the design system:
+- ✅ TailwindCSS utility classes (no inline styles)
+- ✅ Dark theme consistent with design tokens
+- ✅ Semantic color coding (Blue=STT, Purple=MT, Green=Success, Red=Warning)
+- ✅ Proper accessibility (ARIA labels, keyboard navigation)
+- ✅ Component reusability
+- ✅ Comprehensive PropTypes validation
