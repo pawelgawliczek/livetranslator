@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import "./index.css";
 import "./i18n";
 import { loadLanguageFromProfile } from "./utils/languageSync";
 import LandingPage from "./pages/LandingPage";

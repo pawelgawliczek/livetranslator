@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { loadLanguageFromProfile, getUserLanguage } from "../utils/languageSync";
 import LanguageSelector from "../components/LanguageSelector";
+import ThemeToggle from "../components/ThemeToggle";
 import Footer from "../components/Footer";
 
 const LANGUAGES = [
@@ -285,6 +286,16 @@ export default function ProfilePage({ token, onLogout }) {
                 </div>
                 <div style={styles.helpText}>
                   {t('common.language')} controls both UI and translation language
+                </div>
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Theme</label>
+                <div style={{marginTop: "0.5rem"}}>
+                  <ThemeToggle />
+                </div>
+                <div style={styles.helpText}>
+                  Toggle between light and dark mode
                 </div>
               </div>
 

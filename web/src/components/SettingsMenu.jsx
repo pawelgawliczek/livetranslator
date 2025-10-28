@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 export default function SettingsMenu({
@@ -22,6 +22,21 @@ export default function SettingsMenu({
   onShowRoomAdminSettings
 }) {
   const { t } = useTranslation();
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // Initialize theme from localStorage or current setting
+  useEffect(() => {
+    const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
+    setIsDarkMode(currentTheme === "dark");
+  }, [isOpen]);
+
+  const toggleTheme = () => {
+    const newTheme = isDarkMode ? "light" : "dark";
+    setIsDarkMode(!isDarkMode);
+    document.documentElement.setAttribute("data-theme", newTheme);
+    localStorage.setItem("theme", newTheme);
+  };
+
   if (!isOpen) return null;
 
   // Debug logging
@@ -66,6 +81,13 @@ export default function SettingsMenu({
       icon: "🎙️",
       label: t('settings.soundSettings'),
       onClick: onShowSound
+    },
+    {
+      icon: isDarkMode ? "🌙" : "☀️",
+      label: isDarkMode ? "Dark Mode" : "Light Mode",
+      onClick: toggleTheme,
+      isToggle: true,
+      toggleValue: isDarkMode
     },
     // Only show persistence toggle for logged-in users
     ...(!isGuest ? [{

@@ -1,0 +1,262 @@
+/* Tailwind directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS Design Tokens */
+:root {
+  /* Light theme colors - Clean, minimal blog aesthetic */
+  --bg: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --fg: #1a1a1a;
+  --muted: #6b7280;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --accent: #667eea;
+  --accent-dark: #5568d3;
+  --accent-fg: #ffffff;
+  --ring: rgba(102, 126, 234, 0.5);
+  --gradient-from: #667eea;
+  --gradient-to: #764ba2;
+}
+
+/* Dark theme colors */
+[data-theme="dark"] {
+  --bg: #0f0f0f;
+  --bg-secondary: #1a1a1a;
+  --fg: #e5e5e5;
+  --muted: #a3a3a3;
+  --card: #1a1a1a;
+  --border: #2a2a2a;
+  --accent: #8b7fd6;
+  --accent-dark: #7a6ec4;
+  --accent-fg: #ffffff;
+  --ring: rgba(139, 127, 214, 0.5);
+  --gradient-from: #8b7fd6;
+  --gradient-to: #9d88d6;
+}
+
+/* Base styles */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-bg text-fg font-sans;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Typography */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold;
+    text-wrap: balance;
+  }
+
+  h1 {
+    @apply text-4xl;
+  }
+
+  h2 {
+    @apply text-3xl;
+  }
+
+  h3 {
+    @apply text-2xl font-semibold;
+  }
+
+  h4 {
+    @apply text-xl font-semibold;
+  }
+
+  h5 {
+    @apply text-lg font-medium;
+  }
+
+  h6 {
+    @apply text-base font-medium;
+  }
+
+  p {
+    @apply text-base leading-relaxed;
+  }
+
+  small {
+    @apply text-sm;
+  }
+
+  /* Links */
+  a {
+    @apply text-accent hover:text-accent-dark transition-colors;
+  }
+
+  /* Focus states for accessibility */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    @apply outline-none ring-2 ring-offset-2 ring-ring;
+  }
+
+  /* Form elements */
+  input,
+  textarea,
+  select {
+    @apply bg-card text-fg border border-border rounded-md px-3 py-2;
+    @apply focus:border-accent focus:ring-2 focus:ring-ring;
+    @apply transition-colors;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-muted;
+  }
+}
+
+/* Utility components */
+@layer components {
+  /* Card component */
+  .card {
+    @apply bg-card border border-border rounded-lg shadow-md p-6;
+    @apply transition-shadow hover:shadow-lg;
+  }
+
+  /* Button variants */
+  .btn {
+    @apply px-4 py-2 rounded-md font-semibold transition-all;
+    @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-accent-fg hover:bg-accent-dark;
+    @apply shadow-sm hover:shadow-md;
+  }
+
+  .btn-secondary {
+    @apply btn bg-transparent border border-border text-fg;
+    @apply hover:bg-card hover:border-accent;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-fg hover:bg-card;
+  }
+
+  /* Section container */
+  .section {
+    @apply bg-card rounded-xl p-8;
+    @apply max-w-container-lg mx-auto;
+  }
+
+  /* Tag/Pill component */
+  .tag-pill {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+    @apply bg-accent/10 text-accent border border-accent/20;
+  }
+
+  /* Modal backdrop */
+  .modal-backdrop {
+    @apply fixed inset-0 bg-black/50 backdrop-blur-sm;
+    @apply flex items-center justify-center p-4 z-50;
+  }
+
+  /* Modal container */
+  .modal {
+    @apply bg-card rounded-xl shadow-xl p-6;
+    @apply max-w-container-sm w-full;
+    @apply border border-border;
+  }
+
+  /* Prose/article typography */
+  .prose {
+    @apply max-w-prose mx-auto;
+  }
+
+  .prose p {
+    @apply mb-4;
+  }
+
+  .prose ul,
+  .prose ol {
+    @apply ml-6 mb-4;
+  }
+
+  .prose li {
+    @apply mb-2;
+  }
+
+  .prose blockquote {
+    @apply border-l-4 border-accent pl-4 italic text-muted;
+  }
+
+  .prose code {
+    @apply bg-card px-2 py-1 rounded text-sm font-mono;
+    @apply border border-border;
+  }
+
+  .prose pre {
+    @apply bg-card p-4 rounded-md overflow-x-auto;
+    @apply border border-border;
+  }
+
+  .prose pre code {
+    @apply bg-transparent border-none p-0;
+  }
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Smooth scrolling for accessibility */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg);
+}
+
+/* Selection styling */
+::selection {
+  background-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+::-moz-selection {
+  background-color: var(--accent);
+  color: var(--accent-fg);
+}
