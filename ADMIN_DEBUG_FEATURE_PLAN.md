@@ -1,9 +1,43 @@
 # Admin Message Debug Feature - Implementation Plan
 
-**Status:** Planning
+**Status:** ✅ Phase 0 Complete - In Progress
 **Priority:** Medium
-**Estimated Effort:** 8-12 hours (development + testing)
+**Estimated Effort:** 16-23 hours (development + testing)
 **Created:** 2025-10-28
+**Last Updated:** 2025-10-28
+**Branch:** `feature/admin-debug-tracking`
+
+## Progress Tracker
+
+| Phase | Status | Time | Commit |
+|-------|--------|------|--------|
+| **Phase 0** | ✅ Complete | 2h | [168ba93](../../commit/168ba93) |
+| **Phase 1** | ⏸️ Pending | 2-3h | - |
+| **Phase 2** | ⏸️ Pending | 2-3h | - |
+| **Phase 3** | ⏸️ Pending | 1h | - |
+| **Phase 4** | ⏸️ Pending | 1-2h | - |
+| **Phase 5** | ⏸️ Pending | 2-3h | - |
+| **Testing** | ⏸️ Pending | 6-9h | - |
+
+### Phase 0 Summary ✅
+
+**Completed:** 2025-10-28
+**Duration:** 2 hours
+**Commit:** `168ba93` - "feat(phase-0): add segment_id to cost tracking for per-message attribution"
+
+**Changes:**
+- ✅ Database migration 010: Added `segment_id` column to `room_costs` table
+- ✅ Updated `RoomCost` model with `segment_id` field
+- ✅ Updated STT router cost events (3 locations)
+- ✅ Updated MT router cost events (character & token-based)
+- ✅ Updated cost tracker service to persist `segment_id`
+- ✅ All tests passing (415/415)
+
+**Benefits Unlocked:**
+- Complete audit trail for cost tracking
+- Per-message cost attribution from database
+- Foundation for Redis debug feature (Phase 1-5)
+- Historical cost queries beyond 24h TTL
 
 ---
 
@@ -241,7 +275,10 @@ cost_usd = (input_tokens / 1000) * input_rate + (output_tokens / 1000) * output_
 
 ## Implementation Plan
 
-### Phase 0: Add segment_id to Cost Tracking (2 hours) ⚡ **FOUNDATION**
+### Phase 0: Add segment_id to Cost Tracking ✅ **COMPLETE**
+
+**Duration:** 2 hours (completed 2025-10-28)
+**Commit:** [168ba93](../../commit/168ba93)
 
 **Purpose:** Fix existing gap in cost tracking to enable per-message cost analysis
 
@@ -1573,6 +1610,6 @@ Total:             ~600 bytes × 24h TTL
 
 ---
 
-**Document Version:** 1.0
+**Document Version:** 1.1
 **Last Updated:** 2025-10-28
-**Status:** Ready for implementation approval
+**Status:** Phase 0 Complete - Ready for Phase 1
