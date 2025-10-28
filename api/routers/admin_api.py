@@ -5,11 +5,12 @@ from sqlalchemy import select, text
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-import redis
+import redis.asyncio as redis
 import json
 import os
 from ..auth import require_admin, get_db
 from ..models import User, SystemSettings
+from ..services.debug_tracker import get_debug_info, calculate_stt_cost, calculate_mt_cost
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -404,4 +405,193 @@ def get_system_stats(
         "healthy_providers": result[3],
         "total_providers": result[4],
         "system_status": "operational" if result[3] == result[4] else "degraded"
+    }
+
+# ============================================================================
+# Message Debug Info (Admin Debug Feature - Phase 3)
+# ============================================================================
+
+@router.get("/message-debug/{segment_id}")
+async def get_message_debug_info(
+    segment_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get complete debug information for a message by segment_id.
+
+    Returns debug data from Redis (if available, <24h old) or reconstructs
+    from database (for older messages or if Redis expired).
+
+    Only accessible by admin users.
+    """
+
+    # Try Redis first (fast path for recent messages)
+    r = await redis.from_url(REDIS_URL, decode_responses=True)
+    try:
+        debug_info = await get_debug_info(r, segment_id)
+
+        if debug_info:
+            return {
+                "source": "redis",
+                "segment_id": segment_id,
+                "data": debug_info
+            }
+    finally:
+        await r.aclose()
+
+    # Fallback to database reconstruction (for expired or old messages)
+    # Query segment info
+    segment_query = text("""
+        SELECT
+            id,
+            room_id,
+            text,
+            source_lang,
+            speaker,
+            created_at
+        FROM segments
+        WHERE id = :segment_id
+    """)
+
+    segment = db.execute(segment_query, {"segment_id": segment_id}).fetchone()
+
+    if not segment:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Segment {segment_id} not found"
+        )
+
+    # Query STT costs
+    stt_query = text("""
+        SELECT
+            provider,
+            units,
+            unit_type,
+            amount_usd,
+            ts
+        FROM room_costs
+        WHERE segment_id = :segment_id
+          AND pipeline = 'stt'
+        ORDER BY ts DESC
+        LIMIT 1
+    """)
+
+    stt_result = db.execute(stt_query, {"segment_id": segment_id}).fetchone()
+
+    # Query MT costs
+    mt_query = text("""
+        SELECT
+            provider,
+            units,
+            unit_type,
+            amount_usd,
+            ts
+        FROM room_costs
+        WHERE segment_id = :segment_id
+          AND pipeline = 'mt'
+        ORDER BY ts ASC
+    """)
+
+    mt_results = db.execute(mt_query, {"segment_id": segment_id}).fetchall()
+
+    # Query translations
+    translations_query = text("""
+        SELECT
+            target_lang,
+            text
+        FROM translations
+        WHERE segment_id = :segment_id
+        ORDER BY created_at ASC
+    """)
+
+    translations = db.execute(translations_query, {"segment_id": segment_id}).fetchall()
+
+    # Reconstruct debug info from database
+    debug_data = {
+        "segment_id": segment_id,
+        "room_code": segment[1],
+        "timestamp": segment[5].isoformat() + "Z" if segment[5] else None,
+        "stt": None,
+        "mt": [],
+        "totals": {
+            "stt_cost_usd": 0.0,
+            "mt_cost_usd": 0.0,
+            "total_cost_usd": 0.0,
+            "mt_translations": 0
+        }
+    }
+
+    # Build STT section
+    if stt_result:
+        debug_data["stt"] = {
+            "provider": stt_result[0],
+            "language": segment[3] or "auto",
+            "mode": "database_reconstructed",
+            "latency_ms": None,  # Not available from database
+            "audio_duration_sec": float(stt_result[1]) if stt_result[1] else 0.0,
+            "cost_usd": float(stt_result[3]),
+            "cost_breakdown": {
+                "unit_type": stt_result[2],
+                "units": float(stt_result[1]) if stt_result[1] else 0.0,
+                "rate_per_unit": float(stt_result[3]) / float(stt_result[1]) if stt_result[1] and float(stt_result[1]) > 0 else 0.0
+            },
+            "routing_reason": "Reconstructed from database",
+            "fallback_triggered": None,  # Not available
+            "text": segment[2]
+        }
+        debug_data["totals"]["stt_cost_usd"] = float(stt_result[3])
+
+    # Build MT section
+    translations_map = {row[0]: row[1] for row in translations}
+
+    for mt_row in mt_results:
+        provider = mt_row[0]
+        units = float(mt_row[1]) if mt_row[1] else 0.0
+        unit_type = mt_row[2]
+        cost_usd = float(mt_row[3])
+
+        # Try to determine target language from translations
+        # This is approximate since we don't store language pairs in room_costs
+        tgt_lang = "unknown"
+        translated_text = None
+
+        # Match by cost amount (rough heuristic)
+        for lang, text in translations_map.items():
+            if lang not in [segment[3], "auto"]:  # Not source language
+                tgt_lang = lang
+                translated_text = text
+                break
+
+        mt_entry = {
+            "src_lang": segment[3] or "auto",
+            "tgt_lang": tgt_lang,
+            "provider": provider,
+            "latency_ms": None,  # Not available from database
+            "cost_usd": cost_usd,
+            "cost_breakdown": {
+                "unit_type": unit_type,
+                "units": units,
+                "rate_per_unit": cost_usd / units if units > 0 else 0.0
+            },
+            "routing_reason": "Reconstructed from database",
+            "fallback_triggered": None,  # Not available
+            "throttled": False,
+            "text": translated_text or "(text not available)"
+        }
+
+        debug_data["mt"].append(mt_entry)
+        debug_data["totals"]["mt_cost_usd"] += cost_usd
+
+    debug_data["totals"]["total_cost_usd"] = (
+        debug_data["totals"]["stt_cost_usd"] +
+        debug_data["totals"]["mt_cost_usd"]
+    )
+    debug_data["totals"]["mt_translations"] = len(debug_data["mt"])
+
+    return {
+        "source": "database",
+        "segment_id": segment_id,
+        "note": "Reconstructed from database. Some fields (latency, routing details) unavailable for old messages.",
+        "data": debug_data
     }

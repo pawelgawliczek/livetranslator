@@ -7,6 +7,7 @@ import SoundSettingsModal from "../components/SoundSettingsModal";
 import NotificationToast from "../components/NotificationToast";
 import AdminLeftToast from "../components/AdminLeftToast";
 import ParticipantsPanel from "../components/ParticipantsPanel";
+import MessageDebugModal from "../components/MessageDebugModal";
 import { getUserLanguage, setUserLanguage, syncLanguageWithProfile } from "../utils/languageSync";
 
 export default function RoomPage({ token, onLogout }) {
@@ -30,6 +31,22 @@ export default function RoomPage({ token, onLogout }) {
       @keyframes pulse {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.6; }
+      }
+      .debug-icon {
+        position: absolute;
+        top: 0.35rem;
+        right: 0.35rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        opacity: 0.4;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        padding: 0.2rem;
+        line-height: 1;
+        user-select: none;
+      }
+      .debug-icon:hover {
+        opacity: 1;
+        transform: scale(1.15);
       }
     `;
     document.head.appendChild(style);
@@ -85,6 +102,8 @@ export default function RoomPage({ token, onLogout }) {
   const [isRoomOwner, setIsRoomOwner] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
+  const [debugModalOpen, setDebugModalOpen] = useState(false);
+  const [debugSegmentId, setDebugSegmentId] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
   const [showAdminLeaveWarning, setShowAdminLeaveWarning] = useState(false);
@@ -1919,8 +1938,22 @@ export default function RoomPage({ token, onLogout }) {
               background: "#1a1a1a",
               borderRadius: "12px",
               padding: "0.5rem 0.65rem",
-              border: "1px solid #333"
+              border: "1px solid #333",
+              position: "relative"
             }}>
+              {/* Debug icon - only visible for admin users */}
+              {isAdmin && (
+                <span
+                  className="debug-icon"
+                  onClick={() => {
+                    setDebugSegmentId(segId);
+                    setDebugModalOpen(true);
+                  }}
+                  title="View debug info"
+                >
+                  🔍
+                </span>
+              )}
               {seg.translation ? (
                 <>
                   {/* Translation - large font with username/time on left */}
@@ -2519,6 +2552,14 @@ export default function RoomPage({ token, onLogout }) {
           )}
         </div>
       )}
+
+      {/* Message Debug Modal */}
+      <MessageDebugModal
+        isOpen={debugModalOpen}
+        onClose={() => setDebugModalOpen(false)}
+        segmentId={debugSegmentId}
+        token={token}
+      />
     </div>
   );
 }
