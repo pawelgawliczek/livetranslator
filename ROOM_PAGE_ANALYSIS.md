@@ -336,37 +336,75 @@ const RING_BUFFER_MS = 500;    // pre-speech buffer
   - [utils.jsx](web/src/test/utils.jsx:1)
 
 ### 📊 Statistics
-- **Components extracted**: 11 of 11 planned ✅ (100% component extraction complete!)
-- **Total code written**: ~1,110 lines (components) + ~6,850 lines (tests)
-- **Test coverage**: 172 test suites, 790+ assertions
-- **Backend tests**: 224/224 passing ✅
-- **Test-to-code ratio**: 6.2:1
-- **Component extraction**: 100% complete ✅
-- **Overall progress**: ~75% complete (hooks and integration remaining)
+- **Components extracted**: 11 of 11 planned ✅ (100% complete!)
+- **Custom hooks created**: 3 of 3 planned ✅ (100% complete!)
+- **Total code written**:
+  - Components: ~1,110 lines
+  - Hooks: ~1,070 lines
+  - Tests: ~8,600 lines (components + hooks)
+  - **Total**: ~10,780 lines
+- **Test coverage**:
+  - Component tests: 172 test suites, 790+ assertions
+  - Hook tests: 140+ test cases
+  - Backend tests: 224/224 passing ✅
+- **Test-to-code ratio**: ~4:1 (8,600 test lines / 2,180 implementation lines)
+- **Overall progress**: ~85% complete (final integration remaining)
+
+### ✅ COMPLETED - Phase 5: Custom Hooks (HIGH RISK)
+
+#### Hooks Created (Test-First Approach)
+12. **usePresenceWebSocket** ✅ - Presence system & network monitoring (~370 lines)
+    - WebSocket connection management
+    - Presence events (user_joined, user_left, language_changed, presence_snapshot)
+    - Network monitoring (ping/pong, RTT, quality classification)
+    - Participant and language count tracking
+    - Welcome banner and toast notifications
+    - Test coverage: 80+ test cases
+    - [usePresenceWebSocket.jsx](web/src/hooks/usePresenceWebSocket.jsx:1)
+    - [usePresenceWebSocket.test.jsx](web/src/hooks/usePresenceWebSocket.test.jsx:1)
+
+13. **useRoomWebSocket** ✅ - Message processing & segment management (~250 lines)
+    - STT message processing (partial, final, finalize)
+    - Translation message processing (partial, final)
+    - Placeholder management for speaking indicators
+    - Segment merging (source + translation)
+    - Message filtering and sorting
+    - Debounced rendering (200ms) for performance
+    - Test coverage: 60+ test cases
+    - [useRoomWebSocket.jsx](web/src/hooks/useRoomWebSocket.jsx:1)
+    - [useRoomWebSocket.test.jsx](web/src/hooks/useRoomWebSocket.test.jsx:1)
+
+14. **useAudioStream** ✅ - Audio capture & VAD integration (~450 lines)
+    - MediaStream acquisition (getUserMedia)
+    - Audio processing with ScriptProcessor
+    - Energy-based Voice Activity Detection
+    - Audio resampling (source rate → 16kHz)
+    - Push-to-talk mode support
+    - Adaptive send rate based on network quality
+    - Safety timeouts (30s max recording)
+    - Proper resource cleanup
+    - Test coverage: Basic interface tests + comprehensive manual QA plan
+    - [useAudioStream.jsx](web/src/hooks/useAudioStream.jsx:1)
+    - [useAudioStream.test.jsx](web/src/hooks/useAudioStream.test.jsx:1)
 
 ### 🔄 REMAINING Work
 
-#### Phase 5: Custom Hooks (HIGH RISK) - Not Started
-12. **useRoomWebSocket** - Main WebSocket connection logic (~400 lines)
-13. **usePresenceWebSocket** - Presence system (~200 lines)
-14. **useAudioStream** - Audio capture & VAD integration (~500 lines)
-
-#### Phase 6: Final Integration (HIGH RISK) - Not Started
-15. **Refactor RoomPage** - Orchestrate all components (~300-400 lines)
-16. **Apply Tailwind** - Replace remaining inline styles
-17. **Integration Testing** - Full E2E tests
+#### Phase 6: Final Integration (HIGH RISK) - In Progress
+15. **Refactor RoomPage** ⏳ - Orchestrate all components and hooks (~300-400 lines)
+16. **Apply Tailwind** ⏳ - Replace remaining inline styles
+17. **Integration Testing** ⏳ - Full E2E tests + Manual QA
 
 ### 🎯 Next Steps
 1. ✅ Extract MicrophoneButton component
 2. ✅ Extract RoomControls component
 3. ✅ Extract ChatMessage and ChatMessageList
-4. ⏳ Create custom hooks for WebSocket/Audio logic (HIGH RISK)
-5. ⏳ Refactor main RoomPage to use all components
-6. ⏳ Integration testing and manual QA
+4. ✅ Create custom hooks for WebSocket/Audio logic (HIGH RISK)
+5. ⏳ Refactor main RoomPage to use all components and hooks
+6. ⏳ Integration testing (automated + manual QA)
 7. ⏳ Merge to main branch
 
-**Note**: Phase 5 (custom hooks) is HIGH RISK due to complex WebSocket, audio streaming, and VAD logic.
-This requires careful extraction to avoid breaking real-time functionality.
+**Progress**: Phase 5 complete! All custom hooks created with test-first approach.
+Now ready for final integration in Phase 6.
 
 ### 📝 Git Commits (feature/room-page-redesign branch)
 - `394ed23` - Setup testing infrastructure + RoomHeader + NetworkStatusIndicator

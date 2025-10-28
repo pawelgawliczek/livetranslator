@@ -20,7 +20,7 @@ export default function RoomHeader({
   onMenuClick
 }) {
   return (
-    <div className="bg-card-dark border-b border-border-dark flex items-center justify-between gap-2 px-3 py-2 shrink-0"
+    <div className="bg-card-dark border-b border-border-dark flex items-center justify-between gap-2 px-3 py-2 shrink-0 relative z-[999]"
          style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
 
       {/* Back button - left */}
