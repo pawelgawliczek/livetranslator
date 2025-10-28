@@ -231,8 +231,8 @@ class TestCreateSTTDebugInfo:
         data_json = call_args[0][1]
         ttl = call_args[1]["ex"]
 
-        # Verify key format
-        assert key == "debug:segment:123"
+        # Verify key format (includes room_code to prevent collisions)
+        assert key == "debug:abc123:segment:123"
 
         # Verify TTL
         assert ttl == DEBUG_TTL_SECONDS
@@ -370,11 +370,11 @@ class TestAppendMTDebugInfo:
         }
 
         await append_mt_debug_info(
-            mock_redis, 123, mt_data, routing_info
+            mock_redis, "abc123", 123, mt_data, routing_info
         )
 
-        # Verify Redis get was called
-        mock_redis.get.assert_called_once_with("debug:segment:123")
+        # Verify Redis get was called (includes room_code to prevent collisions)
+        mock_redis.get.assert_called_once_with("debug:abc123:segment:123")
 
         # Verify Redis set was called
         mock_redis.set.assert_called_once()
@@ -453,7 +453,7 @@ class TestAppendMTDebugInfo:
         }
 
         await append_mt_debug_info(
-            mock_redis, 123, mt_data, routing_info
+            mock_redis, "abc123", 123, mt_data, routing_info
         )
 
         # Extract updated data
@@ -498,7 +498,7 @@ class TestAppendMTDebugInfo:
 
         # Should not raise exception
         await append_mt_debug_info(
-            mock_redis, 999, mt_data, routing_info
+            mock_redis, "test999", 999, mt_data, routing_info
         )
 
     @pytest.mark.asyncio
@@ -540,7 +540,7 @@ class TestAppendMTDebugInfo:
         }
 
         await append_mt_debug_info(
-            mock_redis, 123, mt_data, routing_info
+            mock_redis, "abc123", 123, mt_data, routing_info
         )
 
         # Extract updated data
@@ -571,10 +571,10 @@ class TestGetDebugInfo:
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=json.dumps(debug_data))
 
-        result = await get_debug_info(mock_redis, 123)
+        result = await get_debug_info(mock_redis, "abc123", 123)
 
-        # Verify Redis get was called
-        mock_redis.get.assert_called_once_with("debug:segment:123")
+        # Verify Redis get was called (includes room_code to prevent collisions)
+        mock_redis.get.assert_called_once_with("debug:abc123:segment:123")
 
         # Verify returned data
         assert result is not None
@@ -587,7 +587,7 @@ class TestGetDebugInfo:
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=None)
 
-        result = await get_debug_info(mock_redis, 999)
+        result = await get_debug_info(mock_redis, "test999", 999)
 
         assert result is None
 
@@ -597,7 +597,7 @@ class TestGetDebugInfo:
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(side_effect=Exception("Redis connection failed"))
 
-        result = await get_debug_info(mock_redis, 123)
+        result = await get_debug_info(mock_redis, "abc123", 123)
 
         assert result is None
 
@@ -632,7 +632,7 @@ class TestGetDebugInfo:
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=json.dumps(debug_data))
 
-        result = await get_debug_info(mock_redis, 789)
+        result = await get_debug_info(mock_redis, "test456", 789)
 
         # Verify complete structure
         assert result["segment_id"] == 789
