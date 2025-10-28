@@ -537,10 +537,11 @@ async def router_loop():
                         "pipeline": "stt",
                         "mode": provider_config["provider"],
                         "units": duration_sec,
-                        "unit_type": "seconds"
+                        "unit_type": "seconds",
+                        "segment_id": segment_id
                     }
                     await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
-                    print(f"[STT Router] 💰 Cost tracked: {duration_sec:.1f}s ({provider_config['provider']})")
+                    print(f"[STT Router] 💰 Cost tracked: {duration_sec:.1f}s ({provider_config['provider']}) seg={segment_id}")
 
                     # Clear partial session
                     if room in partial_sessions:
@@ -619,10 +620,11 @@ async def router_loop():
                             "provider": session["provider"],
                             "mode": "final",
                             "units": audio_duration,
-                            "unit_type": "seconds"
+                            "unit_type": "seconds",
+                            "segment_id": session["segment_id"]
                         }
                         await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
-                        print(f"[STT Router] 💰 [{timestamp:.3f}] Cost tracked: {audio_duration:.1f}s ({session['provider']})")
+                        print(f"[STT Router] 💰 [{timestamp:.3f}] Cost tracked: {audio_duration:.1f}s ({session['provider']}) seg={session['segment_id']}")
 
                         # Save accumulated text before resetting - use for content-based blocking of late finals
                         # Use accumulated_text (not finalized_text) because it includes partials that may arrive as late finals
@@ -760,10 +762,11 @@ async def router_loop():
                                 "pipeline": "stt",
                                 "mode": provider_config["provider"],
                                 "units": audio_duration,
-                                "unit_type": "seconds"
+                                "unit_type": "seconds",
+                                "segment_id": session["segment_id"]
                             }
                             await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
-                            print(f"[STT Router] 💰 Cost tracked: {audio_duration:.1f}s ({provider_config['provider']})")
+                            print(f"[STT Router] 💰 Cost tracked: {audio_duration:.1f}s ({provider_config['provider']}) seg={session['segment_id']}")
 
                             # Add to conversation history
                             if final_text and len(final_text) > 10:

@@ -61,6 +61,7 @@ class RoomCost(Base):
     units: Mapped[Optional[int]] = mapped_column(BigInteger)
     unit_type: Mapped[Optional[str]] = mapped_column(Text)
     amount_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=0)
+    segment_id: Mapped[Optional[int]] = mapped_column(Integer)
 
 class RoomParticipant(Base):
     __tablename__ = "room_participants"

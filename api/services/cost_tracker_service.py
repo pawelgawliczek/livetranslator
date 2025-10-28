@@ -117,6 +117,7 @@ async def track_loop():
             mode = data.get("mode") or provider  # For backward compatibility
             units = data.get("units", 0)
             unit_type = data.get("unit_type", "seconds")
+            segment_id = data.get("segment_id")  # NEW: Extract segment_id for per-message tracking
 
             # Validate required fields
             if not room_id:
@@ -130,18 +131,19 @@ async def track_loop():
             # Calculate cost
             cost = calculate_cost(pipeline, provider, float(units), unit_type, pricing)
 
-            # Store in database
+            # Store in database with segment_id
             async with db_pool.acquire() as conn:
                 await conn.execute(
                     """
-                    INSERT INTO room_costs (room_id, pipeline, mode, provider, units, unit_type, amount_usd, ts)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+                    INSERT INTO room_costs (room_id, pipeline, mode, provider, units, unit_type, amount_usd, segment_id, ts)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
                     """,
-                    room_id, pipeline, mode, provider, units, unit_type, float(cost)
+                    room_id, pipeline, mode, provider, units, unit_type, float(cost), segment_id
                 )
 
-            # Log success
-            print(f"[Cost Tracker] ✓ {room_id}: {pipeline}/{provider} {units}{unit_type} = ${cost:.6f}")
+            # Log success with segment_id
+            seg_info = f" seg={segment_id}" if segment_id else ""
+            print(f"[Cost Tracker] ✓ {room_id}: {pipeline}/{provider} {units}{unit_type} = ${cost:.6f}{seg_info}")
 
         except Exception as e:
             print(f"[Cost Tracker] ✗ Error: {e}")

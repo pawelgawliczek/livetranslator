@@ -425,10 +425,11 @@ async def router_loop():
                                 "mode": backend_name,
                                 "units": translation_result["char_count"],
                                 "unit_type": "characters",
-                                "provider": backend_name
+                                "provider": backend_name,
+                                "segment_id": segment
                             }
                             await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
-                            print(f"[MT Router] 💰 Cost tracked: {translation_result['char_count']} chars ({backend_name})")
+                            print(f"[MT Router] 💰 Cost tracked: {translation_result['char_count']} chars ({backend_name}) seg={segment}")
                         elif not from_cache and "tokens" in translation_result:
                             # OpenAI uses token-based pricing
                             cost_event = {
@@ -438,10 +439,11 @@ async def router_loop():
                                 "mode": backend_name,
                                 "units": translation_result["tokens"],
                                 "unit_type": "tokens",
-                                "provider": backend_name
+                                "provider": backend_name,
+                                "segment_id": segment
                             }
                             await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
-                            print(f"[MT Router] 💰 Cost tracked: {translation_result['tokens']} tokens ({backend_name})")
+                            print(f"[MT Router] 💰 Cost tracked: {translation_result['tokens']} tokens ({backend_name}) seg={segment}")
 
                     except Exception as e:
                         print(f"[MT Router] ✗ Translation error {src_lang}→{tgt_normalized}: {e}")
