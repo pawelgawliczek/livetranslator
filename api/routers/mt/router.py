@@ -458,28 +458,27 @@ async def router_loop():
                             print(f"[MT Router] 💰 Cost tracked: {translation_result['tokens']} tokens ({backend_name}) seg={segment}")
 
                         # Track debug info (fire-and-forget) - always track, even for cached
-                        if not from_cache:  # Only track non-cached translations
-                            await append_mt_debug_info(
-                                redis=r,
-                                segment_id=segment,
-                                mt_data={
-                                    "src_lang": src_lang,
-                                    "tgt_lang": tgt_normalized,
-                                    "provider": backend_name,
-                                    "latency_ms": latency_ms,
-                                    "text": translated,
-                                    "char_count": translation_result.get("char_count"),
-                                    "input_tokens": translation_result.get("input_tokens"),
-                                    "output_tokens": translation_result.get("output_tokens")
-                                },
-                                routing_info={
-                                    "routing_reason": f"{src_lang}→{tgt_normalized}/{quality_tier} → {backend_name} ({'fallback' if translation_result.get('fallback') else 'primary'})",
-                                    "fallback_triggered": translation_result.get("fallback", False),
-                                    "throttled": was_throttled,
-                                    "throttle_delay_ms": throttle_delay_ms,
-                                    "throttle_reason": f"Arabic {'partial' if not is_final else 'final'} throttling (max 1 req/{ARABIC_THROTTLE_SECONDS}s)" if was_throttled else None
-                                }
-                            )
+                        await append_mt_debug_info(
+                            redis=r,
+                            segment_id=segment,
+                            mt_data={
+                                "src_lang": src_lang,
+                                "tgt_lang": tgt_normalized,
+                                "provider": backend_name,
+                                "latency_ms": latency_ms if not from_cache else 0,  # Cache hits have no latency
+                                "text": translated,
+                                "char_count": translation_result.get("char_count"),
+                                "input_tokens": translation_result.get("input_tokens"),
+                                "output_tokens": translation_result.get("output_tokens")
+                            },
+                            routing_info={
+                                "routing_reason": f"{src_lang}→{tgt_normalized}/{quality_tier} → {backend_name} ({'cached' if from_cache else 'fallback' if translation_result.get('fallback') else 'primary'})",
+                                "fallback_triggered": translation_result.get("fallback", False),
+                                "throttled": was_throttled,
+                                "throttle_delay_ms": throttle_delay_ms,
+                                "throttle_reason": f"Arabic {'partial' if not is_final else 'final'} throttling (max 1 req/{ARABIC_THROTTLE_SECONDS}s)" if was_throttled else None
+                            }
+                        )
 
                     except Exception as e:
                         print(f"[MT Router] ✗ Translation error {src_lang}→{tgt_normalized}: {e}")
