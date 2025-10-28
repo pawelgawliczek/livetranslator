@@ -17,54 +17,33 @@ export default function RoomsMenu({
       icon: "🛠️",
       label: t('common.admin'),
       onClick: onAdminClick,
-      color: "#f59e0b"
+      colorClass: "text-yellow-500"
     }] : []),
     {
       icon: "👤",
       label: t('common.profile'),
       onClick: onProfileClick,
-      color: "#6366f1"
+      colorClass: "text-accent"
     },
     {
       icon: "🚪",
       label: t('common.logout'),
       onClick: onLogout,
-      color: "#ef4444"
+      colorClass: "text-red-500"
     }
   ];
 
   return (
     <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: "rgba(0,0,0,0.85)",
-        zIndex: 1000,
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "flex-end",
-        padding: "0.5rem",
-        paddingTop: "max(3.5rem, calc(env(safe-area-inset-top) + 3.5rem))"
-      }}
+      className="fixed inset-0 bg-black/85 z-[1000] flex items-start justify-end p-2 pt-[max(3.5rem,calc(env(safe-area-inset-top)+3.5rem))]"
       onClick={onClose}
     >
       <div
-        style={{
-          background: "#1a1a1a",
-          borderRadius: "12px",
-          border: "1px solid #333",
-          minWidth: "280px",
-          maxWidth: "320px",
-          overflow: "hidden",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.5)"
-        }}
+        className="bg-card border border-border rounded-xl min-w-[280px] max-w-[320px] overflow-hidden shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Menu Items */}
-        <div style={{ padding: "0.5rem 0" }}>
+        <div className="py-2">
           {menuItems.map((item, index) => (
             <button
               key={index}
@@ -72,26 +51,12 @@ export default function RoomsMenu({
                 item.onClick();
                 onClose();
               }}
-              style={{
-                width: "100%",
-                padding: "0.875rem 1rem",
-                background: "transparent",
-                border: "none",
-                color: item.color || "white",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                fontSize: "0.95rem",
-                transition: "background 0.15s"
-              }}
-              onMouseOver={(e) => e.currentTarget.style.background = "#2a2a2a"}
-              onMouseOut={(e) => e.currentTarget.style.background = "transparent"}
+              className={`w-full px-4 py-3.5 bg-transparent border-none cursor-pointer flex items-center gap-3 text-base transition-colors hover:bg-bg-secondary ${item.colorClass}`}
             >
-              <span style={{ fontSize: "1.25rem", width: "24px", textAlign: "center" }}>
+              <span className="text-xl w-6 text-center">
                 {item.icon}
               </span>
-              <span style={{ flex: 1, textAlign: "left" }}>
+              <span className="flex-1 text-left">
                 {item.label}
               </span>
             </button>

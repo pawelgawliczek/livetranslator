@@ -2,25 +2,13 @@ import React from "react";
 
 export default function Footer() {
   return (
-    <footer
-      style={{
-        padding: "0.5rem",
-        textAlign: "center",
-        fontSize: "0.65rem",
-        color: "#555",
-        marginTop: "auto",
-        flexShrink: 0,
-      }}
-    >
+    <footer className="p-2 text-center text-xs text-muted mt-auto flex-shrink-0">
       Created by{" "}
       <a
         href="https://pawelgawliczek.cloud/"
         target="_blank"
         rel="noopener noreferrer"
-        style={{
-          color: "#667eea",
-          textDecoration: "none",
-        }}
+        className="text-accent hover:text-accent-dark font-semibold transition-colors no-underline"
       >
         Pawel Gawliczek
       </a>{" "}

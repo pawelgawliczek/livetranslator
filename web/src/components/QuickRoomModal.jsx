@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import Modal from "./ui/Modal";
+import Button from "./ui/Button";
 
 export default function QuickRoomModal({ token, onClose }) {
   const { t } = useTranslation();
@@ -43,13 +45,11 @@ export default function QuickRoomModal({ token, onClose }) {
 
           // Detect when another participant joins
           if (msg.type === "user_joined" && msg.triggered_by_user_id) {
-            // Check if it's not us joining (compare with our user ID from token)
             try {
               const payload = JSON.parse(atob(token.split('.')[1]));
               const myUserId = payload.sub || payload.user_id;
 
               if (msg.triggered_by_user_id !== myUserId) {
-                // Guest has joined, auto-navigate to room
                 console.log('[QuickRoom] Guest joined! Navigating to room...');
                 setStep("joining");
                 setTimeout(() => {
@@ -87,9 +87,6 @@ export default function QuickRoomModal({ token, onClose }) {
 
   async function createQuickRoom() {
     try {
-      // Generate a unique room code (max 12 chars)
-      // Format: q-XXXXX where X is base36 timestamp + random suffix
-      // Retry up to 3 times if code already exists
       let quickRoomCode;
       let createResp;
       let attempts = 0;
@@ -98,13 +95,11 @@ export default function QuickRoomModal({ token, onClose }) {
       while (attempts < maxAttempts) {
         attempts++;
 
-        // Generate code with timestamp + random suffix for uniqueness
         const timestamp = Date.now();
-        const random = Math.floor(Math.random() * 1000); // 0-999
+        const random = Math.floor(Math.random() * 1000);
         const shortCode = timestamp.toString(36) + random.toString(36);
-        quickRoomCode = `q-${shortCode}`.substring(0, 12); // Ensure max 12 chars
+        quickRoomCode = `q-${shortCode}`.substring(0, 12);
 
-        // Create the room
         createResp = await fetch("/api/rooms", {
           method: "POST",
           headers: {
@@ -115,19 +110,17 @@ export default function QuickRoomModal({ token, onClose }) {
         });
 
         if (createResp.ok) {
-          break; // Success!
+          break;
         }
 
-        // Check if it's a conflict error
         const errorData = await createResp.json().catch(() => ({}));
         if (createResp.status === 400 && errorData.detail?.includes("already exists")) {
           console.log(`[QuickRoom] Code collision detected (attempt ${attempts}/${maxAttempts}), retrying...`);
           if (attempts >= maxAttempts) {
             throw new Error("Failed to generate unique room code after multiple attempts");
           }
-          continue; // Retry with new code
+          continue;
         } else {
-          // Different error, don't retry
           throw new Error("Failed to create room");
         }
       }
@@ -138,7 +131,6 @@ export default function QuickRoomModal({ token, onClose }) {
 
       setRoomCode(quickRoomCode);
 
-      // Generate invite code with QR
       const inviteResp = await fetch(`/api/invites/generate/${quickRoomCode}`, {
         method: "POST"
       });
@@ -160,287 +152,90 @@ export default function QuickRoomModal({ token, onClose }) {
   function copyInviteLink() {
     if (!inviteData) return;
     navigator.clipboard.writeText(inviteData.invite_url);
-    // Could add a toast notification here
   }
 
   if (step === "creating") {
     return (
-      <div style={styles.overlay} onClick={onClose}>
-        <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-          <div style={styles.modalHeader}>
-            <h2 style={styles.modalTitle}>{t('quickRoom.creatingTitle')}</h2>
-            <button style={styles.closeButton} onClick={onClose}>✕</button>
-          </div>
-          <div style={styles.modalBody}>
-            <div style={styles.loadingSpinner}>
-              <div style={styles.spinner}></div>
-              <p style={styles.loadingText}>{t('quickRoom.settingUp')}</p>
-            </div>
-          </div>
+      <Modal isOpen={true} onClose={onClose} title={t('quickRoom.creatingTitle')}>
+        <div className="flex flex-col items-center gap-4 py-12">
+          <div className="w-12 h-12 border-4 border-border border-t-accent rounded-full animate-spin"></div>
+          <p className="text-muted">{t('quickRoom.settingUp')}</p>
         </div>
-      </div>
+      </Modal>
     );
   }
 
   if (error) {
     return (
-      <div style={styles.overlay} onClick={onClose}>
-        <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-          <div style={styles.modalHeader}>
-            <h2 style={styles.modalTitle}>{t('quickRoom.error')}</h2>
-            <button style={styles.closeButton} onClick={onClose}>✕</button>
-          </div>
-          <div style={styles.modalBody}>
-            <p style={{color: "#ef4444", textAlign: "center"}}>
-              {error}
-            </p>
-            <button style={styles.primaryButton} onClick={onClose}>
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
+      <Modal isOpen={true} onClose={onClose} title={t('quickRoom.error')}>
+        <p className="text-red-500 text-center mb-6">{error}</p>
+        <Button variant="primary" onClick={onClose} className="w-full">
+          Close
+        </Button>
+      </Modal>
     );
   }
 
   if (step === "joining") {
     return (
-      <div style={styles.overlay}>
-        <div style={styles.modal}>
-          <div style={styles.modalBody}>
-            <div style={styles.loadingSpinner}>
-              <div style={styles.spinner}></div>
-              <p style={styles.loadingText}>{t('quickRoom.guestJoined')}</p>
-            </div>
-          </div>
+      <Modal isOpen={true} onClose={() => {}} title="">
+        <div className="flex flex-col items-center gap-4 py-12">
+          <div className="w-12 h-12 border-4 border-border border-t-accent rounded-full animate-spin"></div>
+          <p className="text-muted">{t('quickRoom.guestJoined')}</p>
         </div>
-      </div>
+      </Modal>
     );
   }
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.modalHeader}>
-          <h2 style={styles.modalTitle}>{t('quickRoom.scanTitle')}</h2>
-          <button style={styles.closeButton} onClick={onClose}>✕</button>
+    <Modal isOpen={true} onClose={onClose} title={t('quickRoom.scanTitle')}>
+      <p className="text-muted text-center mb-6 leading-relaxed">
+        {t('quickRoom.qrInstructions')}
+      </p>
+
+      {inviteData && (
+        <div className="flex justify-center mb-6">
+          <img
+            src={inviteData.qr_code}
+            alt="QR Code"
+            className="w-[min(280px,70vw)] h-[min(280px,70vw)] rounded-lg border-2 border-border bg-white p-3"
+          />
         </div>
+      )}
 
-        <div style={styles.modalBody}>
-          <p style={styles.instructionText}>
-            {t('quickRoom.qrInstructions')}
-          </p>
-
-          {inviteData && (
-            <div style={styles.qrContainer}>
-              <img
-                src={inviteData.qr_code}
-                alt="QR Code"
-                style={styles.qrCode}
-              />
-            </div>
-          )}
-
-          <div style={styles.roomCodeContainer}>
-            <span style={styles.roomCodeLabel}>{t('quickRoom.roomLabel')}</span>
-            <code style={styles.roomCode}>{roomCode}</code>
-          </div>
-
-          <div style={styles.wsStatus}>
-            {wsConnected ? (
-              <span style={styles.statusConnected}>● {t('quickRoom.waitingForGuest')}</span>
-            ) : (
-              <span style={styles.statusDisconnected}>○ {t('quickRoom.connecting')}</span>
-            )}
-          </div>
-
-          <div style={styles.buttonGroup}>
-            <button style={styles.secondaryButton} onClick={copyInviteLink}>
-              {t('quickRoom.copyLink')}
-            </button>
-            <button
-              style={styles.primaryButton}
-              onClick={() => navigate(`/room/${roomCode}`)}
-            >
-              {t('quickRoom.enterNow')}
-            </button>
-          </div>
-
-          <p style={styles.expiryText}>
-            {t('quickRoom.expiresInMinutes', { minutes: inviteData?.expires_in_minutes || 30 })}
-          </p>
-        </div>
+      <div className="bg-bg-secondary rounded-lg p-3 mb-4 text-center border border-border">
+        <span className="text-muted text-sm mr-2">{t('quickRoom.roomLabel')}</span>
+        <code className="text-accent text-base font-mono font-semibold">{roomCode}</code>
       </div>
-    </div>
+
+      <div className="text-center mb-6 text-sm">
+        {wsConnected ? (
+          <span className="text-green-500">● {t('quickRoom.waitingForGuest')}</span>
+        ) : (
+          <span className="text-muted">○ {t('quickRoom.connecting')}</span>
+        )}
+      </div>
+
+      <div className="flex gap-3 mb-4 flex-wrap">
+        <Button
+          variant="secondary"
+          onClick={copyInviteLink}
+          className="flex-1 min-w-[150px]"
+        >
+          {t('quickRoom.copyLink')}
+        </Button>
+        <Button
+          variant="primary"
+          onClick={() => navigate(`/room/${roomCode}`)}
+          className="flex-1 min-w-[150px]"
+        >
+          {t('quickRoom.enterNow')}
+        </Button>
+      </div>
+
+      <p className="text-muted text-xs text-center">
+        {t('quickRoom.expiresInMinutes', { minutes: inviteData?.expires_in_minutes || 30 })}
+      </p>
+    </Modal>
   );
-}
-
-const styles = {
-  overlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "rgba(0, 0, 0, 0.8)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1000,
-    padding: "1rem"
-  },
-  modal: {
-    background: "#1a1a1a",
-    borderRadius: "16px",
-    border: "1px solid #333",
-    maxWidth: "500px",
-    width: "100%",
-    maxHeight: "90vh",
-    overflow: "auto",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.5)"
-  },
-  modalHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "1.5rem",
-    borderBottom: "1px solid #333"
-  },
-  modalTitle: {
-    fontSize: "clamp(1.25rem, 4vw, 1.5rem)",
-    margin: 0,
-    color: "white"
-  },
-  closeButton: {
-    background: "none",
-    border: "none",
-    color: "#999",
-    fontSize: "1.5rem",
-    cursor: "pointer",
-    padding: "0.25rem",
-    lineHeight: 1,
-    transition: "color 0.2s"
-  },
-  modalBody: {
-    padding: "1.5rem"
-  },
-  instructionText: {
-    color: "#ccc",
-    fontSize: "0.95rem",
-    lineHeight: "1.5",
-    marginBottom: "1.5rem",
-    textAlign: "center"
-  },
-  qrContainer: {
-    display: "flex",
-    justifyContent: "center",
-    marginBottom: "1.5rem"
-  },
-  qrCode: {
-    width: "min(280px, 70vw)",
-    height: "min(280px, 70vw)",
-    borderRadius: "12px",
-    border: "2px solid #333",
-    background: "white",
-    padding: "0.75rem"
-  },
-  roomCodeContainer: {
-    background: "#2a2a2a",
-    borderRadius: "8px",
-    padding: "0.75rem 1rem",
-    marginBottom: "1rem",
-    textAlign: "center",
-    border: "1px solid #444"
-  },
-  roomCodeLabel: {
-    color: "#999",
-    fontSize: "0.85rem",
-    marginRight: "0.5rem"
-  },
-  roomCode: {
-    color: "#3b82f6",
-    fontSize: "1rem",
-    fontFamily: "monospace",
-    fontWeight: "600"
-  },
-  wsStatus: {
-    textAlign: "center",
-    marginBottom: "1.5rem",
-    fontSize: "0.9rem"
-  },
-  statusConnected: {
-    color: "#10b981"
-  },
-  statusDisconnected: {
-    color: "#999"
-  },
-  buttonGroup: {
-    display: "flex",
-    gap: "0.75rem",
-    marginBottom: "1rem",
-    flexWrap: "wrap"
-  },
-  primaryButton: {
-    flex: "1 1 150px",
-    minWidth: "150px",
-    padding: "0.875rem 1.5rem",
-    background: "#3b82f6",
-    color: "white",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: "600",
-    fontSize: "1rem",
-    transition: "background 0.2s"
-  },
-  secondaryButton: {
-    flex: "1 1 150px",
-    minWidth: "150px",
-    padding: "0.875rem 1.5rem",
-    background: "#2a2a2a",
-    color: "white",
-    border: "1px solid #444",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: "600",
-    fontSize: "1rem",
-    transition: "all 0.2s"
-  },
-  expiryText: {
-    color: "#666",
-    fontSize: "0.8rem",
-    textAlign: "center",
-    margin: 0
-  },
-  loadingSpinner: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "1rem",
-    padding: "3rem 1rem"
-  },
-  spinner: {
-    width: "50px",
-    height: "50px",
-    border: "4px solid #333",
-    borderTop: "4px solid #3b82f6",
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite"
-  },
-  loadingText: {
-    color: "#999",
-    margin: 0
-  }
-};
-
-// Add keyframes for spinner animation
-if (typeof document !== 'undefined') {
-  const styleSheet = document.createElement("style");
-  styleSheet.textContent = `
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-  `;
-  document.head.appendChild(styleSheet);
 }

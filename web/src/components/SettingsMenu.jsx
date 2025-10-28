@@ -121,55 +121,20 @@ export default function SettingsMenu({
 
   return (
     <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: "rgba(0,0,0,0.85)",
-        zIndex: 1000,
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "flex-end",
-        padding: "0.5rem",
-        paddingTop: "max(3.5rem, calc(env(safe-area-inset-top) + 3.5rem))"
-      }}
+      className="fixed inset-0 bg-black/85 z-[1000] flex items-start justify-end p-2 pt-[max(3.5rem,calc(env(safe-area-inset-top)+3.5rem))]"
       onClick={handleClose}
     >
       {!canClose && (
-        <div style={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          background: "#ef4444",
-          color: "white",
-          padding: "1rem 1.5rem",
-          borderRadius: "8px",
-          fontSize: "0.9rem",
-          fontWeight: "500",
-          pointerEvents: "none",
-          opacity: 0,
-          animation: "fadeIn 0.3s forwards"
-        }}>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white px-6 py-4 rounded-lg text-sm font-medium pointer-events-none opacity-0 animate-fadeIn">
           Please select a language first
         </div>
       )}
       <div
-        style={{
-          background: "#1a1a1a",
-          borderRadius: "12px",
-          border: "1px solid #333",
-          minWidth: "280px",
-          maxWidth: "320px",
-          overflow: "hidden",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.5)"
-        }}
+        className="bg-card border border-border rounded-xl min-w-[280px] max-w-[320px] overflow-hidden shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Menu Items */}
-        <div style={{ padding: "0.5rem 0" }}>
+        <div className="py-2">
           {menuItems.map((item, index) => (
             <button
               key={index}
@@ -181,66 +146,41 @@ export default function SettingsMenu({
                 }
               }}
               disabled={item.disabled}
-              style={{
-                width: "100%",
-                padding: "0.875rem 1rem",
-                background: "transparent",
-                border: "none",
-                color: item.color || "white",
-                cursor: item.disabled ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                fontSize: "0.95rem",
-                transition: "background 0.15s",
-                opacity: item.disabled ? 0.5 : 1
-              }}
-              onMouseOver={(e) => !item.disabled && (e.currentTarget.style.background = "#2a2a2a")}
-              onMouseOut={(e) => e.currentTarget.style.background = "transparent"}
+              className={`w-full px-4 py-3.5 bg-transparent border-none ${
+                item.color ? '' : 'text-fg'
+              } cursor-pointer flex items-center gap-3 text-base transition-colors hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed`}
+              style={item.color ? { color: item.color } : {}}
             >
-              <span style={{ fontSize: "1.25rem", width: "24px", textAlign: "center" }}>
+              <span className="text-xl w-6 text-center">
                 {item.icon}
               </span>
-              <span style={{ flex: 1, textAlign: "left" }}>
+              <span className="flex-1 text-left">
                 {item.label}
               </span>
               {item.value && (
-                <span style={{ fontSize: "0.85rem", color: "#999" }}>
+                <span className="text-sm text-muted">
                   {item.value}
                 </span>
               )}
               {item.isToggle && (
                 <div
-                  style={{
-                    width: "44px",
-                    height: "24px",
-                    borderRadius: "12px",
-                    background: item.toggleValue ? "#22c55e" : "#444",
-                    position: "relative",
-                    transition: "background 0.2s",
-                    cursor: "pointer"
-                  }}
+                  className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${
+                    item.toggleValue ? 'bg-green-500' : 'bg-border'
+                  }`}
                   onClick={(e) => {
                     e.stopPropagation();
                     item.onClick();
                   }}
                 >
                   <div
-                    style={{
-                      width: "20px",
-                      height: "20px",
-                      borderRadius: "50%",
-                      background: "white",
-                      position: "absolute",
-                      top: "2px",
-                      left: item.toggleValue ? "22px" : "2px",
-                      transition: "left 0.2s"
-                    }}
+                    className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all ${
+                      item.toggleValue ? 'left-[22px]' : 'left-0.5'
+                    }`}
                   />
                 </div>
               )}
               {item.hasSubMenu && (
-                <span style={{ color: "#666" }}>›</span>
+                <span className="text-muted">›</span>
               )}
             </button>
           ))}
