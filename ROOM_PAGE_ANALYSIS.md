@@ -262,7 +262,7 @@ const RING_BUFFER_MS = 500;    // pre-speech buffer
 
 ## Current Progress (October 28, 2025)
 
-### ✅ COMPLETED Components (7/11)
+### ✅ COMPLETED Components (11/11) - Component Extraction Complete!
 
 #### Phase 1: Presentational Components (LOW RISK) - 100% Complete
 1. **RoomHeader** ✅ - Header bar with back button, room name, participant counts, VAD status, menu
@@ -294,6 +294,39 @@ const RING_BUFFER_MS = 500;    // pre-speech buffer
    - 75 lines of code, 10 test suites, 50+ assertions
    - [RoomExpirationModal.jsx](web/src/components/room/RoomExpirationModal.jsx:1)
 
+#### Phase 3: Interactive Components (MEDIUM-HIGH RISK) - 100% Complete
+8. **MicrophoneButton** ✅ - Large record button with PTT support
+   - 130 lines of code, 21 test suites, 100+ assertions
+   - Start/stop recording with visual states (idle green, streaming red)
+   - Push-to-talk mode with mouse and touch events
+   - [MicrophoneButton.jsx](web/src/components/room/MicrophoneButton.jsx:1)
+
+9. **RoomControls** ✅ - Bottom control panel
+   - 95 lines of code, 18 test suites, 90+ assertions
+   - Push-to-talk toggle checkbox
+   - Network status indicator integration
+   - Microphone button integration
+   - Mobile-optimized with safe area insets
+   - [RoomControls.jsx](web/src/components/room/RoomControls.jsx:1)
+
+#### Phase 4: Message Display Components (MEDIUM RISK) - 100% Complete
+10. **ChatMessage** ✅ - Individual message renderer
+    - 220 lines of code, 30 test suites, 150+ assertions
+    - System messages (join/leave notifications)
+    - Translated messages (translation + source text)
+    - Source-only messages (own messages)
+    - Debug icon for admins
+    - Processing indicators and speaking placeholders
+    - [ChatMessage.jsx](web/src/components/room/ChatMessage.jsx:1)
+
+11. **ChatMessageList** ✅ - Scrollable message container
+    - 105 lines of code, 20 test suites, 100+ assertions
+    - Auto-scroll support with ref
+    - Loading/empty states
+    - Admin left warning integration
+    - Touch-optimized scrolling
+    - [ChatMessageList.jsx](web/src/components/room/ChatMessageList.jsx:1)
+
 #### Supporting Infrastructure ✅
 - **Language Constants** - Centralized LANGUAGES array with helpers
   - [languages.js](web/src/constants/languages.js:1)
@@ -303,22 +336,15 @@ const RING_BUFFER_MS = 500;    // pre-speech buffer
   - [utils.jsx](web/src/test/utils.jsx:1)
 
 ### 📊 Statistics
-- **Components extracted**: 7 of 11 planned
-- **Total code written**: ~560 lines (components) + ~3500 lines (tests)
-- **Test coverage**: 83 test suites, 350+ assertions
+- **Components extracted**: 11 of 11 planned ✅ (100% component extraction complete!)
+- **Total code written**: ~1,110 lines (components) + ~6,850 lines (tests)
+- **Test coverage**: 172 test suites, 790+ assertions
 - **Backend tests**: 224/224 passing ✅
-- **Test-to-code ratio**: 6:1
-- **Progress**: ~50% complete
+- **Test-to-code ratio**: 6.2:1
+- **Component extraction**: 100% complete ✅
+- **Overall progress**: ~75% complete (hooks and integration remaining)
 
-### 🔄 REMAINING Components (4/11)
-
-#### Phase 3: Interactive Components (MEDIUM-HIGH RISK)
-8. **MicrophoneButton** ⏳ - Start/stop/PTT button with visual states (~100 lines)
-9. **RoomControls** ⏳ - Bottom panel: mic + PTT toggle + network status (~120 lines)
-
-#### Phase 4: Message Components (MEDIUM RISK)
-10. **ChatMessage** ⏳ - Individual message rendering with translations (~100 lines)
-11. **ChatMessageList** ⏳ - Scrollable container with auto-scroll (~150 lines)
+### 🔄 REMAINING Work
 
 #### Phase 5: Custom Hooks (HIGH RISK) - Not Started
 12. **useRoomWebSocket** - Main WebSocket connection logic (~400 lines)
@@ -331,18 +357,22 @@ const RING_BUFFER_MS = 500;    // pre-speech buffer
 17. **Integration Testing** - Full E2E tests
 
 ### 🎯 Next Steps
-1. ⏳ Extract MicrophoneButton component
-2. ⏳ Extract RoomControls component
-3. ⏳ Extract ChatMessage and ChatMessageList
-4. ⏳ Create custom hooks for WebSocket/Audio logic
+1. ✅ Extract MicrophoneButton component
+2. ✅ Extract RoomControls component
+3. ✅ Extract ChatMessage and ChatMessageList
+4. ⏳ Create custom hooks for WebSocket/Audio logic (HIGH RISK)
 5. ⏳ Refactor main RoomPage to use all components
 6. ⏳ Integration testing and manual QA
 7. ⏳ Merge to main branch
+
+**Note**: Phase 5 (custom hooks) is HIGH RISK due to complex WebSocket, audio streaming, and VAD logic.
+This requires careful extraction to avoid breaking real-time functionality.
 
 ### 📝 Git Commits (feature/room-page-redesign branch)
 - `394ed23` - Setup testing infrastructure + RoomHeader + NetworkStatusIndicator
 - `0b6a258` - LanguagePickerModal + CostsModal + language constants
 - `38c629b` - WelcomeBanner + AdminLeaveModal + RoomExpirationModal
+- `20e3a22` - MicrophoneButton + RoomControls + ChatMessage + ChatMessageList ✅ (11/11 components complete!)
 
 ### 🎨 Design System Integration
 All extracted components follow the design system:
