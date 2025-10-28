@@ -6,17 +6,30 @@ Tests the complete message lifecycle:
 """
 
 import pytest
+import pytest_asyncio
 import json
+import os
 import asyncio
 import redis.asyncio as redis
 from unittest.mock import AsyncMock, patch
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/5")
+
+
+@pytest_asyncio.fixture
+async def async_redis():
+    """Create a Redis client for testing."""
+    client = redis.from_url(REDIS_URL, decode_responses=True)
+    yield client
+    await client.aclose()
 
 
 @pytest.mark.e2e
 class TestDebugTrackingE2E:
     """End-to-end tests for debug tracking through complete pipeline"""
 
-    async def test_complete_message_debug_flow_polish_to_english(self, async_redis, db):
+    @pytest.mark.asyncio
+    async def test_complete_message_debug_flow_polish_to_english(self, async_redis):
         """
         Test full pipeline: Polish audio → STT → MT (pl→en) → Debug API
 
@@ -66,10 +79,10 @@ class TestDebugTrackingE2E:
             "throttle_reason": None
         }
 
-        await append_mt_debug_info(async_redis, segment_id, mt_data, mt_routing)
+        await append_mt_debug_info(async_redis, room_code, segment_id, mt_data, mt_routing)
 
         # Step 3: Retrieve complete debug info
-        debug_info = await get_debug_info(async_redis, segment_id)
+        debug_info = await get_debug_info(async_redis, room_code, segment_id)
 
         # Verify complete structure
         assert debug_info is not None
@@ -101,6 +114,7 @@ class TestDebugTrackingE2E:
         assert debug_info["totals"]["mt_translations"] == 1
 
 
+    @pytest.mark.asyncio
     async def test_multi_language_room_debug_tracking(self, async_redis):
         """
         Test debug tracking in room with multiple participants
@@ -149,7 +163,7 @@ class TestDebugTrackingE2E:
             "throttle_delay_ms": 0,
             "throttle_reason": None
         }
-        await append_mt_debug_info(async_redis, segment_id, mt_en_data, mt_en_routing)
+        await append_mt_debug_info(async_redis, room_code, segment_id, mt_en_data, mt_en_routing)
 
         # MT 2: pl→ar (GPT-4o-mini, throttled)
         mt_ar_data = {
@@ -169,10 +183,10 @@ class TestDebugTrackingE2E:
             "throttle_delay_ms": 2500,
             "throttle_reason": "Arabic partial throttling (max 1 req/2.5s)"
         }
-        await append_mt_debug_info(async_redis, segment_id, mt_ar_data, mt_ar_routing)
+        await append_mt_debug_info(async_redis, room_code, segment_id, mt_ar_data, mt_ar_routing)
 
         # Retrieve and verify
-        debug_info = await get_debug_info(async_redis, segment_id)
+        debug_info = await get_debug_info(async_redis, room_code, segment_id)
 
         assert len(debug_info["mt"]) == 2
         assert debug_info["totals"]["mt_translations"] == 2
@@ -189,6 +203,7 @@ class TestDebugTrackingE2E:
         assert debug_info["mt"][1]["throttle_delay_ms"] == 2500
 
 
+    @pytest.mark.asyncio
     async def test_streaming_mode_with_zero_latency(self, async_redis):
         """
         Test streaming STT mode shows zero latency
@@ -216,12 +231,13 @@ class TestDebugTrackingE2E:
         await create_stt_debug_info(async_redis, segment_id, room_code, stt_data, stt_routing)
 
         # Verify
-        debug_info = await get_debug_info(async_redis, segment_id)
+        debug_info = await get_debug_info(async_redis, room_code, segment_id)
         assert debug_info["stt"]["mode"] == "streaming"
         assert debug_info["stt"]["latency_ms"] == 0
         assert "streaming" in debug_info["stt"]["routing_reason"].lower()
 
 
+    @pytest.mark.asyncio
     async def test_provider_fallback_captured_in_debug(self, async_redis):
         """
         Test that fallback scenario is captured correctly
@@ -266,10 +282,10 @@ class TestDebugTrackingE2E:
             "throttle_delay_ms": 0,
             "throttle_reason": None
         }
-        await append_mt_debug_info(async_redis, segment_id, mt_data, mt_routing)
+        await append_mt_debug_info(async_redis, room_code, segment_id, mt_data, mt_routing)
 
         # Verify fallback flags
-        debug_info = await get_debug_info(async_redis, segment_id)
+        debug_info = await get_debug_info(async_redis, room_code, segment_id)
 
         assert debug_info["stt"]["fallback_triggered"] is True
         assert "fallback" in debug_info["stt"]["routing_reason"].lower()
@@ -278,6 +294,7 @@ class TestDebugTrackingE2E:
         assert "fallback" in debug_info["mt"][0]["routing_reason"].lower()
 
 
+    @pytest.mark.asyncio
     async def test_cached_translation_shows_zero_latency(self, async_redis):
         """
         Test that cached MT translations show 0ms latency
@@ -322,14 +339,15 @@ class TestDebugTrackingE2E:
             "throttle_delay_ms": 0,
             "throttle_reason": None
         }
-        await append_mt_debug_info(async_redis, segment_id, mt_data, mt_routing)
+        await append_mt_debug_info(async_redis, room_code, segment_id, mt_data, mt_routing)
 
         # Verify
-        debug_info = await get_debug_info(async_redis, segment_id)
+        debug_info = await get_debug_info(async_redis, room_code, segment_id)
         assert debug_info["mt"][0]["latency_ms"] == 0
         assert "cached" in debug_info["mt"][0]["routing_reason"]
 
 
+    @pytest.mark.asyncio
     async def test_skip_reasons_appear_for_same_language(self, async_redis):
         """
         Test that skip reasons are shown when no translation is needed
@@ -359,6 +377,7 @@ class TestDebugTrackingE2E:
         # Skip reason: pl→pl (same language)
         await append_mt_skip_reason(
             redis=async_redis,
+            room_code=room_code,
             segment_id=segment_id,
             src_lang="pl",
             tgt_lang="pl",
@@ -366,7 +385,7 @@ class TestDebugTrackingE2E:
         )
 
         # Verify
-        debug_info = await get_debug_info(async_redis, segment_id)
+        debug_info = await get_debug_info(async_redis, room_code, segment_id)
         assert len(debug_info["mt"]) == 0  # No translations
         assert len(debug_info["mt_skip_reasons"]) == 1
         assert debug_info["mt_skip_reasons"][0]["src_lang"] == "pl"
@@ -374,6 +393,7 @@ class TestDebugTrackingE2E:
         assert "No translation needed" in debug_info["mt_skip_reasons"][0]["reason"]
 
 
+    @pytest.mark.asyncio
     async def test_cost_calculations_accurate_across_providers(self, async_redis):
         """
         Test that cost calculations are accurate for different provider types
@@ -418,7 +438,7 @@ class TestDebugTrackingE2E:
             "throttle_delay_ms": 0,
             "throttle_reason": None
         }
-        await append_mt_debug_info(async_redis, segment_id, mt_deepl_data, mt_deepl_routing)
+        await append_mt_debug_info(async_redis, room_code, segment_id, mt_deepl_data, mt_deepl_routing)
 
         # MT 2: GPT-4o-mini (token-based)
         mt_gpt_data = {
@@ -438,10 +458,10 @@ class TestDebugTrackingE2E:
             "throttle_delay_ms": 0,
             "throttle_reason": None
         }
-        await append_mt_debug_info(async_redis, segment_id, mt_gpt_data, mt_gpt_routing)
+        await append_mt_debug_info(async_redis, room_code, segment_id, mt_gpt_data, mt_gpt_routing)
 
         # Verify costs
-        debug_info = await get_debug_info(async_redis, segment_id)
+        debug_info = await get_debug_info(async_redis, room_code, segment_id)
 
         # STT cost: 10 sec * $0.00012/sec = $0.0012
         expected_stt_cost = 10.0 * 0.00012

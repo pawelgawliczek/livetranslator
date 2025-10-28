@@ -411,14 +411,15 @@ def get_system_stats(
 # Message Debug Info (Admin Debug Feature - Phase 3)
 # ============================================================================
 
-@router.get("/message-debug/{segment_id}")
+@router.get("/message-debug/{room_code}/{segment_id}")
 async def get_message_debug_info(
+    room_code: str,
     segment_id: int,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     """
-    Get complete debug information for a message by segment_id.
+    Get complete debug information for a message by room_code and segment_id.
 
     Returns debug data from Redis (if available, <24h old) or reconstructs
     from database (for older messages or if Redis expired).
@@ -429,11 +430,12 @@ async def get_message_debug_info(
     # Try Redis first (fast path for recent messages)
     r = await redis.from_url(REDIS_URL, decode_responses=True)
     try:
-        debug_info = await get_debug_info(r, segment_id)
+        debug_info = await get_debug_info(r, room_code, segment_id)
 
         if debug_info:
             return {
                 "source": "redis",
+                "room_code": room_code,
                 "segment_id": segment_id,
                 "data": debug_info
             }
@@ -441,25 +443,28 @@ async def get_message_debug_info(
         await r.aclose()
 
     # Fallback to database reconstruction (for expired or old messages)
-    # Query segment info
+    # Query segment info - need to join with rooms to get room by code
     segment_query = text("""
         SELECT
-            id,
-            room_id,
-            text,
-            source_lang,
-            speaker,
-            created_at
-        FROM segments
-        WHERE id = :segment_id
+            s.id,
+            s.room_id,
+            s.text,
+            s.lang as source_lang,
+            s.speaker_id as speaker,
+            s.ts_iso as created_at,
+            r.code as room_code
+        FROM segments s
+        JOIN rooms r ON s.room_id = r.id
+        WHERE r.code = :room_code
+          AND s.segment_id = :segment_id
     """)
 
-    segment = db.execute(segment_query, {"segment_id": segment_id}).fetchone()
+    segment = db.execute(segment_query, {"room_code": room_code, "segment_id": str(segment_id)}).fetchone()
 
     if not segment:
         raise HTTPException(
             status_code=404,
-            detail=f"Segment {segment_id} not found"
+            detail=f"Segment {segment_id} not found in room {room_code}"
         )
 
     # Query STT costs
@@ -510,8 +515,8 @@ async def get_message_debug_info(
     # Reconstruct debug info from database
     debug_data = {
         "segment_id": segment_id,
-        "room_code": segment[1],
-        "timestamp": segment[5].isoformat() + "Z" if segment[5] else None,
+        "room_code": segment[6],  # room_code from JOIN
+        "timestamp": segment[5] if segment[5] else None,
         "stt": None,
         "mt": [],
         "totals": {

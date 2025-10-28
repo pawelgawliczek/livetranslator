@@ -2557,6 +2557,7 @@ export default function RoomPage({ token, onLogout }) {
       <MessageDebugModal
         isOpen={debugModalOpen}
         onClose={() => setDebugModalOpen(false)}
+        roomCode={roomId}
         segmentId={debugSegmentId}
         token={token}
       />

@@ -4,7 +4,7 @@ Debug Tracker Service
 Tracks per-message debug information in Redis for admin diagnostics.
 Stores STT/MT processing details, routing decisions, costs, and latencies.
 
-Redis key format: debug:segment:{segment_id}
+Redis key format: debug:{room_code}:segment:{segment_id}
 TTL: 24 hours (86400 seconds)
 """
 
@@ -213,7 +213,7 @@ async def create_stt_debug_info(
         }
 
         # Store in Redis with 24h TTL
-        key = f"debug:segment:{segment_id}"
+        key = f"debug:{room_code}:segment:{segment_id}"
         await redis.set(key, json.dumps(debug_info), ex=DEBUG_TTL_SECONDS)
 
         print(f"[Debug Tracker] ✓ Created debug info: segment={segment_id}, room={room_code}, provider={stt_data['provider']}")
@@ -225,6 +225,7 @@ async def create_stt_debug_info(
 
 async def append_mt_debug_info(
     redis: Redis,
+    room_code: str,
     segment_id: int,
     mt_data: dict,
     routing_info: dict
@@ -234,7 +235,8 @@ async def append_mt_debug_info(
 
     Args:
         redis: Redis client
-        segment_id: Unique segment identifier
+        room_code: Room code for key isolation
+        segment_id: Unique segment identifier (per-room)
         mt_data: Dictionary containing:
             - src_lang: Source language code
             - tgt_lang: Target language code
@@ -253,11 +255,11 @@ async def append_mt_debug_info(
     """
     try:
         # Retrieve existing debug info
-        key = f"debug:segment:{segment_id}"
+        key = f"debug:{room_code}:segment:{segment_id}"
         data = await redis.get(key)
 
         if not data:
-            print(f"[Debug Tracker] ⚠️  No existing debug info for segment {segment_id}, cannot append MT data")
+            print(f"[Debug Tracker] ⚠️  No existing debug info for room {room_code} segment {segment_id}, cannot append MT data")
             return
 
         debug_info = json.loads(data)
@@ -304,7 +306,7 @@ async def append_mt_debug_info(
         # Update Redis with extended TTL
         await redis.set(key, json.dumps(debug_info), ex=DEBUG_TTL_SECONDS)
 
-        print(f"[Debug Tracker] ✓ Appended MT debug info: segment={segment_id}, {mt_data['src_lang']}→{mt_data['tgt_lang']}, provider={mt_data['provider']}")
+        print(f"[Debug Tracker] ✓ Appended MT debug info: room={room_code}, segment={segment_id}, {mt_data['src_lang']}→{mt_data['tgt_lang']}, provider={mt_data['provider']}")
 
     except Exception as e:
         print(f"[Debug Tracker] ⚠️  Failed to append MT debug info for segment {segment_id}: {e}")
@@ -313,6 +315,7 @@ async def append_mt_debug_info(
 
 async def append_mt_skip_reason(
     redis: Redis,
+    room_code: str,
     segment_id: int,
     src_lang: str,
     tgt_lang: str,
@@ -323,18 +326,19 @@ async def append_mt_skip_reason(
 
     Args:
         redis: Redis client
-        segment_id: Unique segment identifier
+        room_code: Room code for key isolation
+        segment_id: Unique segment identifier (per-room)
         src_lang: Source language code
         tgt_lang: Target language code
         reason: Human-readable reason for skipping
     """
     try:
         # Retrieve existing debug info
-        key = f"debug:segment:{segment_id}"
+        key = f"debug:{room_code}:segment:{segment_id}"
         data = await redis.get(key)
 
         if not data:
-            print(f"[Debug Tracker] ⚠️  No existing debug info for segment {segment_id}, cannot append skip reason")
+            print(f"[Debug Tracker] ⚠️  No existing debug info for room {room_code} segment {segment_id}, cannot append skip reason")
             return
 
         debug_info = json.loads(data)
@@ -351,26 +355,27 @@ async def append_mt_skip_reason(
         # Update Redis with extended TTL
         await redis.set(key, json.dumps(debug_info), ex=DEBUG_TTL_SECONDS)
 
-        print(f"[Debug Tracker] ✓ Recorded MT skip: segment={segment_id}, {src_lang}→{tgt_lang}, reason={reason}")
+        print(f"[Debug Tracker] ✓ Recorded MT skip: room={room_code}, segment={segment_id}, {src_lang}→{tgt_lang}, reason={reason}")
 
     except Exception as e:
         print(f"[Debug Tracker] ⚠️  Failed to append MT skip reason for segment {segment_id}: {e}")
         # Don't raise - debug tracking is optional
 
 
-async def get_debug_info(redis: Redis, segment_id: int) -> Optional[dict]:
+async def get_debug_info(redis: Redis, room_code: str, segment_id: int) -> Optional[dict]:
     """
     Retrieve debug info from Redis.
 
     Args:
         redis: Redis client
-        segment_id: Unique segment identifier
+        room_code: Room code for key isolation
+        segment_id: Unique segment identifier (per-room)
 
     Returns:
         Debug info dictionary or None if not found
     """
     try:
-        key = f"debug:segment:{segment_id}"
+        key = f"debug:{room_code}:segment:{segment_id}"
         data = await redis.get(key)
 
         if not data:

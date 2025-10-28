@@ -351,6 +351,7 @@ async def router_loop():
                         print(f"[MT Router] ⊘ Skipping auto→{tgt_normalized} (unknown source language)")
                         await append_mt_skip_reason(
                             redis=r,
+                            room_code=room,
                             segment_id=segment,
                             src_lang=src_lang,
                             tgt_lang=tgt_normalized,
@@ -363,6 +364,7 @@ async def router_loop():
                         print(f"[MT Router] ⊘ Skipping {src_lang}→{tgt_normalized} (same language)")
                         await append_mt_skip_reason(
                             redis=r,
+                            room_code=room,
                             segment_id=segment,
                             src_lang=src_lang,
                             tgt_lang=tgt_normalized,
@@ -474,6 +476,7 @@ async def router_loop():
                         # Track debug info (fire-and-forget) - always track, even for cached
                         await append_mt_debug_info(
                             redis=r,
+                            room_code=room,
                             segment_id=segment,
                             mt_data={
                                 "src_lang": src_lang,

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 
-export default function MessageDebugModal({ isOpen, onClose, segmentId, token }) {
+export default function MessageDebugModal({ isOpen, onClose, roomCode, segmentId, token }) {
   const [debugData, setDebugData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [source, setSource] = useState(null);
 
   useEffect(() => {
-    if (!isOpen || !segmentId) {
+    if (!isOpen || !segmentId || !roomCode) {
       return;
     }
 
@@ -17,7 +17,7 @@ export default function MessageDebugModal({ isOpen, onClose, segmentId, token })
       setError(null);
 
       try {
-        const response = await fetch(`/api/admin/message-debug/${segmentId}`, {
+        const response = await fetch(`/api/admin/message-debug/${roomCode}/${segmentId}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -46,7 +46,7 @@ export default function MessageDebugModal({ isOpen, onClose, segmentId, token })
     };
 
     fetchDebugInfo();
-  }, [isOpen, segmentId, token]);
+  }, [isOpen, roomCode, segmentId, token]);
 
   // Close modal on Escape key
   useEffect(() => {
