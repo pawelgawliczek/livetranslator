@@ -202,6 +202,7 @@ async def create_stt_debug_info(
             },
 
             "mt": [],  # Will be populated by append_mt_debug_info()
+            "mt_skip_reasons": [],  # Will be populated by append_mt_skip_reason()
 
             "totals": {
                 "stt_cost_usd": stt_cost,
@@ -307,6 +308,53 @@ async def append_mt_debug_info(
 
     except Exception as e:
         print(f"[Debug Tracker] ⚠️  Failed to append MT debug info for segment {segment_id}: {e}")
+        # Don't raise - debug tracking is optional
+
+
+async def append_mt_skip_reason(
+    redis: Redis,
+    segment_id: int,
+    src_lang: str,
+    tgt_lang: str,
+    reason: str
+) -> None:
+    """
+    Record why an MT translation was skipped.
+
+    Args:
+        redis: Redis client
+        segment_id: Unique segment identifier
+        src_lang: Source language code
+        tgt_lang: Target language code
+        reason: Human-readable reason for skipping
+    """
+    try:
+        # Retrieve existing debug info
+        key = f"debug:segment:{segment_id}"
+        data = await redis.get(key)
+
+        if not data:
+            print(f"[Debug Tracker] ⚠️  No existing debug info for segment {segment_id}, cannot append skip reason")
+            return
+
+        debug_info = json.loads(data)
+
+        # Add skip reason
+        skip_entry = {
+            "src_lang": src_lang,
+            "tgt_lang": tgt_lang,
+            "reason": reason
+        }
+
+        debug_info["mt_skip_reasons"].append(skip_entry)
+
+        # Update Redis with extended TTL
+        await redis.set(key, json.dumps(debug_info), ex=DEBUG_TTL_SECONDS)
+
+        print(f"[Debug Tracker] ✓ Recorded MT skip: segment={segment_id}, {src_lang}→{tgt_lang}, reason={reason}")
+
+    except Exception as e:
+        print(f"[Debug Tracker] ⚠️  Failed to append MT skip reason for segment {segment_id}: {e}")
         # Don't raise - debug tracking is optional
 
 

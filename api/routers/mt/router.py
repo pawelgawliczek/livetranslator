@@ -18,7 +18,7 @@ import google_backend
 import amazon_backend
 
 # Import debug tracker
-from debug_tracker import append_mt_debug_info
+from debug_tracker import append_mt_debug_info, append_mt_skip_reason
 
 # Config
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/5")
@@ -349,11 +349,25 @@ async def router_loop():
                     # Skip translation if source language is unknown/auto
                     if src_lang == "auto":
                         print(f"[MT Router] ⊘ Skipping auto→{tgt_normalized} (unknown source language)")
+                        await append_mt_skip_reason(
+                            redis=r,
+                            segment_id=segment,
+                            src_lang=src_lang,
+                            tgt_lang=tgt_normalized,
+                            reason="Source language unknown (auto-detected as 'auto')"
+                        )
                         continue
 
                     # Skip translation if source and target are the same
                     if src_lang == tgt_normalized:
                         print(f"[MT Router] ⊘ Skipping {src_lang}→{tgt_normalized} (same language)")
+                        await append_mt_skip_reason(
+                            redis=r,
+                            segment_id=segment,
+                            src_lang=src_lang,
+                            tgt_lang=tgt_normalized,
+                            reason=f"No translation needed - source and target are both '{src_lang}'"
+                        )
                         continue
 
                     try:

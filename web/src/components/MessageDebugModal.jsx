@@ -440,6 +440,63 @@ export default function MessageDebugModal({ isOpen, onClose, segmentId, token })
                 </div>
               )}
 
+              {/* MT Skip Reasons Section */}
+              {debugData.mt_skip_reasons && debugData.mt_skip_reasons.length > 0 && (
+                <div style={{
+                  background: '#0f0f0f',
+                  border: '1px solid #2a2a2a',
+                  borderRadius: '8px',
+                  padding: '1rem',
+                  marginBottom: '1rem'
+                }}>
+                  <h3 style={{
+                    margin: '0 0 0.75rem 0',
+                    fontSize: '0.95rem',
+                    fontWeight: '600',
+                    color: '#fb923c'
+                  }}>
+                    ℹ️ Translation Info
+                  </h3>
+
+                  {debugData.mt_skip_reasons.map((skip, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        background: '#1a1a1a',
+                        border: '1px solid #2a2a2a',
+                        borderRadius: '6px',
+                        padding: '0.75rem',
+                        marginBottom: idx < debugData.mt_skip_reasons.length - 1 ? '0.5rem' : 0,
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <span style={{ color: '#999' }}>Target Language:</span>{' '}
+                        <span style={{
+                          background: '#2a2a1a',
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '4px',
+                          color: '#fb923c',
+                          fontFamily: 'monospace'
+                        }}>
+                          {skip.src_lang} → {skip.tgt_lang}
+                        </span>
+                      </div>
+
+                      <div style={{
+                        padding: '0.5rem',
+                        background: '#1a1a0f',
+                        borderRadius: '4px',
+                        color: '#fb923c',
+                        fontSize: '0.8rem'
+                      }}>
+                        <strong>Reason:</strong> {skip.reason}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Totals Section */}
               {debugData.totals && (
                 <div style={{
