@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import Modal from "./ui/Modal";
+import Button from "./ui/Button";
 
 export default function InviteModal({ roomCode, onClose }) {
   const { t } = useTranslation();
@@ -62,368 +64,142 @@ export default function InviteModal({ roomCode, onClose }) {
 
   if (loading) {
     return (
-      <div style={styles.overlay} onClick={onClose}>
-        <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-          <div style={styles.modalHeader}>
-            <h2 style={styles.modalTitle}>{t('invite.generatingInvite')}</h2>
-            <button style={styles.closeButton} onClick={onClose}>✕</button>
-          </div>
-          <div style={styles.modalBody}>
-            <div style={styles.loadingSpinner}>
-              <div style={styles.spinner}></div>
-            </div>
-          </div>
+      <Modal isOpen={true} onClose={onClose} title={t('invite.generatingInvite')}>
+        <div className="flex flex-col items-center gap-4 py-12">
+          <div className="w-12 h-12 border-4 border-border border-t-accent rounded-full animate-spin"></div>
         </div>
-      </div>
+      </Modal>
     );
   }
 
   if (error) {
     return (
-      <div style={styles.overlay} onClick={onClose}>
-        <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-          <div style={styles.modalHeader}>
-            <h2 style={styles.modalTitle}>{t('invite.error')}</h2>
-            <button style={styles.closeButton} onClick={onClose}>✕</button>
-          </div>
-          <div style={styles.modalBody}>
-            <p style={{color: "#ef4444", textAlign: "center"}}>
-              {error}
-            </p>
-            <button style={styles.primaryButton} onClick={onClose}>
-              {t('common.close')}
-            </button>
-          </div>
-        </div>
-      </div>
+      <Modal isOpen={true} onClose={onClose} title={t('invite.error')}>
+        <p className="text-red-500 text-center mb-6">{error}</p>
+        <Button variant="primary" onClick={onClose} className="w-full">
+          {t('common.close')}
+        </Button>
+      </Modal>
     );
   }
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.modalHeader}>
-          <h2 style={styles.modalTitle}>{t('invite.title')}</h2>
-          <button style={styles.closeButton} onClick={onClose}>✕</button>
+    <Modal isOpen={true} onClose={onClose} title={t('invite.title')}>
+      {/* Share method tabs */}
+      <div className="flex gap-2 mb-6 border-b border-border pb-2 flex-wrap">
+        <button
+          className={`flex-1 min-w-[90px] px-2 py-3 bg-transparent border-none rounded-t-lg text-sm font-medium transition-all text-center ${
+            shareMethod === "qr"
+              ? "bg-bg-secondary text-accent border-b-2 border-accent"
+              : "text-muted hover:text-fg"
+          }`}
+          onClick={() => setShareMethod("qr")}
+        >
+          {t('invite.qrCodeTab')}
+        </button>
+        <button
+          className={`flex-1 min-w-[90px] px-2 py-3 bg-transparent border-none rounded-t-lg text-sm font-medium transition-all text-center ${
+            shareMethod === "link"
+              ? "bg-bg-secondary text-accent border-b-2 border-accent"
+              : "text-muted hover:text-fg"
+          }`}
+          onClick={() => setShareMethod("link")}
+        >
+          {t('invite.linkTab')}
+        </button>
+        <button
+          className={`flex-1 min-w-[90px] px-2 py-3 bg-transparent border-none rounded-t-lg text-sm font-medium transition-all text-center ${
+            shareMethod === "email"
+              ? "bg-bg-secondary text-accent border-b-2 border-accent"
+              : "text-muted hover:text-fg"
+          }`}
+          onClick={() => setShareMethod("email")}
+        >
+          {t('invite.emailTab')}
+        </button>
+      </div>
+
+      {/* QR Code view */}
+      {shareMethod === "qr" && inviteData && (
+        <div className="min-h-[300px]">
+          <p className="text-muted text-center mb-6 leading-relaxed">
+            {t('invite.qrInstructions')}
+          </p>
+          <div className="flex justify-center mb-6">
+            <img
+              src={inviteData.qr_code}
+              alt="QR Code"
+              className="w-[min(280px,70vw)] h-[min(280px,70vw)] rounded-lg border-2 border-border bg-white p-3"
+            />
+          </div>
+          <Button variant="secondary" onClick={downloadQR} className="w-full">
+            {t('invite.downloadQR')}
+          </Button>
         </div>
+      )}
 
-        <div style={styles.modalBody}>
-          {/* Share method tabs */}
-          <div style={styles.tabs}>
-            <button
-              style={{
-                ...styles.tab,
-                ...(shareMethod === "qr" ? styles.tabActive : {})
-              }}
-              onClick={() => setShareMethod("qr")}
-            >
-              {t('invite.qrCodeTab')}
-            </button>
-            <button
-              style={{
-                ...styles.tab,
-                ...(shareMethod === "link" ? styles.tabActive : {})
-              }}
-              onClick={() => setShareMethod("link")}
-            >
-              {t('invite.linkTab')}
-            </button>
-            <button
-              style={{
-                ...styles.tab,
-                ...(shareMethod === "email" ? styles.tabActive : {})
-              }}
-              onClick={() => setShareMethod("email")}
-            >
-              {t('invite.emailTab')}
-            </button>
+      {/* Link view */}
+      {shareMethod === "link" && inviteData && (
+        <div className="min-h-[300px]">
+          <p className="text-muted text-center mb-6 leading-relaxed">
+            {t('invite.linkInstructions')}
+          </p>
+          <div className="mb-6">
+            <input
+              type="text"
+              readOnly
+              value={inviteData.invite_url}
+              onClick={(e) => e.target.select()}
+              className="w-full px-3.5 py-3 bg-bg-secondary border border-border rounded-lg text-accent text-sm font-mono"
+            />
           </div>
+          <Button variant="primary" onClick={copyLink} className="w-full">
+            {copied ? "✓ Copied!" : t('rooms.copyCode')}
+          </Button>
+        </div>
+      )}
 
-          {/* QR Code view */}
-          {shareMethod === "qr" && inviteData && (
-            <div style={styles.contentSection}>
-              <p style={styles.instructionText}>
-                {t('invite.qrInstructions')}
+      {/* Email view */}
+      {shareMethod === "email" && inviteData && (
+        <div className="min-h-[300px]">
+          <p className="text-muted text-center mb-6 leading-relaxed">
+            {t('invite.emailInstructions')}
+          </p>
+          <div className="bg-bg-secondary rounded-lg p-4 mb-6 border border-border">
+            <div className="text-muted text-sm mb-3 font-semibold">
+              {t('invite.preview')}
+            </div>
+            <div className="text-fg text-sm leading-relaxed">
+              <p><strong>{t('invite.emailBodyGreeting')}</strong></p>
+              <p>{t('invite.emailBodyLink')}<br/>
+                <code className="bg-bg px-2 py-1 rounded text-xs text-accent break-all inline-block mt-1">
+                  {inviteData.invite_url}
+                </code>
               </p>
-              <div style={styles.qrContainer}>
-                <img
-                  src={inviteData.qr_code}
-                  alt="QR Code"
-                  style={styles.qrCode}
-                />
-              </div>
-              <button style={styles.secondaryButton} onClick={downloadQR}>
-                {t('invite.downloadQR')}
-              </button>
-            </div>
-          )}
-
-          {/* Link view */}
-          {shareMethod === "link" && inviteData && (
-            <div style={styles.contentSection}>
-              <p style={styles.instructionText}>
-                {t('invite.linkInstructions')}
+              <p className="text-xs text-muted">
+                {t('invite.emailBodyExpiry', { minutes: inviteData.expires_in_minutes })}
               </p>
-              <div style={styles.linkContainer}>
-                <input
-                  type="text"
-                  readOnly
-                  value={inviteData.invite_url}
-                  style={styles.linkInput}
-                  onClick={(e) => e.target.select()}
-                />
-              </div>
-              <button
-                style={styles.primaryButton}
-                onClick={copyLink}
-              >
-                {copied ? "✓ Copied!" : t('rooms.copyCode')}
-              </button>
-            </div>
-          )}
-
-          {/* Email view */}
-          {shareMethod === "email" && inviteData && (
-            <div style={styles.contentSection}>
-              <p style={styles.instructionText}>
-                {t('invite.emailInstructions')}
-              </p>
-              <div style={styles.emailPreview}>
-                <div style={styles.emailLabel}>{t('invite.preview')}</div>
-                <div style={styles.emailBody}>
-                  <p><strong>{t('invite.emailBodyGreeting')}</strong></p>
-                  <p>{t('invite.emailBodyLink')} <br/>
-                    <code style={styles.inlineCode}>{inviteData.invite_url}</code>
-                  </p>
-                  <p style={{fontSize: "0.85rem", color: "#999"}}>
-                    {t('invite.emailBodyExpiry', { minutes: inviteData.expires_in_minutes })}
-                  </p>
-                </div>
-              </div>
-              <button style={styles.primaryButton} onClick={shareViaEmail}>
-                {t('invite.openEmail')}
-              </button>
-            </div>
-          )}
-
-          {/* Room info */}
-          <div style={styles.roomInfo}>
-            <div style={styles.roomInfoRow}>
-              <span style={styles.infoLabel}>{t('invite.roomLabel')}</span>
-              <code style={styles.infoValue}>{roomCode}</code>
-            </div>
-            <div style={styles.roomInfoRow}>
-              <span style={styles.infoLabel}>{t('invite.expiresLabel')}</span>
-              <span style={styles.infoValue}>
-                {t('invite.expiresInMinutes', { minutes: inviteData?.expires_in_minutes || 30 })}
-              </span>
             </div>
           </div>
+          <Button variant="primary" onClick={shareViaEmail} className="w-full">
+            {t('invite.openEmail')}
+          </Button>
+        </div>
+      )}
+
+      {/* Room info */}
+      <div className="bg-bg-secondary rounded-lg p-4 mt-6 border border-border">
+        <div className="flex justify-between items-center py-2">
+          <span className="text-muted text-sm">{t('invite.roomLabel')}</span>
+          <code className="text-accent text-sm font-mono font-semibold">{roomCode}</code>
+        </div>
+        <div className="flex justify-between items-center py-2">
+          <span className="text-muted text-sm">{t('invite.expiresLabel')}</span>
+          <span className="text-accent text-sm font-mono font-semibold">
+            {t('invite.expiresInMinutes', { minutes: inviteData?.expires_in_minutes || 30 })}
+          </span>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
-
-const styles = {
-  overlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "rgba(0, 0, 0, 0.8)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1000,
-    padding: "1rem"
-  },
-  modal: {
-    background: "#1a1a1a",
-    borderRadius: "16px",
-    border: "1px solid #333",
-    maxWidth: "550px",
-    width: "100%",
-    maxHeight: "90vh",
-    overflow: "auto",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.5)"
-  },
-  modalHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "1.5rem",
-    borderBottom: "1px solid #333"
-  },
-  modalTitle: {
-    fontSize: "clamp(1.25rem, 4vw, 1.5rem)",
-    margin: 0,
-    color: "white"
-  },
-  closeButton: {
-    background: "none",
-    border: "none",
-    color: "#999",
-    fontSize: "1.5rem",
-    cursor: "pointer",
-    padding: "0.25rem",
-    lineHeight: 1,
-    transition: "color 0.2s"
-  },
-  modalBody: {
-    padding: "1.5rem"
-  },
-  tabs: {
-    display: "flex",
-    gap: "0.5rem",
-    marginBottom: "1.5rem",
-    borderBottom: "1px solid #333",
-    paddingBottom: "0.5rem",
-    flexWrap: "wrap"
-  },
-  tab: {
-    flex: "1 1 90px",
-    minWidth: "90px",
-    padding: "0.75rem 0.5rem",
-    background: "transparent",
-    color: "#999",
-    border: "none",
-    borderRadius: "8px 8px 0 0",
-    cursor: "pointer",
-    fontSize: "0.875rem",
-    fontWeight: "500",
-    transition: "all 0.2s",
-    textAlign: "center"
-  },
-  tabActive: {
-    background: "#2a2a2a",
-    color: "#3b82f6",
-    borderBottom: "2px solid #3b82f6"
-  },
-  contentSection: {
-    minHeight: "300px"
-  },
-  instructionText: {
-    color: "#ccc",
-    fontSize: "0.95rem",
-    lineHeight: "1.5",
-    marginBottom: "1.5rem",
-    textAlign: "center"
-  },
-  qrContainer: {
-    display: "flex",
-    justifyContent: "center",
-    marginBottom: "1.5rem"
-  },
-  qrCode: {
-    width: "min(280px, 70vw)",
-    height: "min(280px, 70vw)",
-    borderRadius: "12px",
-    border: "2px solid #333",
-    background: "white",
-    padding: "0.75rem"
-  },
-  linkContainer: {
-    marginBottom: "1.5rem"
-  },
-  linkInput: {
-    width: "100%",
-    padding: "0.875rem",
-    background: "#2a2a2a",
-    border: "1px solid #444",
-    borderRadius: "8px",
-    color: "#3b82f6",
-    fontSize: "0.9rem",
-    fontFamily: "monospace",
-    boxSizing: "border-box"
-  },
-  emailPreview: {
-    background: "#2a2a2a",
-    borderRadius: "8px",
-    padding: "1rem",
-    marginBottom: "1.5rem",
-    border: "1px solid #444"
-  },
-  emailLabel: {
-    color: "#999",
-    fontSize: "0.85rem",
-    marginBottom: "0.75rem",
-    fontWeight: "600"
-  },
-  emailBody: {
-    color: "#ccc",
-    fontSize: "0.9rem",
-    lineHeight: "1.6"
-  },
-  inlineCode: {
-    background: "#1a1a1a",
-    padding: "0.25rem 0.5rem",
-    borderRadius: "4px",
-    fontSize: "0.85rem",
-    color: "#3b82f6",
-    wordBreak: "break-all"
-  },
-  roomInfo: {
-    background: "#2a2a2a",
-    borderRadius: "8px",
-    padding: "1rem",
-    marginTop: "1.5rem",
-    border: "1px solid #444"
-  },
-  roomInfoRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "0.5rem 0"
-  },
-  infoLabel: {
-    color: "#999",
-    fontSize: "0.9rem"
-  },
-  infoValue: {
-    color: "#3b82f6",
-    fontSize: "0.9rem",
-    fontFamily: "monospace",
-    fontWeight: "600"
-  },
-  primaryButton: {
-    width: "100%",
-    padding: "0.875rem 1.5rem",
-    background: "#3b82f6",
-    color: "white",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: "600",
-    fontSize: "1rem",
-    transition: "background 0.2s"
-  },
-  secondaryButton: {
-    width: "100%",
-    padding: "0.875rem 1.5rem",
-    background: "#2a2a2a",
-    color: "white",
-    border: "1px solid #444",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: "600",
-    fontSize: "1rem",
-    transition: "all 0.2s"
-  },
-  loadingSpinner: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "1rem",
-    padding: "3rem 1rem"
-  },
-  spinner: {
-    width: "50px",
-    height: "50px",
-    border: "4px solid #333",
-    borderTop: "4px solid #3b82f6",
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite"
-  }
-};
