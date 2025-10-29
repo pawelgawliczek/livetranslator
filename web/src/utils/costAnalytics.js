@@ -9,7 +9,7 @@ const API_BASE = '';  // Uses same origin
 /**
  * Get cost overview for a date range
  */
-export async function getCostOverview(token, startDate, endDate, granularity = null) {
+export async function getCostOverview(token, startDate, endDate, granularity = null, roomId = null, userId = null) {
   const params = new URLSearchParams({
     start_date: startDate.toISOString(),
     end_date: endDate.toISOString(),
@@ -17,6 +17,14 @@ export async function getCostOverview(token, startDate, endDate, granularity = n
 
   if (granularity) {
     params.append('granularity', granularity);
+  }
+
+  if (roomId) {
+    params.append('room_id', roomId);
+  }
+
+  if (userId) {
+    params.append('user_id', userId);
   }
 
   const response = await fetch(`${API_BASE}/api/admin/costs/overview?${params}`, {

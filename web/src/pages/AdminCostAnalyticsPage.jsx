@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getCostOverview, getUserCosts, getRoomCosts, getDatePresets, exportToCSV } from '../utils/costAnalytics';
 import DateRangePicker from '../components/admin/DateRangePicker';
 import CostOverviewCards from '../components/admin/CostOverviewCards';
@@ -11,6 +11,11 @@ import UserDetailModal from '../components/admin/UserDetailModal';
 
 export default function AdminCostAnalyticsPage({ token, onLogout }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Context filters from URL
+  const roomFilter = searchParams.get('room_id');
+  const userFilter = searchParams.get('user_id');
 
   // Date range state
   const presets = getDatePresets();
@@ -50,7 +55,7 @@ export default function AdminCostAnalyticsPage({ token, onLogout }) {
       setOverviewLoading(true);
 
       try {
-        const data = await getCostOverview(token, startDate, endDate);
+        const data = await getCostOverview(token, startDate, endDate, null, roomFilter, userFilter);
         setOverview(data);
       } catch (err) {
         console.error('Error fetching overview:', err);
@@ -64,7 +69,7 @@ export default function AdminCostAnalyticsPage({ token, onLogout }) {
     };
 
     fetchOverview();
-  }, [token, startDate, endDate, navigate, onLogout]);
+  }, [token, startDate, endDate, roomFilter, userFilter, navigate, onLogout]);
 
   // Fetch users when date range or pagination/sort changes
   useEffect(() => {
@@ -218,12 +223,22 @@ export default function AdminCostAnalyticsPage({ token, onLogout }) {
       <div className="bg-gray-800 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/admin')}
+            onClick={() => roomFilter ? navigate(-1) : navigate('/admin')}
             className="text-gray-400 hover:text-white transition-colors"
           >
-            ← Back to Admin
+            ← Back
           </button>
-          <h1 className="text-2xl font-bold">Cost Analytics</h1>
+          <div>
+            <h1 className="text-2xl font-bold">
+              {roomFilter || userFilter ? 'Cost Analytics' : 'Cost Analytics'}
+            </h1>
+            {roomFilter && (
+              <p className="text-sm text-gray-400 mt-1">Room: {roomFilter}</p>
+            )}
+            {userFilter && !roomFilter && (
+              <p className="text-sm text-gray-400 mt-1">User ID: {userFilter}</p>
+            )}
+          </div>
         </div>
         <button
           onClick={onLogout}
@@ -242,7 +257,7 @@ export default function AdminCostAnalyticsPage({ token, onLogout }) {
         <CostOverviewCards overview={overview} loading={overviewLoading} />
 
         {/* Cost Trend Chart */}
-        <CostTrendChart token={token} startDate={startDate} endDate={endDate} />
+        <CostTrendChart token={token} startDate={startDate} endDate={endDate} roomId={roomFilter} userId={userFilter} />
 
         {/* Provider Breakdown Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -260,32 +275,35 @@ export default function AdminCostAnalyticsPage({ token, onLogout }) {
           />
         </div>
 
-        {/* Users Table */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xl font-semibold"></h3>
-            <button
-              onClick={handleExportUsers}
-              disabled={users.length === 0}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
-            >
-              Export Users to CSV
-            </button>
-          </div>
-          <UserCostTable
-            users={users}
-            page={usersPage}
-            totalUsers={totalUsers}
-            onPageChange={handleUsersPageChange}
-            onSort={handleUsersSort}
-            onSearch={handleUsersSearch}
-            onViewDetail={handleViewUserDetail}
-            loading={usersLoading}
-          />
-        </div>
+        {/* Hide user/room tables when filtering by room or user */}
+        {!roomFilter && !userFilter && (
+          <>
+            {/* Users Table */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xl font-semibold"></h3>
+                <button
+                  onClick={handleExportUsers}
+                  disabled={users.length === 0}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+                >
+                  Export Users to CSV
+                </button>
+              </div>
+              <UserCostTable
+                users={users}
+                page={usersPage}
+                totalUsers={totalUsers}
+                onPageChange={handleUsersPageChange}
+                onSort={handleUsersSort}
+                onSearch={handleUsersSearch}
+                onViewDetail={handleViewUserDetail}
+                loading={usersLoading}
+              />
+            </div>
 
-        {/* Rooms Table */}
-        <div>
+            {/* Rooms Table */}
+            <div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xl font-semibold"></h3>
             <button
@@ -305,7 +323,9 @@ export default function AdminCostAnalyticsPage({ token, onLogout }) {
             onSearch={handleRoomsSearch}
             loading={roomsLoading}
           />
-        </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* User Detail Modal */}

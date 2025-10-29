@@ -4,18 +4,18 @@ import { formatCurrency, formatNumber, PROVIDER_COLORS } from '../../utils/costA
 export default function ProviderBreakdownChart({ title, breakdown, type, loading }) {
   if (loading) {
     return (
-      <div className="bg-gray-800 rounded-lg p-6 animate-pulse">
-        <div className="h-6 bg-gray-700 rounded w-1/3 mb-4"></div>
-        <div className="h-64 bg-gray-700 rounded"></div>
+      <div className="bg-card rounded-lg p-6 animate-pulse border border-border">
+        <div className="h-6 bg-bg-secondary rounded w-1/3 mb-4"></div>
+        <div className="h-64 bg-bg-secondary rounded"></div>
       </div>
     );
   }
 
   if (!breakdown || Object.keys(breakdown).length === 0) {
     return (
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h4 className="text-lg font-semibold text-white mb-4">{title}</h4>
-        <div className="flex items-center justify-center h-64 text-gray-400">
+      <div className="bg-card rounded-lg p-6 border border-border">
+        <h4 className="text-lg font-semibold text-fg mb-4">{title}</h4>
+        <div className="flex items-center justify-center h-64 text-muted">
           No data available
         </div>
       </div>
@@ -54,8 +54,8 @@ export default function ProviderBreakdownChart({ title, breakdown, type, loading
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-      <h4 className="text-lg font-semibold text-white mb-4">{title}</h4>
+    <div className="bg-card rounded-lg p-6 border border-border">
+      <h4 className="text-lg font-semibold text-fg mb-4">{title}</h4>
 
       {/* Bar chart */}
       <ResponsiveContainer width="100%" height={300}>
@@ -87,11 +87,11 @@ export default function ProviderBreakdownChart({ title, breakdown, type, loading
                 className="w-3 h-3 rounded"
                 style={{ backgroundColor: PROVIDER_COLORS[item.provider] || '#6b7280' }}
               ></div>
-              <span className="text-gray-300">{item.provider}</span>
+              <span className="text-fg">{item.provider}</span>
             </div>
             <div className="text-right">
-              <div className="text-white font-medium">{formatCurrency(item.cost)}</div>
-              <div className="text-gray-500 text-xs">
+              <div className="text-fg font-medium">{formatCurrency(item.cost)}</div>
+              <div className="text-muted text-xs">
                 {formatNumber(item.units)} {item.unitType} ({item.percentage.toFixed(1)}%)
               </div>
             </div>
@@ -100,14 +100,14 @@ export default function ProviderBreakdownChart({ title, breakdown, type, loading
       </div>
 
       {/* Total */}
-      <div className="mt-4 pt-4 border-t border-gray-700 flex items-center justify-between font-semibold">
-        <span className="text-gray-300">{type === 'stt' ? 'Total STT' : 'Total MT'}:</span>
-        <span className="text-white">{formatCurrency(totalCost)}</span>
+      <div className="mt-4 pt-4 border-t border-border flex items-center justify-between font-semibold">
+        <span className="text-fg">{type === 'stt' ? 'Total STT' : 'Total MT'}:</span>
+        <span className="text-fg">{formatCurrency(totalCost)}</span>
       </div>
 
       {/* Average cost per unit */}
       {data.length > 0 && data[0].unitType && (
-        <div className="mt-2 text-sm text-gray-400 text-right">
+        <div className="mt-2 text-sm text-muted text-right">
           Avg: {formatCurrency(totalCost / data.reduce((sum, d) => sum + d.units, 0))}/{data[0].unitType}
         </div>
       )}

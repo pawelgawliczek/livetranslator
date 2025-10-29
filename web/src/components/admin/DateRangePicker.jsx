@@ -46,84 +46,76 @@ export default function DateRangePicker({ startDate, endDate, onChange }) {
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-      <h3 className="text-lg font-semibold text-white mb-4">📊 Time Period</h3>
-
-      {/* Preset buttons */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
+    <div className="bg-card rounded-lg p-4 border border-border">
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Preset buttons - compact inline */}
         {Object.entries(presets).map(([key, preset]) => (
           <button
             key={key}
             onClick={() => handlePresetClick(preset)}
-            className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-600 hover:text-white transition-colors"
+            className="px-3 py-1.5 bg-bg-secondary text-muted rounded text-xs font-medium hover:bg-accent hover:text-accent-fg transition-colors"
           >
             {preset.label}
           </button>
         ))}
         <button
           onClick={() => setShowCustom(!showCustom)}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+          className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
             showCustom
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
+              ? 'bg-accent text-accent-fg'
+              : 'bg-bg-secondary text-muted hover:bg-accent hover:text-accent-fg'
           }`}
         >
-          Custom Range
+          Custom
         </button>
-      </div>
 
-      {/* Custom date range */}
-      {showCustom && (
-        <div className="bg-gray-700 rounded-lg p-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-gray-300 text-sm font-medium mb-2">Start Date</label>
-              <input
-                type="date"
-                value={customStart}
-                onChange={(e) => setCustomStart(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-gray-300 text-sm font-medium mb-2">End Date</label>
-              <input
-                type="date"
-                value={customEnd}
-                onChange={(e) => setCustomEnd(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-              />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleCustomApply}
-              disabled={!customStart || !customEnd}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
-            >
-              Apply
-            </button>
-            <button
-              onClick={handleReset}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-500 transition-colors"
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Current selection display */}
-      <div className="mt-4 pt-4 border-t border-gray-700">
-        <div className="text-sm text-gray-400">
-          Current Period:{' '}
-          <span className="text-white font-medium">
+        {/* Current selection display - inline */}
+        <div className="ml-auto text-xs text-muted">
+          <span className="opacity-70">Period:</span>{' '}
+          <span className="text-fg font-medium">
             {startDate && endDate
-              ? `${format(startDate, 'MMM dd, yyyy')} - ${format(endDate, 'MMM dd, yyyy')}`
+              ? `${format(startDate, 'MMM dd')} - ${format(endDate, 'MMM dd, yyyy')}`
               : 'Not selected'}
           </span>
         </div>
       </div>
+
+      {/* Custom date range */}
+      {showCustom && (
+        <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-end gap-2">
+          <div className="flex-1 min-w-[120px]">
+            <label className="block text-muted text-xs mb-1">Start</label>
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="w-full px-2 py-1.5 bg-bg-secondary border border-border rounded text-fg text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="flex-1 min-w-[120px]">
+            <label className="block text-muted text-xs mb-1">End</label>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="w-full px-2 py-1.5 bg-bg-secondary border border-border rounded text-fg text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <button
+            onClick={handleCustomApply}
+            disabled={!customStart || !customEnd}
+            className="px-3 py-1.5 bg-accent text-accent-fg rounded text-xs font-medium hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Apply
+          </button>
+          <button
+            onClick={handleReset}
+            className="px-3 py-1.5 bg-bg-secondary text-muted rounded text-xs font-medium hover:bg-accent hover:text-accent-fg transition-colors"
+          >
+            Reset
+          </button>
+        </div>
+      )}
     </div>
   );
 }

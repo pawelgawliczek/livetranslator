@@ -77,8 +77,8 @@ services:
   api:
     container_name: api
     build:
-      context: ./api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: api/Dockerfile
     <<: *common_deploy
     logging: *default-logging
     env_file: [.env]

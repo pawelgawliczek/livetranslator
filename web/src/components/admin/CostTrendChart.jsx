@@ -188,10 +188,10 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
 
   if (loading) {
     return (
-      <div className="bg-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">📈 Cost Trend</h3>
+      <div className="bg-card rounded-lg p-6 border border-border">
+        <h3 className="text-xl font-semibold text-fg mb-4">📈 Cost Trend</h3>
         <div className="flex items-center justify-center h-64">
-          <div className="text-gray-400">Loading chart data...</div>
+          <div className="text-muted">Loading chart data...</div>
         </div>
       </div>
     );
@@ -199,8 +199,8 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
 
   if (error) {
     return (
-      <div className="bg-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">📈 Cost Trend</h3>
+      <div className="bg-card rounded-lg p-6 border border-border">
+        <h3 className="text-xl font-semibold text-fg mb-4">📈 Cost Trend</h3>
         <div className="flex items-center justify-center h-64">
           <div className="text-red-400">Error: {error}</div>
         </div>
@@ -209,14 +209,14 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <h3 className="text-xl font-semibold text-white mb-4">📈 Cost Trend</h3>
+    <div className="bg-card rounded-lg p-6 border border-border">
+      <h3 className="text-xl font-semibold text-fg mb-4">📈 Cost Trend</h3>
 
       {/* Controls */}
       <div className="space-y-4 mb-6">
         {/* Granularity */}
         <div>
-          <label className="text-gray-400 text-sm font-medium block mb-2">Granularity:</label>
+          <label className="text-muted text-sm font-medium block mb-2">Granularity:</label>
           <div className="flex gap-2 flex-wrap">
             {availableGranularities.map((g) => (
               <button
@@ -224,8 +224,8 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
                 onClick={() => setGranularity(g)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   granularity === g
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-accent text-accent-fg'
+                    : 'bg-bg-secondary text-muted hover:bg-accent hover:bg-opacity-20'
                 }`}
               >
                 {g.charAt(0).toUpperCase() + g.slice(1)}
@@ -236,14 +236,14 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
 
         {/* View Mode */}
         <div>
-          <label className="text-gray-400 text-sm font-medium block mb-2">View Mode:</label>
+          <label className="text-muted text-sm font-medium block mb-2">View Mode:</label>
           <div className="flex gap-2">
             <button
               onClick={() => setViewMode('normal')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 viewMode === 'normal'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  ? 'bg-accent text-accent-fg'
+                  : 'bg-bg-secondary text-muted hover:bg-accent hover:bg-opacity-20'
               }`}
             >
               Normal
@@ -252,8 +252,8 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
               onClick={() => setViewMode('accumulated')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 viewMode === 'accumulated'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  ? 'bg-accent text-accent-fg'
+                  : 'bg-bg-secondary text-muted hover:bg-accent hover:bg-opacity-20'
               }`}
             >
               Accumulated (Cumulative)
@@ -263,14 +263,14 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
 
         {/* Data Grouping */}
         <div>
-          <label className="text-gray-400 text-sm font-medium block mb-2">Data View:</label>
+          <label className="text-muted text-sm font-medium block mb-2">Data View:</label>
           <div className="flex gap-2">
             <button
               onClick={() => setDataGrouping('aggregate')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 dataGrouping === 'aggregate'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  ? 'bg-accent text-accent-fg'
+                  : 'bg-bg-secondary text-muted hover:bg-accent hover:bg-opacity-20'
               }`}
             >
               Aggregate
@@ -279,8 +279,8 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
               onClick={() => setDataGrouping('by_provider')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 dataGrouping === 'by_provider'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  ? 'bg-accent text-accent-fg'
+                  : 'bg-bg-secondary text-muted hover:bg-accent hover:bg-opacity-20'
               }`}
             >
               By Provider
@@ -290,8 +290,8 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
 
         {/* Toggles */}
         {dataGrouping === 'aggregate' ? (
-          <div className="bg-gray-700 rounded-lg p-4">
-            <label className="text-gray-300 text-sm font-medium block mb-2">Show:</label>
+          <div className="bg-bg-secondary rounded-lg p-4 border border-border">
+            <label className="text-fg text-sm font-medium block mb-2">Show:</label>
             <div className="flex gap-4 flex-wrap">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -300,7 +300,7 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
                   onChange={(e) => setShowTotal(e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm text-gray-300">Total</span>
+                <span className="text-sm text-fg">Total</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -309,7 +309,7 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
                   onChange={(e) => setShowSTT(e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm text-gray-300">STT</span>
+                <span className="text-sm text-fg">STT</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -318,15 +318,15 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
                   onChange={(e) => setShowMT(e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm text-gray-300">MT</span>
+                <span className="text-sm text-fg">MT</span>
               </label>
             </div>
           </div>
         ) : (
-          <div className="bg-gray-700 rounded-lg p-4 space-y-3">
+          <div className="bg-bg-secondary rounded-lg p-4 border border-border space-y-3">
             {uniqueProviders.stt.length > 0 && (
               <div>
-                <label className="text-gray-300 text-sm font-medium block mb-2">STT Providers:</label>
+                <label className="text-fg text-sm font-medium block mb-2">STT Providers:</label>
                 <div className="flex gap-4 flex-wrap">
                   {uniqueProviders.stt.map((provider) => (
                     <label key={provider} className="flex items-center gap-2 cursor-pointer">
@@ -338,7 +338,7 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
                         }
                         className="w-4 h-4"
                       />
-                      <span className="text-sm text-gray-300">{provider}</span>
+                      <span className="text-sm text-fg">{provider}</span>
                     </label>
                   ))}
                 </div>
@@ -346,7 +346,7 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
             )}
             {uniqueProviders.mt.length > 0 && (
               <div>
-                <label className="text-gray-300 text-sm font-medium block mb-2">MT Providers:</label>
+                <label className="text-fg text-sm font-medium block mb-2">MT Providers:</label>
                 <div className="flex gap-4 flex-wrap">
                   {uniqueProviders.mt.map((provider) => (
                     <label key={provider} className="flex items-center gap-2 cursor-pointer">
@@ -358,7 +358,7 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
                         }
                         className="w-4 h-4"
                       />
-                      <span className="text-sm text-gray-300">{provider}</span>
+                      <span className="text-sm text-fg">{provider}</span>
                     </label>
                   ))}
                 </div>
@@ -453,7 +453,7 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
           </LineChart>
         </ResponsiveContainer>
       ) : (
-        <div className="flex items-center justify-center h-64 text-gray-400">
+        <div className="flex items-center justify-center h-64 text-muted">
           No data available for the selected period
         </div>
       )}
@@ -463,7 +463,7 @@ export default function CostTrendChart({ token, startDate, endDate, userId, room
         <button
           onClick={handleExport}
           disabled={data.length === 0}
-          className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+          className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:bg-bg-secondary disabled:text-muted disabled:cursor-not-allowed transition-colors"
         >
           Export Chart Data (CSV)
         </button>

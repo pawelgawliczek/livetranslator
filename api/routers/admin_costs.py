@@ -170,12 +170,15 @@ async def get_cost_overview(
     start_date: datetime = Query(..., description="Start date (ISO 8601)"),
     end_date: datetime = Query(..., description="End date (ISO 8601)"),
     granularity: Optional[str] = Query(None, description="hour|day|week|month|year"),
+    room_id: Optional[str] = Query(None, description="Filter by room code"),
+    user_id: Optional[int] = Query(None, description="Filter by user ID"),
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     """
-    Get system-wide cost overview with provider breakdown.
+    Get cost overview with provider breakdown.
 
+    Can filter by room_id and/or user_id to get context-specific analytics.
     Returns total costs, STT/MT breakdown, usage metrics, and provider details.
     """
 
@@ -183,8 +186,29 @@ async def get_cost_overview(
     if not granularity:
         granularity = auto_detect_granularity(start_date, end_date)
 
+    # Build WHERE clause with optional filters
+    where_conditions = ["ts >= :start_date", "ts <= :end_date"]
+    query_params = {
+        "start_date": start_date,
+        "end_date": end_date
+    }
+
+    if room_id:
+        where_conditions.append("room_id = :room_id")
+        query_params["room_id"] = room_id
+
+    if user_id:
+        where_conditions.append("""
+            room_id IN (
+                SELECT code FROM rooms WHERE owner_id = :user_id
+            )
+        """)
+        query_params["user_id"] = user_id
+
+    where_clause = " AND ".join(where_conditions)
+
     # Get total costs
-    totals_query = text("""
+    totals_query = text(f"""
         SELECT
             COALESCE(SUM(amount_usd), 0) as total_cost,
             COALESCE(SUM(CASE WHEN pipeline = 'stt' THEN amount_usd ELSE 0 END), 0) as stt_cost,
@@ -192,13 +216,10 @@ async def get_cost_overview(
             COALESCE(SUM(CASE WHEN pipeline = 'stt' AND unit_type = 'seconds' THEN units ELSE 0 END), 0) / 60.0 as total_minutes,
             COUNT(DISTINCT room_id) as active_rooms
         FROM room_costs
-        WHERE ts >= :start_date AND ts <= :end_date
+        WHERE {where_clause}
     """)
 
-    totals = db.execute(totals_query, {
-        "start_date": start_date,
-        "end_date": end_date
-    }).fetchone()
+    totals = db.execute(totals_query, query_params).fetchone()
 
     total_cost = float(totals[0])
     stt_cost = float(totals[1])
@@ -207,41 +228,45 @@ async def get_cost_overview(
     active_rooms = int(totals[4])
 
     # Get active users count (users who created rooms with activity)
-    users_query = text("""
+    users_where_conditions = ["rc.ts >= :start_date", "rc.ts <= :end_date"]
+    if room_id:
+        users_where_conditions.append("rc.room_id = :room_id")
+    if user_id:
+        users_where_conditions.append("r.owner_id = :user_id")
+
+    users_where_clause = " AND ".join(users_where_conditions)
+
+    users_query = text(f"""
         SELECT COUNT(DISTINCT r.owner_id)
         FROM room_costs rc
         JOIN rooms r ON rc.room_id = r.code
-        WHERE rc.ts >= :start_date AND rc.ts <= :end_date
+        WHERE {users_where_clause}
     """)
 
-    active_users = db.execute(users_query, {
-        "start_date": start_date,
-        "end_date": end_date
-    }).scalar() or 0
+    active_users = db.execute(users_query, query_params).scalar() or 0
 
     # Calculate growth rate
     growth_rate = calculate_growth_rate(db, start_date, end_date, total_cost)
 
     # Get STT provider breakdown
-    stt_breakdown_query = text("""
+    stt_where_conditions = where_conditions.copy()
+    stt_where_conditions.append("pipeline = 'stt'")
+    stt_where_conditions.append("provider IS NOT NULL")
+    stt_where_clause = " AND ".join(stt_where_conditions)
+
+    stt_breakdown_query = text(f"""
         SELECT
             provider,
             SUM(amount_usd) as cost_usd,
             SUM(units) as units,
             unit_type
         FROM room_costs
-        WHERE ts >= :start_date
-          AND ts <= :end_date
-          AND pipeline = 'stt'
-          AND provider IS NOT NULL
+        WHERE {stt_where_clause}
         GROUP BY provider, unit_type
         ORDER BY cost_usd DESC
     """)
 
-    stt_results = db.execute(stt_breakdown_query, {
-        "start_date": start_date,
-        "end_date": end_date
-    }).fetchall()
+    stt_results = db.execute(stt_breakdown_query, query_params).fetchall()
 
     stt_breakdown = {}
     for row in stt_results:
@@ -259,25 +284,24 @@ async def get_cost_overview(
         }
 
     # Get MT provider breakdown
-    mt_breakdown_query = text("""
+    mt_where_conditions = where_conditions.copy()
+    mt_where_conditions.append("pipeline = 'mt'")
+    mt_where_conditions.append("provider IS NOT NULL")
+    mt_where_clause = " AND ".join(mt_where_conditions)
+
+    mt_breakdown_query = text(f"""
         SELECT
             provider,
             SUM(amount_usd) as cost_usd,
             SUM(units) as units,
             unit_type
         FROM room_costs
-        WHERE ts >= :start_date
-          AND ts <= :end_date
-          AND pipeline = 'mt'
-          AND provider IS NOT NULL
+        WHERE {mt_where_clause}
         GROUP BY provider, unit_type
         ORDER BY cost_usd DESC
     """)
 
-    mt_results = db.execute(mt_breakdown_query, {
-        "start_date": start_date,
-        "end_date": end_date
-    }).fetchall()
+    mt_results = db.execute(mt_breakdown_query, query_params).fetchall()
 
     mt_breakdown = {}
     for row in mt_results:

@@ -20,7 +20,6 @@ import MessageDebugModal from "../components/MessageDebugModal";
 import RoomHeader from "../components/room/RoomHeader";
 import NetworkStatusIndicator from "../components/room/NetworkStatusIndicator";
 import LanguagePickerModal from "../components/room/LanguagePickerModal";
-import CostsModal from "../components/room/CostsModal";
 import WelcomeBanner from "../components/room/WelcomeBanner";
 import AdminLeaveModal from "../components/room/AdminLeaveModal";
 import RoomExpirationModal from "../components/room/RoomExpirationModal";
@@ -138,7 +137,6 @@ export default function RoomPage({ token, onLogout }) {
 
   // Modal state
   const [showLangPicker, setShowLangPicker] = useState(false);
-  const [showCosts, setShowCosts] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showSoundSettings, setShowSoundSettings] = useState(false);
@@ -149,9 +147,6 @@ export default function RoomPage({ token, onLogout }) {
   // Debug modal state
   const [debugModalOpen, setDebugModalOpen] = useState(false);
   const [debugSegmentId, setDebugSegmentId] = useState(null);
-
-  // Costs state
-  const [costs, setCosts] = useState(null);
 
   // Test mode for Sound Settings
   const [testMode, setTestMode] = useState(false);
@@ -741,14 +736,6 @@ export default function RoomPage({ token, onLogout }) {
         />
       )}
 
-      {/* Costs Modal */}
-      {showCosts && (
-        <CostsModal
-          isOpen={showCosts}
-          costs={costs}
-          onClose={() => setShowCosts(false)}
-        />
-      )}
 
       {/* Chat Messages */}
       <ChatMessageList
@@ -807,18 +794,9 @@ export default function RoomPage({ token, onLogout }) {
             setShowSettings(false);
             setShowInvite(true);
           }}
-          onShowCosts={async () => {
+          onShowCosts={() => {
             setShowSettings(false);
-            try {
-              const response = await fetch(`/api/costs/room/${encodeURIComponent(roomId)}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-              });
-              const data = await response.json();
-              setCosts(data);
-              setShowCosts(true);
-            } catch (error) {
-              console.error('[Costs] Failed to fetch:', error);
-            }
+            navigate(`/admin/costs?room_id=${encodeURIComponent(roomId)}`);
           }}
           onShowSound={() => {
             setShowSettings(false);

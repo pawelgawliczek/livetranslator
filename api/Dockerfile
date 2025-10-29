@@ -4,9 +4,11 @@ RUN addgroup --system --gid 988 docker && adduser --system --uid 1001 --ingroup 
  && apt-get update && apt-get install -y --no-install-recommends curl \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY requirements.txt .
+COPY api/requirements.txt .
 RUN pip install -r requirements.txt
-COPY . /app/api
+COPY api /app/api
+COPY scripts /app/scripts
+COPY migrations /app/migrations
 USER app
 EXPOSE 8000
 CMD ["uvicorn","api.main:app","--host","0.0.0.0","--port","8000","--proxy-headers"]
