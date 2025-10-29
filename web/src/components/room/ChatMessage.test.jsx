@@ -50,10 +50,7 @@ describe('ChatMessage', () => {
       );
 
       const messageContainer = container.firstChild;
-      expect(messageContainer).toHaveStyle({
-        textAlign: 'center',
-        fontStyle: 'italic'
-      });
+      expect(messageContainer).toHaveClass('text-center', 'text-muted', 'italic');
     });
 
     it('should not show debug icon for system messages even when admin', () => {
@@ -425,12 +422,8 @@ describe('ChatMessage', () => {
         />
       );
 
-      const messageCard = container.querySelector('[style*="background"]');
-      expect(messageCard).toHaveStyle({
-        background: '#1a1a1a',
-        borderRadius: '12px',
-        border: '1px solid #333'
-      });
+      const messageCard = container.querySelector('.bg-card');
+      expect(messageCard).toHaveClass('bg-card', 'rounded-xl', 'border', 'border-border');
     });
 
     it('should use blue color for speaker name', () => {
@@ -448,12 +441,10 @@ describe('ChatMessage', () => {
       );
 
       const speakerName = screen.getByText(/user/).parentElement;
-      expect(speakerName).toHaveStyle({
-        color: '#3b82f6'
-      });
+      expect(speakerName).toHaveClass('text-blue-500');
     });
 
-    it('should show translation in white for final messages', () => {
+    it('should show translation with foreground color for final messages', () => {
       const segment = {
         source: { speaker: 'user@test.com', text: 'Original', final: true },
         translation: { text: 'Translated', final: true }
@@ -470,11 +461,11 @@ describe('ChatMessage', () => {
 
       const translationText = screen.getByText('Translated');
       expect(translationText).toHaveStyle({
-        color: '#fff'
+        color: 'var(--fg)'
       });
     });
 
-    it('should show translation in gray for non-final messages', () => {
+    it('should show translation with muted color for non-final messages', () => {
       const segment = {
         source: { speaker: 'user@test.com', text: 'Original', final: false },
         translation: { text: 'Translating', final: false }
@@ -491,11 +482,11 @@ describe('ChatMessage', () => {
 
       const translationText = screen.getByText('Translating');
       expect(translationText).toHaveStyle({
-        color: '#bbb'
+        color: 'var(--muted)'
       });
     });
 
-    it('should show source text in gray italic below translation', () => {
+    it('should show source text with muted styling below translation', () => {
       const segment = {
         source: { speaker: 'user@test.com', text: 'Original text', final: true },
         translation: { text: 'Translated text', final: true }
@@ -511,11 +502,7 @@ describe('ChatMessage', () => {
       );
 
       const sourceText = screen.getByText('Original text');
-      expect(sourceText).toHaveStyle({
-        color: '#666',
-        fontStyle: 'italic',
-        fontSize: '0.8rem'
-      });
+      expect(sourceText).toHaveClass('text-muted', 'text-sm', 'italic');
     });
   });
 

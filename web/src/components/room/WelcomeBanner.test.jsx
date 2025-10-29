@@ -202,16 +202,16 @@ describe('WelcomeBanner', () => {
       expect(banner).toHaveClass('z-[998]');
     });
 
-    it('has dark theme styling', () => {
+    it('has theme styling', () => {
       const { container } = renderWithProviders(<WelcomeBanner {...defaultProps} />);
       const banner = container.firstChild;
-      expect(banner).toHaveClass('bg-card-dark', 'border-border-dark');
+      expect(banner).toHaveClass('bg-card', 'border-border');
     });
 
     it('close button has hover effect', () => {
       renderWithProviders(<WelcomeBanner {...defaultProps} />);
       const closeButton = screen.getByLabelText('Close welcome banner');
-      expect(closeButton).toHaveClass('hover:text-white', 'transition-colors');
+      expect(closeButton).toHaveClass('hover:text-fg', 'transition-colors');
     });
   });
 
