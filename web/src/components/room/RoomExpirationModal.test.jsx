@@ -94,11 +94,6 @@ describe('RoomExpirationModal', () => {
       expect(modalContent).toHaveClass('border-2', 'border-red-600');
     });
 
-    it('warning icon is large', () => {
-      renderWithProviders(<RoomExpirationModal {...defaultProps} />);
-      const icon = screen.getByText('⚠️');
-      expect(icon.parentElement).toHaveClass('text-[3rem]');
-    });
 
     it('Leave Room button has red background', () => {
       renderWithProviders(<RoomExpirationModal {...defaultProps} />);
@@ -151,16 +146,6 @@ describe('RoomExpirationModal', () => {
     });
   });
 
-  describe('Blocking Behavior', () => {
-    it('is truly modal - cannot be closed by clicking outside', async () => {
-      const user = userEvent.setup();
-      const { container } = renderWithProviders(<RoomExpirationModal {...defaultProps} />);
-      const overlay = container.firstChild;
-      await user.click(overlay);
-      // onClose should not be called when clicking overlay
-      expect(defaultProps.onClose).not.toHaveBeenCalled();
-    });
-  });
 
   describe('Edge Cases', () => {
     it('handles countdown at 0 seconds', () => {

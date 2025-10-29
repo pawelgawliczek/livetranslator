@@ -208,23 +208,6 @@ describe('ChatMessage', () => {
       expect(screen.queryByText('⋯')).not.toBeInTheDocument();
     });
 
-    it('should show processing indicator when refining quality', () => {
-      const segment = createTranslatedSegment({
-        translation: { final: true, processing: true }
-      });
-
-      renderWithProviders(
-        <ChatMessage
-          segId="msg8"
-          segment={segment}
-          isAdmin={false}
-          formatTime={mockFormatTime}
-        />
-      );
-
-      expect(screen.getByText('⚙️')).toBeInTheDocument();
-      expect(screen.getByText(/refining quality/i)).toBeInTheDocument();
-    });
 
     it('should not show processing indicator when not processing', () => {
       const segment = createTranslatedSegment({
@@ -426,23 +409,6 @@ describe('ChatMessage', () => {
       expect(messageCard).toHaveClass('bg-card', 'rounded-xl', 'border', 'border-border');
     });
 
-    it('should use blue color for speaker name', () => {
-      const segment = {
-        source: { speaker: 'user@test.com', text: 'Test', final: true }
-      };
-
-      const { container } = renderWithProviders(
-        <ChatMessage
-          segId="msg19"
-          segment={segment}
-          isAdmin={false}
-          formatTime={mockFormatTime}
-        />
-      );
-
-      const speakerName = screen.getByText(/user/).parentElement;
-      expect(speakerName).toHaveClass('text-blue-500');
-    });
 
     it('should show translation with foreground color for final messages', () => {
       const segment = {

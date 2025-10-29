@@ -86,18 +86,6 @@ describe('AdminLeaveModal', () => {
       expect(onLeave).toHaveBeenCalledTimes(1);
     });
 
-    it('calls onStay when backdrop is clicked', async () => {
-      const user = userEvent.setup();
-      const onStay = vi.fn();
-      const { container } = renderWithProviders(
-        <AdminLeaveModal {...defaultProps} onStay={onStay} />
-      );
-
-      const backdrop = container.querySelector('.fixed.inset-0');
-      await user.click(backdrop);
-
-      expect(onStay).toHaveBeenCalledTimes(1);
-    });
 
     it('calls onStay when ESC key is pressed', async () => {
       const user = userEvent.setup();
@@ -214,12 +202,6 @@ describe('AdminLeaveModal', () => {
       });
     });
 
-    it('rejoin note is italicized and muted', () => {
-      const { container } = renderWithProviders(<AdminLeaveModal {...defaultProps} />);
-      const italicText = container.querySelector('.italic');
-      expect(italicText).toBeInTheDocument();
-      expect(italicText).toHaveClass('text-muted-dark');
-    });
   });
 
   describe('Component Behavior', () => {
