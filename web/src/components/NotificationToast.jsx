@@ -1,26 +1,24 @@
 import React from "react";
 
 /**
- * Toast notification system for presence events.
+ * Toast notification for presence events (join/leave/language change).
  *
  * Features:
- * - Auto-dismiss after 5 seconds
- * - Stacks up to 3 notifications
+ * - Auto-dismiss after 5 seconds (managed by parent)
  * - Slide-in animation
- * - Shows join/leave/language change events
+ * - Theme-aware colors
+ * - Fixed position at top right
  */
-export default function NotificationToast({ notifications }) {
-  if (!notifications || notifications.length === 0) {
+export default function NotificationToast({ message }) {
+  if (!message) {
     return null;
   }
 
   return (
-    <div style={styles.container}>
-      {notifications.map((notif) => (
-        <div key={notif.id} style={styles.toast} className="toast-slide-in">
-          {notif.message}
-        </div>
-      ))}
+    <div className="fixed top-20 right-5 z-[1000] pointer-events-none">
+      <div className="bg-card border border-border rounded-lg px-4 py-3 text-fg text-sm shadow-lg max-w-[300px] break-words pointer-events-auto toast-slide-in">
+        {message}
+      </div>
       <style>{`
         @keyframes slideIn {
           from {
@@ -39,28 +37,3 @@ export default function NotificationToast({ notifications }) {
     </div>
   );
 }
-
-const styles = {
-  container: {
-    position: "fixed",
-    top: "80px",
-    right: "20px",
-    zIndex: 1000,
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-    pointerEvents: "none", // Allow clicking through
-  },
-  toast: {
-    background: "#2a2a2a",
-    border: "1px solid #444",
-    borderRadius: "8px",
-    padding: "12px 16px",
-    color: "white",
-    fontSize: "0.9rem",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-    maxWidth: "300px",
-    wordWrap: "break-word",
-    pointerEvents: "auto", // Allow interaction with individual toasts
-  },
-};

@@ -19,39 +19,56 @@ export default function ParticipantsPanel({
   const { t } = useTranslation();
   return (
     <>
+      {/* Sidebar Panel */}
       <div
-        style={{
-          ...styles.panel,
-          transform: isOpen ? "translateX(0)" : "translateX(100%)",
-        }}
+        className={`fixed right-0 top-0 h-screen w-[min(300px,85vw)] max-w-[300px] bg-card border-l border-border
+                    transition-transform duration-300 ease-in-out z-[1001] flex flex-col shadow-2xl
+                    ${isOpen ? "translate-x-0" : "translate-x-full"}`}
       >
-        <div style={styles.header}>
-          <h3 style={styles.title}>{t('participants.panelTitle')} ({participants.length})</h3>
-          <button onClick={onToggle} style={styles.closeBtn}>
+        {/* Header */}
+        <div className="flex justify-between items-center p-4 border-b border-border">
+          <h3 className="m-0 text-lg font-semibold text-fg">
+            {t('participants.panelTitle')} ({participants.length})
+          </h3>
+          <button
+            onClick={onToggle}
+            className="bg-transparent border-none text-muted text-2xl cursor-pointer p-1 leading-none
+                       hover:text-fg transition-colors"
+          >
             ✕
           </button>
         </div>
 
-        <div style={styles.list}>
+        {/* Participants List */}
+        <div className="flex-1 overflow-y-auto p-2">
           {participants.length === 0 ? (
-            <div style={styles.emptyState}>{t('participants.empty')}</div>
+            <div className="py-8 px-4 text-center text-muted text-sm">
+              {t('participants.empty')}
+            </div>
           ) : (
             participants.map((p) => {
               // Normalize language code to base language (e.g., "en-GB" -> "en")
               const baseLang = p.language?.split('-')[0] || p.language;
               const lang = languages.find((l) => l.code === baseLang);
               return (
-                <div key={p.user_id} style={styles.participant}>
-                  <div style={styles.participantInfo}>
-                    <span style={styles.flag}>{lang?.flag || "🌐"}</span>
-                    <div style={styles.nameContainer}>
-                      <span style={styles.name}>
+                <div
+                  key={p.user_id}
+                  className="p-3 rounded-lg mb-2 transition-colors hover:bg-bg-secondary cursor-default"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl flex-shrink-0">{lang?.flag || "🌐"}</span>
+                    <div className="flex flex-col gap-1 min-w-0 flex-1">
+                      <span className="text-fg text-[0.95rem] font-medium overflow-hidden text-ellipsis whitespace-nowrap">
                         {p.display_name}
                         {p.is_guest && (
-                          <span style={styles.guestBadge}>{t('participants.guestLabel')}</span>
+                          <span className="ml-2 text-muted text-xs font-normal">
+                            {t('participants.guestLabel')}
+                          </span>
                         )}
                       </span>
-                      <span style={styles.lang}>{lang?.name || p.language}</span>
+                      <span className="text-muted text-[0.85rem]">
+                        {lang?.name || p.language}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -62,109 +79,12 @@ export default function ParticipantsPanel({
       </div>
 
       {/* Overlay when panel is open */}
-      {isOpen && <div style={styles.overlay} onClick={onToggle} />}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[1000]"
+          onClick={onToggle}
+        />
+      )}
     </>
   );
 }
-
-const styles = {
-  panel: {
-    position: "fixed",
-    right: 0,
-    top: 0,
-    height: "100vh",
-    width: "min(300px, 85vw)",
-    maxWidth: "300px",
-    background: "#1a1a1a",
-    borderLeft: "1px solid #333",
-    transition: "transform 0.3s ease",
-    zIndex: 1001,
-    display: "flex",
-    flexDirection: "column",
-    boxShadow: "-4px 0 20px rgba(0,0,0,0.5)",
-  },
-  overlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "rgba(0,0,0,0.5)",
-    zIndex: 1000,
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "1rem",
-    borderBottom: "1px solid #333",
-  },
-  title: {
-    margin: 0,
-    fontSize: "1.1rem",
-    fontWeight: "600",
-    color: "white",
-  },
-  closeBtn: {
-    background: "none",
-    border: "none",
-    color: "#999",
-    fontSize: "1.5rem",
-    cursor: "pointer",
-    padding: "0.25rem",
-    lineHeight: 1,
-    transition: "color 0.2s",
-  },
-  list: {
-    flex: 1,
-    overflowY: "auto",
-    padding: "0.5rem",
-  },
-  emptyState: {
-    padding: "2rem 1rem",
-    textAlign: "center",
-    color: "#666",
-    fontSize: "0.9rem",
-  },
-  participant: {
-    padding: "0.75rem",
-    borderRadius: "8px",
-    marginBottom: "0.5rem",
-    transition: "background 0.2s",
-    cursor: "default",
-  },
-  participantInfo: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.75rem",
-  },
-  flag: {
-    fontSize: "1.5rem",
-    flexShrink: 0,
-  },
-  nameContainer: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.25rem",
-    minWidth: 0,
-    flex: 1,
-  },
-  name: {
-    color: "white",
-    fontSize: "0.95rem",
-    fontWeight: "500",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  guestBadge: {
-    marginLeft: "0.5rem",
-    color: "#999",
-    fontSize: "0.8rem",
-    fontWeight: "normal",
-  },
-  lang: {
-    color: "#999",
-    fontSize: "0.85rem",
-  },
-};
