@@ -51,6 +51,7 @@ export default function usePresenceWebSocket({
   const pingTimeoutRef = useRef(null);
   const pendingPingRef = useRef(null);
   const rttMeasurements = useRef([]);
+  const networkQualityRef = useRef('unknown');
 
   // Notification debouncing
   const notificationDebounce = useRef(new Map());
@@ -77,7 +78,11 @@ export default function usePresenceWebSocket({
       quality = 'low';
     }
 
-    // Update quality if changed
+    // Log quality change and update state
+    if (quality !== networkQualityRef.current && networkQualityRef.current !== 'unknown') {
+      console.log(`[Network] Quality changed: ${networkQualityRef.current} → ${quality} (${Math.round(avgRTT)}ms avg RTT)`);
+    }
+    networkQualityRef.current = quality;
     setNetworkQuality(quality);
   };
 

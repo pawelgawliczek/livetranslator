@@ -208,6 +208,22 @@ export default function RoomPage({ token, onLogout }) {
   }
 
   // ============================================================================
+  // Adaptive Send Interval Logging
+  // ============================================================================
+
+  const prevSendIntervalRef = useRef(null);
+
+  useEffect(() => {
+    const newInterval = getSendIntervalForQuality(networkQuality);
+
+    if (prevSendIntervalRef.current !== null && newInterval !== prevSendIntervalRef.current) {
+      console.log(`[Adaptive] Changing send interval: ${prevSendIntervalRef.current}ms → ${newInterval}ms (quality: ${networkQuality})`);
+    }
+
+    prevSendIntervalRef.current = newInterval;
+  }, [networkQuality]);
+
+  // ============================================================================
   // User Profile Loading
   // ============================================================================
 
@@ -219,7 +235,7 @@ export default function RoomPage({ token, onLogout }) {
 
     if (!token) return;
 
-    fetch('/api/user/profile', {
+    fetch('/api/profile', {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(r => {
@@ -326,7 +342,14 @@ export default function RoomPage({ token, onLogout }) {
   // ============================================================================
 
   useEffect(() => {
-    if (!roomId || !token || isGuest) return;
+    if (!roomId) return;
+
+    // Guests don't have persistence, mark as initialized immediately
+    if (isGuest || !token) {
+      setPersistenceEnabled(false);
+      setPersistenceInitialized(true);
+      return;
+    }
 
     fetch(`/api/rooms/${encodeURIComponent(roomId)}/persistence`, {
       headers: { 'Authorization': `Bearer ${token}` }
@@ -512,7 +535,8 @@ export default function RoomPage({ token, onLogout }) {
     if (isRoomAdmin && audioStream.isRecording) {
       setShowAdminLeaveWarning(true);
     } else {
-      navigate('/');
+      // Navigate to rooms list if logged in, otherwise home
+      navigate(isGuest ? '/' : '/rooms');
     }
   };
 
@@ -600,7 +624,7 @@ export default function RoomPage({ token, onLogout }) {
   const myLang = LANGUAGES.find(l => l.code === myLanguage);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-950 text-white font-sans overflow-hidden">
+    <div className="h-screen flex flex-col bg-bg text-fg font-sans overflow-hidden">
       {/* Room Header */}
       <RoomHeader
         roomId={roomId}
@@ -611,14 +635,6 @@ export default function RoomPage({ token, onLogout }) {
         onBackClick={handleBackClick}
         onMenuClick={() => setShowSettings(true)}
       />
-
-      {/* Network Status Indicator */}
-      {networkQuality !== 'unknown' && (
-        <NetworkStatusIndicator
-          quality={networkQuality}
-          rtt={networkRTT}
-        />
-      )}
 
       {/* Welcome Banner */}
       {showWelcome && (
@@ -655,10 +671,10 @@ export default function RoomPage({ token, onLogout }) {
       {/* Language Picker Modal */}
       {showLangPicker && (
         <LanguagePickerModal
+          isOpen={showLangPicker}
           currentLanguage={myLanguage}
-          onSelectLanguage={(lang) => {
+          onLanguageChange={(lang) => {
             handleLanguageChange(lang);
-            setShowLangPicker(false);
           }}
           onClose={() => setShowLangPicker(false)}
         />
@@ -667,6 +683,7 @@ export default function RoomPage({ token, onLogout }) {
       {/* Costs Modal */}
       {showCosts && (
         <CostsModal
+          isOpen={showCosts}
           costs={costs}
           onClose={() => setShowCosts(false)}
         />
@@ -708,7 +725,7 @@ export default function RoomPage({ token, onLogout }) {
       {/* Legacy Modals (not yet refactored) */}
       {showInvite && (
         <InviteModal
-          roomId={roomId}
+          roomCode={roomId}
           onClose={() => setShowInvite(false)}
         />
       )}
@@ -782,24 +799,23 @@ export default function RoomPage({ token, onLogout }) {
 
       {showSoundSettings && (
         <SoundSettingsModal
+          isOpen={showSoundSettings}
           onClose={() => setShowSoundSettings(false)}
-          audioLevel={audioLevel}
-          audioThreshold={audioThreshold}
-          setAudioThreshold={setAudioThreshold}
-          testMode={testMode}
-          setTestMode={handleTestMode}
-          pushToTalk={pushToTalk}
-          setPushToTalk={(enabled) => {
-            setPushToTalk(enabled);
-            localStorage.setItem('lt_push_to_talk', enabled.toString());
-          }}
+          currentLevel={audioLevel}
+          threshold={audioThreshold}
+          onThresholdChange={setAudioThreshold}
+          isActive={status === 'recording'}
+          status={vadStatus}
+          onTest={handleTestMode}
         />
       )}
 
       {showParticipantsPanel && (
         <ParticipantsPanel
           participants={participants}
-          onClose={() => setShowParticipantsPanel(false)}
+          languages={LANGUAGES}
+          isOpen={showParticipantsPanel}
+          onToggle={() => setShowParticipantsPanel(false)}
         />
       )}
 
