@@ -20,7 +20,10 @@
     "react-router-dom": "^6.26.0",
     "i18next": "^23.15.2",
     "react-i18next": "^15.1.0",
-    "i18next-browser-languagedetector": "^8.0.0"
+    "i18next-browser-languagedetector": "^8.0.0",
+    "recharts": "^2.10.0",
+    "date-fns": "^2.30.0",
+    "react-datepicker": "^4.21.0"
   },
   "devDependencies": {
     "vite": "5.4.8",

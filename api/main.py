@@ -24,6 +24,7 @@ from .subscription_api import router as subscription_router
 from .billing_api import router as billing_router
 from .user_history_api import router as user_history_router
 from .routers.admin_api import router as admin_router
+from .routers.admin_costs import router as admin_costs_router
 
 app = FastAPI(title="LiveTranslator API")
 app.include_router(events_router)
@@ -38,6 +39,7 @@ app.include_router(subscription_router)
 app.include_router(billing_router)
 app.include_router(user_history_router)
 app.include_router(admin_router)
+app.include_router(admin_costs_router)
 
 structlog.configure(
     processors=[

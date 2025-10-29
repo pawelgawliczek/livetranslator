@@ -116,6 +116,13 @@ export default function AdminSettingsPage({ token, onLogout }) {
                 ← {t("back_to_rooms") || "Rooms"}
               </button>
               <button
+                onClick={() => navigate("/admin/costs")}
+                className="px-6 py-3 bg-blue-600 text-white border-none rounded-lg cursor-pointer font-semibold
+                           hover:bg-blue-700 transition-colors"
+              >
+                💰 Cost Analytics
+              </button>
+              <button
                 onClick={onLogout}
                 className="px-6 py-3 bg-red-600 text-white border-none rounded-lg cursor-pointer font-semibold
                            hover:bg-red-700 transition-colors"

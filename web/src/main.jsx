@@ -12,6 +12,7 @@ import RoomPage from "./pages/RoomPage";
 import JoinPage from "./pages/JoinPage";
 import ProfilePage from "./pages/ProfilePage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
+import AdminCostAnalyticsPage from "./pages/AdminCostAnalyticsPage";
 
 function App() {
   const [token, setToken] = React.useState(localStorage.getItem("token") || "");
@@ -51,6 +52,10 @@ function App() {
         <Route
           path="/admin"
           element={token ? <AdminSettingsPage token={token} onLogout={logout} /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/admin/costs"
+          element={token ? <AdminCostAnalyticsPage token={token} onLogout={logout} /> : <Navigate to="/login" />}
         />
       </Routes>
     </BrowserRouter>
