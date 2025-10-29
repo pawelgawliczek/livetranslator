@@ -24,86 +24,75 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-bg flex flex-col">
       {/* Theme Toggle - Top Right */}
-      <div className="absolute top-4 right-4 z-10">
+      <div className="fixed top-4 right-4 z-10">
         <ThemeToggle />
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-5 py-16 max-w-container-lg mx-auto w-full">
-        {/* Hero Section with Gradient Accent */}
-        <div className="text-center mb-12 relative">
-          {/* Decorative gradient blur */}
-          <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-96 h-96 bg-gradient-to-br from-gradient-from to-gradient-to opacity-10 blur-3xl rounded-full pointer-events-none"></div>
+      <div className="flex-1 w-full flex flex-col">
+        <div className="flex flex-col items-center justify-between flex-1 px-4 sm:px-6 py-4 sm:py-12 md:py-16 lg:py-20 max-w-container-lg mx-auto w-full">
+          {/* Hero Section with Gradient Accent */}
+          <div className="text-center mb-6 sm:mb-10 md:mb-12 relative w-full">
+            {/* Decorative gradient blur */}
+            <div className="absolute -top-10 sm:-top-20 left-1/2 -translate-x-1/2 w-64 h-64 sm:w-96 sm:h-96 bg-gradient-to-br from-gradient-from to-gradient-to opacity-10 blur-3xl rounded-full pointer-events-none"></div>
 
-          <div className="relative">
-            {/* Badge */}
-            <div className="inline-flex items-center px-4 py-2 rounded-full bg-accent/10 border border-accent/20 text-accent text-sm font-semibold mb-6">
-              🌍 Real-time Translation Platform
+            <div className="relative">
+              {/* Badge */}
+              <div className="inline-flex items-center px-2.5 py-1 sm:px-4 sm:py-2 rounded-full bg-accent/10 border border-accent/20 text-accent text-xs sm:text-sm font-semibold mb-4 sm:mb-6">
+                🌍 Real-time Translation Platform
+              </div>
+
+              {/* Main Heading */}
+              <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-2 sm:mb-4 text-fg leading-tight px-2">
+                {t('landing.title')}
+              </h1>
+
+              {/* Subtitle */}
+              <p className="text-sm sm:text-lg md:text-xl text-muted max-w-2xl mx-auto leading-snug sm:leading-relaxed px-4">
+                {t('landing.subtitle')}
+              </p>
             </div>
-
-            {/* Main Heading */}
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 text-fg leading-tight">
-              {t('landing.title')}
-            </h1>
-
-            {/* Subtitle */}
-            <p className="text-lg md:text-xl text-muted max-w-2xl mx-auto leading-relaxed">
-              {t('landing.subtitle')}
-            </p>
           </div>
-        </div>
 
-        {/* Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mb-12 max-w-3xl">
-          <Card hoverable className="text-center">
-            <div className="text-4xl mb-3">🗣️</div>
-            <h3 className="text-lg font-semibold mb-2 text-fg">Real-time Speech</h3>
-            <p className="text-sm text-muted">Instant voice translation as you speak</p>
-          </Card>
+          {/* Features Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 w-full mb-4 sm:mb-10 md:mb-12 max-w-3xl">
+            <Card hoverable className="text-center py-3 sm:py-4">
+              <div className="text-2xl sm:text-4xl mb-1 sm:mb-3">🗣️</div>
+              <h3 className="text-sm sm:text-lg font-semibold mb-0.5 sm:mb-2 text-fg">Real-time Speech</h3>
+              <p className="text-xs sm:text-sm text-muted leading-tight">Instant voice translation as you speak</p>
+            </Card>
 
-          <Card hoverable className="text-center">
-            <div className="text-4xl mb-3">🌐</div>
-            <h3 className="text-lg font-semibold mb-2 text-fg">12+ Languages</h3>
-            <p className="text-sm text-muted">Connect with anyone worldwide</p>
-          </Card>
+            <Card hoverable className="text-center py-3 sm:py-4">
+              <div className="text-2xl sm:text-4xl mb-1 sm:mb-3">🌐</div>
+              <h3 className="text-sm sm:text-lg font-semibold mb-0.5 sm:mb-2 text-fg">12+ Languages</h3>
+              <p className="text-xs sm:text-sm text-muted leading-tight">Connect with anyone worldwide</p>
+            </Card>
 
-          <Card hoverable className="text-center">
-            <div className="text-4xl mb-3">👥</div>
-            <h3 className="text-lg font-semibold mb-2 text-fg">Multi-participant</h3>
-            <p className="text-sm text-muted">Collaborate with multiple users</p>
-          </Card>
-        </div>
+            <Card hoverable className="text-center py-3 sm:py-4">
+              <div className="text-2xl sm:text-4xl mb-1 sm:mb-3">👥</div>
+              <h3 className="text-sm sm:text-lg font-semibold mb-0.5 sm:mb-2 text-fg">Multi-participant</h3>
+              <p className="text-xs sm:text-sm text-muted leading-tight">Collaborate with multiple users</p>
+            </Card>
+          </div>
 
-        {/* CTA Buttons */}
-        <div className="flex gap-4 flex-wrap justify-center w-full max-w-md">
-          <Button
-            variant="primary"
-            onClick={() => navigate("/login")}
-            className="flex-1 min-w-[140px]"
-          >
-            {t('landing.signIn')}
-          </Button>
+          {/* CTA Buttons */}
+          <div className="flex gap-2.5 sm:gap-4 flex-wrap justify-center w-full max-w-md">
+            <Button
+              variant="primary"
+              onClick={() => navigate("/login")}
+              className="flex-1 min-w-[130px] sm:min-w-[140px] py-2 sm:py-2.5"
+            >
+              {t('landing.signIn')}
+            </Button>
 
-          <Button
-            variant="secondary"
-            onClick={() => navigate("/signup")}
-            className="flex-1 min-w-[140px]"
-          >
-            {t('landing.createAccount')}
-          </Button>
-        </div>
-
-        {/* Creator Info */}
-        <div className="mt-8 text-sm text-muted text-center">
-          Created by{" "}
-          <a
-            href="https://pawelgawliczek.cloud/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-accent hover:text-accent-dark font-semibold transition-colors"
-          >
-            Pawel Gawliczek
-          </a>
+            <Button
+              variant="secondary"
+              onClick={() => navigate("/signup")}
+              className="flex-1 min-w-[130px] sm:min-w-[140px] py-2 sm:py-2.5"
+            >
+              {t('landing.createAccount')}
+            </Button>
+          </div>
         </div>
       </div>
 
