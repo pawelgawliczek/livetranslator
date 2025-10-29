@@ -38,6 +38,7 @@ const MAX_RECORDING_TIME = 30000; // 30 seconds safety timeout
 export default function useAudioStream({
   ws,
   roomId,
+  userEmail,
   myLanguage,
   pushToTalk,
   isPressing,
@@ -337,6 +338,18 @@ export default function useAudioStream({
             partialBufferRef.current = temp;
           }
 
+          // Broadcast speech_started to all clients in the room
+          const speaker = userEmail || 'Guest';
+          if (ws?.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: "speech_started",
+              room_id: roomId,
+              speaker: speaker,
+              timestamp: Date.now()
+            }));
+            console.log('[VAD] Sent speech_started event for:', speaker);
+          }
+
           if (onVadStatusChange) onVadStatusChange("🎤 Speaking...");
         }
 
@@ -347,7 +360,7 @@ export default function useAudioStream({
           isSpeakingRef.current = false;
           partialBufferRef.current = new Float32Array(0);
           ringBufferRef.current = new Float32Array(0);
-          if (onVadStatusChange) onVadStatusChange("idle");
+          if (onVadStatusChange) onVadStatusChange("👂 Listening...");
         }
 
         // Update ring buffer (keep last 500ms for pre-speech capture)
@@ -378,7 +391,7 @@ export default function useAudioStream({
       setIsRecording(true);
       setVadReady(true);
       if (onStatusChange) onStatusChange("streaming");
-      if (onVadStatusChange) onVadStatusChange("idle");
+      if (onVadStatusChange) onVadStatusChange("👂 Listening...");
 
       console.log('[VAD] Ready');
 

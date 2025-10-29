@@ -31,24 +31,8 @@ export default function ChatMessage({
   // System messages - centered and small
   if (isSystemMessage) {
     return (
-      <div
-        style={{
-          textAlign: 'center',
-          padding: '0.25rem',
-          color: '#666',
-          fontSize: '0.7rem',
-          fontStyle: 'italic'
-        }}
-      >
-        <span
-          style={{
-            background: 'rgba(42, 42, 42, 0.5)',
-            padding: '0.25rem 0.6rem',
-            borderRadius: '10px',
-            display: 'inline-block',
-            border: '1px solid rgba(255, 255, 255, 0.05)'
-          }}
-        >
+      <div className="text-center p-1 text-muted text-xs italic">
+        <span className="bg-bg-secondary/50 px-2.5 py-1 rounded-xl inline-block border border-border/20">
           {segment.source.text}
         </span>
       </div>
@@ -60,32 +44,12 @@ export default function ChatMessage({
     if (!speaker || speaker === 'system') return null;
 
     return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          flexShrink: 0,
-          minWidth: 'fit-content'
-        }}
-      >
-        <span
-          style={{
-            fontSize: '0.65rem',
-            color: '#3b82f6',
-            fontWeight: '600',
-            lineHeight: '1.2'
-          }}
-        >
+      <div className="flex flex-col flex-shrink-0 min-w-fit">
+        <span className="text-xs text-blue-500 font-semibold leading-tight">
           👤 {speaker.split('@')[0]}
         </span>
         {timestamp && formatTime && (
-          <span
-            style={{
-              fontSize: '0.6rem',
-              color: '#666',
-              lineHeight: '1.2'
-            }}
-          >
+          <span className="text-[0.6rem] text-muted leading-tight">
             {formatTime(timestamp)}
           </span>
         )}
@@ -98,31 +62,21 @@ export default function ChatMessage({
     const isSpecialSpeaking = data.text === '___SPEAKING___';
 
     return (
-      <span
-        style={{
-          color: isFinal ? '#fff' : '#bbb',
-          fontSize: '1rem',
-          fontWeight: '500',
-          lineHeight: '1.45',
-          flex: 1,
-          minWidth: 0
-        }}
+      <span className="text-base font-medium leading-relaxed flex-1 min-w-0"
+        style={{ color: isFinal ? 'var(--fg)' : 'var(--muted)' }}
       >
         {isSpecialSpeaking ? (
           <>
-            <span className="processing-spinner" style={{ color: '#3b82f6' }}>
+            <span className="processing-spinner text-blue-500">
               🎤
             </span>
-            <span style={{ fontStyle: 'italic' }}> Speaking...</span>
+            <span className="italic"> Speaking...</span>
           </>
         ) : (
           <>
             {data.text}
             {!isFinal && (
-              <span
-                className="processing-spinner"
-                style={{ marginLeft: '0.5rem', color: '#3b82f6' }}
-              >
+              <span className="processing-spinner ml-2 text-blue-500">
                 ⋯
               </span>
             )}
@@ -137,16 +91,7 @@ export default function ChatMessage({
     if (!show) return null;
 
     return (
-      <div
-        style={{
-          fontSize: '0.75rem',
-          color: '#888',
-          marginTop: '0.25rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.4rem'
-        }}
-      >
+      <div className="text-xs text-muted mt-1 flex items-center gap-1.5">
         <span className="processing-spinner">⚙️</span>
         <span>{t('room.refiningQuality')}</span>
       </div>
@@ -160,15 +105,7 @@ export default function ChatMessage({
 
   // Regular message card
   return (
-    <div
-      style={{
-        background: '#1a1a1a',
-        borderRadius: '12px',
-        padding: '0.5rem 0.65rem',
-        border: '1px solid #333',
-        position: 'relative'
-      }}
-    >
+    <div className="bg-card rounded-xl p-2 px-2.5 border border-border relative">
       {/* Debug icon - only visible for admin users */}
       {isAdmin && (
         <span
@@ -183,9 +120,6 @@ export default function ChatMessage({
               handleDebugClick();
             }
           }}
-          style={{
-            cursor: 'pointer'
-          }}
         >
           🔍
         </span>
@@ -194,13 +128,7 @@ export default function ChatMessage({
       {segment.translation ? (
         <>
           {/* Message with translation */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '0.5rem'
-            }}
-          >
+          <div className="flex items-start gap-2">
             <Username speaker={segment.source?.speaker} />
             <MessageText
               data={segment.translation}
@@ -214,14 +142,7 @@ export default function ChatMessage({
 
           {/* Original text - small font below */}
           {segment.source && (
-            <div
-              style={{
-                color: '#666',
-                fontSize: '0.8rem',
-                fontStyle: 'italic',
-                lineHeight: '1.35'
-              }}
-            >
+            <div className="text-muted text-sm italic leading-snug">
               {segment.source.text}
             </div>
           )}
@@ -231,13 +152,7 @@ export default function ChatMessage({
           {/* Message without translation - show source prominently */}
           {segment.source && (
             <>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.5rem'
-                }}
-              >
+              <div className="flex items-start gap-2">
                 <Username speaker={segment.source.speaker} />
                 <MessageText
                   data={segment.source}

@@ -126,11 +126,13 @@ export default function useRoomWebSocket({ myLanguage, userEmail }) {
 
         segsRef.current.set(placeholderKey, {
           segment_id: segmentId,
-          type: 'stt_partial',
-          text: '___SPEAKING___',
-          speaker: m.speaker,
-          final: false,
-          ts_iso: new Date().toISOString(),
+          source: {
+            type: 'stt_partial',
+            text: '___SPEAKING___',
+            speaker: m.speaker,
+            final: false,
+            ts_iso: new Date().toISOString()
+          },
           is_placeholder: true
         });
         scheduleRender();

@@ -73,6 +73,23 @@ export default function RoomPage({ token, onLogout }) {
         display: inline-block;
         animation: spin 1s linear infinite;
       }
+      .debug-icon {
+        position: absolute;
+        top: 0.35rem;
+        right: 0.35rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        opacity: 0.4;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        padding: 0.2rem;
+        line-height: 1;
+        user-select: none;
+        z-index: 10;
+      }
+      .debug-icon:hover {
+        opacity: 1;
+        transform: scale(1.15);
+      }
     `;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
@@ -181,6 +198,7 @@ export default function RoomPage({ token, onLogout }) {
   const audioStream = useAudioStream({
     ws: presenceWs,
     roomId,
+    userEmail,
     myLanguage,
     pushToTalk,
     isPressing,
