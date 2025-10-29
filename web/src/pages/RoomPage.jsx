@@ -805,10 +805,23 @@ export default function RoomPage({ token, onLogout }) {
           onLogout={onLogout}
           canChangeLanguage={status === 'idle'}
           persistenceEnabled={persistenceEnabled}
-          onTogglePersistence={(enabled) => {
+          onTogglePersistence={async (enabled) => {
             setPersistenceEnabled(enabled);
-            if (enabled && persistenceInitialized) {
-              fetchHistory();
+            try {
+              await fetch(`/api/rooms/${encodeURIComponent(roomId)}/recording`, {
+                method: 'PATCH',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ recording: enabled })
+              });
+              if (enabled && persistenceInitialized) {
+                fetchHistory();
+              }
+            } catch (error) {
+              console.error('[Persistence] Failed to toggle:', error);
+              setPersistenceEnabled(!enabled); // Revert on error
             }
           }}
           isRoomAdmin={isRoomAdmin}
