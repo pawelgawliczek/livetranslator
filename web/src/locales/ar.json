@@ -328,7 +328,15 @@
     "title": "LiveTranslator",
     "subtitle": "منصة تعاون صوتي متعدد اللغات في الوقت الفعلي",
     "signIn": "تسجيل الدخول",
-    "createAccount": "إنشاء حساب"
+    "createAccount": "إنشاء حساب",
+    "features": {
+      "realTimeTitle": "الكلام في الوقت الفعلي",
+      "realTimeDesc": "ترجمة صوتية فورية أثناء التحدث",
+      "languagesTitle": "أكثر من 12 لغة",
+      "languagesDesc": "تواصل مع أي شخص في جميع أنحاء العالم",
+      "multiParticipantTitle": "متعدد المشاركين",
+      "multiParticipantDesc": "تعاون مع عدة مستخدمين"
+    }
   },
   "joinPage": {
     "validatingInvite": "جاري التحقق من الدعوة...",

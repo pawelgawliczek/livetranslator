@@ -328,7 +328,15 @@
     "title": "LiveTranslator",
     "subtitle": "リアルタイム多言語音声コラボレーションプラットフォーム",
     "signIn": "ログイン",
-    "createAccount": "アカウントを作成"
+    "createAccount": "アカウントを作成",
+    "features": {
+      "realTimeTitle": "リアルタイム音声",
+      "realTimeDesc": "話しながら即座に音声翻訳",
+      "languagesTitle": "12以上の言語",
+      "languagesDesc": "世界中の誰とでもつながる",
+      "multiParticipantTitle": "マルチ参加者",
+      "multiParticipantDesc": "複数のユーザーと協力"
+    }
   },
   "joinPage": {
     "validatingInvite": "招待を検証中...",

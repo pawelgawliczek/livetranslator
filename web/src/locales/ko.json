@@ -328,7 +328,15 @@
     "title": "LiveTranslator",
     "subtitle": "실시간 다국어 음성 협업 플랫폼",
     "signIn": "로그인",
-    "createAccount": "계정 만들기"
+    "createAccount": "계정 만들기",
+    "features": {
+      "realTimeTitle": "실시간 음성",
+      "realTimeDesc": "말하는 동안 즉시 음성 번역",
+      "languagesTitle": "12개 이상의 언어",
+      "languagesDesc": "전 세계 누구와도 연결",
+      "multiParticipantTitle": "다중 참여자",
+      "multiParticipantDesc": "여러 사용자와 협업"
+    }
   },
   "joinPage": {
     "validatingInvite": "초대 확인 중...",

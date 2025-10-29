@@ -58,20 +58,20 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 w-full mb-4 sm:mb-10 md:mb-12 max-w-3xl">
             <Card hoverable className="text-center py-3 sm:py-4">
               <div className="text-2xl sm:text-4xl mb-1 sm:mb-3">🗣️</div>
-              <h3 className="text-sm sm:text-lg font-semibold mb-0.5 sm:mb-2 text-fg">Real-time Speech</h3>
-              <p className="text-xs sm:text-sm text-muted leading-tight">Instant voice translation as you speak</p>
+              <h3 className="text-sm sm:text-lg font-semibold mb-0.5 sm:mb-2 text-fg">{t('landing.features.realTimeTitle')}</h3>
+              <p className="text-xs sm:text-sm text-muted leading-tight">{t('landing.features.realTimeDesc')}</p>
             </Card>
 
             <Card hoverable className="text-center py-3 sm:py-4">
               <div className="text-2xl sm:text-4xl mb-1 sm:mb-3">🌐</div>
-              <h3 className="text-sm sm:text-lg font-semibold mb-0.5 sm:mb-2 text-fg">12+ Languages</h3>
-              <p className="text-xs sm:text-sm text-muted leading-tight">Connect with anyone worldwide</p>
+              <h3 className="text-sm sm:text-lg font-semibold mb-0.5 sm:mb-2 text-fg">{t('landing.features.languagesTitle')}</h3>
+              <p className="text-xs sm:text-sm text-muted leading-tight">{t('landing.features.languagesDesc')}</p>
             </Card>
 
             <Card hoverable className="text-center py-3 sm:py-4">
               <div className="text-2xl sm:text-4xl mb-1 sm:mb-3">👥</div>
-              <h3 className="text-sm sm:text-lg font-semibold mb-0.5 sm:mb-2 text-fg">Multi-participant</h3>
-              <p className="text-xs sm:text-sm text-muted leading-tight">Collaborate with multiple users</p>
+              <h3 className="text-sm sm:text-lg font-semibold mb-0.5 sm:mb-2 text-fg">{t('landing.features.multiParticipantTitle')}</h3>
+              <p className="text-xs sm:text-sm text-muted leading-tight">{t('landing.features.multiParticipantDesc')}</p>
             </Card>
           </div>
 

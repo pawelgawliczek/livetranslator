@@ -328,7 +328,15 @@
     "title": "LiveTranslator",
     "subtitle": "Piattaforma di collaborazione vocale multilingue in tempo reale",
     "signIn": "Accedi",
-    "createAccount": "Crea account"
+    "createAccount": "Crea account",
+    "features": {
+      "realTimeTitle": "Parlato in tempo reale",
+      "realTimeDesc": "Traduzione vocale istantanea mentre parli",
+      "languagesTitle": "Oltre 12 lingue",
+      "languagesDesc": "Connettiti con chiunque nel mondo",
+      "multiParticipantTitle": "Multi-partecipante",
+      "multiParticipantDesc": "Collabora con più utenti"
+    }
   },
   "joinPage": {
     "validatingInvite": "Convalida invito...",

@@ -328,7 +328,15 @@
     "title": "LiveTranslator",
     "subtitle": "Echtzeit-Mehrsprachige Sprach-Kollaborationsplattform",
     "signIn": "Anmelden",
-    "createAccount": "Konto erstellen"
+    "createAccount": "Konto erstellen",
+    "features": {
+      "realTimeTitle": "Echtzeit-Sprache",
+      "realTimeDesc": "Sofortige Sprachübersetzung während Sie sprechen",
+      "languagesTitle": "Über 12 Sprachen",
+      "languagesDesc": "Verbinden Sie sich mit jedem weltweit",
+      "multiParticipantTitle": "Mehrere Teilnehmer",
+      "multiParticipantDesc": "Arbeiten Sie mit mehreren Benutzern zusammen"
+    }
   },
   "joinPage": {
     "validatingInvite": "Einladung wird überprüft...",

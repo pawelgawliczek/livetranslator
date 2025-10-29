@@ -328,7 +328,15 @@
     "title": "LiveTranslator",
     "subtitle": "实时多语言语音协作平台",
     "signIn": "登录",
-    "createAccount": "创建账户"
+    "createAccount": "创建账户",
+    "features": {
+      "realTimeTitle": "实时语音",
+      "realTimeDesc": "说话时即时语音翻译",
+      "languagesTitle": "12种以上语言",
+      "languagesDesc": "与世界各地的任何人联系",
+      "multiParticipantTitle": "多参与者",
+      "multiParticipantDesc": "与多个用户协作"
+    }
   },
   "joinPage": {
     "validatingInvite": "验证邀请中...",
