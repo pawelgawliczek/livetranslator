@@ -18,50 +18,22 @@ export default function AdminLeftToast({ timeRemaining, formatCountdown }) {
   }
 
   const isUrgent = timeRemaining < 60000; // Less than 1 minute
+  const borderColorClass = isUrgent ? 'border-red-600' : 'border-orange-500';
+  const accentColorClass = isUrgent ? 'text-red-500' : 'text-orange-500';
 
   return (
-    <div
-      style={{
-        background: isUrgent
-          ? "linear-gradient(135deg, #dc2626 0%, #991b1b 100%)"
-          : "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-        padding: "0.75rem 1rem",
-        margin: "0.75rem",
-        marginBottom: "0",
-        color: "white",
-        fontSize: "0.85rem",
-        fontWeight: "600",
-        textAlign: "center",
-        borderRadius: "12px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
-        border: "1px solid rgba(255,255,255,0.2)",
-        flexShrink: 0,
-      }}
-    >
-        <div style={{ marginBottom: "0.25rem" }}>
-          {t('room.adminLeftWarning')}
+    <div className={`bg-card border-2 ${borderColorClass} rounded-xl px-4 py-3 mx-3 mb-0 shadow-lg flex-shrink-0`}>
+      <div className="text-fg font-semibold text-sm mb-1 text-center">
+        {t('room.adminLeftWarning')}
+      </div>
+      <div className={`${accentColorClass} text-xs font-normal text-center`}>
+        {t('room.roomClosingIn', { countdown: formatCountdown(timeRemaining) })}
+      </div>
+      {isUrgent && (
+        <div className="text-muted text-xs font-normal mt-1 text-center">
+          {t('room.recordingDisabledWarning')}
         </div>
-        <div
-          style={{
-            fontSize: "0.75rem",
-            fontWeight: "normal",
-            opacity: 0.95,
-          }}
-        >
-          {t('room.roomClosingIn', { countdown: formatCountdown(timeRemaining) })}
-        </div>
-        {isUrgent && (
-          <div
-            style={{
-              fontSize: "0.7rem",
-              fontWeight: "normal",
-              opacity: 0.85,
-              marginTop: "0.25rem",
-            }}
-          >
-            {t('room.recordingDisabledWarning')}
-          </div>
-        )}
+      )}
     </div>
   );
 }

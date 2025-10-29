@@ -44,9 +44,13 @@ class Event(Base):
     __tablename__ = "events"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), index=True, nullable=False)
-    ts: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    segment_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_final: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    src_lang: Mapped[str] = mapped_column(String(16), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    translated_text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     room = relationship("Room")
 
 class RoomCost(Base):
@@ -58,7 +62,7 @@ class RoomCost(Base):
     pipeline: Mapped[str] = mapped_column(Text, nullable=False)
     mode: Mapped[str] = mapped_column(Text, nullable=False)
     provider: Mapped[Optional[str]] = mapped_column(Text)
-    units: Mapped[Optional[int]] = mapped_column(BigInteger)
+    units: Mapped[Optional[float]] = mapped_column(Numeric(12, 3))
     unit_type: Mapped[Optional[str]] = mapped_column(Text)
     amount_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=0)
     segment_id: Mapped[Optional[int]] = mapped_column(Integer)

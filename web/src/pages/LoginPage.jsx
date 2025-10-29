@@ -15,6 +15,36 @@ export default function LoginPage({ onLogin }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Check for existing session in localStorage
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      const existingToken = localStorage.getItem("token");
+      if (existingToken) {
+        // Validate token with backend
+        try {
+          const response = await fetch("/api/profile", {
+            headers: { "Authorization": `Bearer ${existingToken}` }
+          });
+
+          if (response.ok) {
+            // Token is valid, redirect to rooms
+            onLogin(existingToken);
+            navigate('/rooms');
+            return;
+          } else {
+            // Token is invalid, clear it
+            localStorage.removeItem("token");
+          }
+        } catch (err) {
+          // Network error or invalid token, clear it
+          localStorage.removeItem("token");
+        }
+      }
+    };
+
+    checkExistingSession();
+  }, [onLogin, navigate]);
+
   // Check for token in URL (from Google OAuth redirect)
   useEffect(() => {
     const params = new URLSearchParams(location.search);

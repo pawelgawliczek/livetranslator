@@ -38,35 +38,14 @@ export default function LanguageSelector({ style, token }) {
   };
 
   return (
-    <div style={{ position: "relative", ...style }}>
+    <div className="relative" style={style}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-          padding: "0.5rem 1rem",
-          background: "#1a1a1a",
-          border: "1px solid #444",
-          borderRadius: "8px",
-          color: "white",
-          cursor: "pointer",
-          fontSize: "0.9rem",
-          fontWeight: "500",
-          transition: "all 0.2s"
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.borderColor = "#666";
-          e.currentTarget.style.background = "#2a2a2a";
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.borderColor = "#444";
-          e.currentTarget.style.background = "#1a1a1a";
-        }}
+        className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-lg text-fg cursor-pointer text-sm font-medium transition-all hover:bg-bg-secondary"
       >
         <span>{currentLanguage.flag}</span>
         <span>{currentLanguage.name}</span>
-        <span style={{ fontSize: "0.7rem", opacity: 0.7 }}>
+        <span className="text-xs opacity-70">
           {isOpen ? "▲" : "▼"}
         </span>
       </button>
@@ -76,66 +55,23 @@ export default function LanguageSelector({ style, token }) {
           {/* Backdrop */}
           <div
             onClick={() => setIsOpen(false)}
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 999
-            }}
+            className="fixed inset-0 z-[999]"
           />
 
           {/* Dropdown */}
-          <div
-            style={{
-              position: "absolute",
-              top: "calc(100% + 0.5rem)",
-              right: 0,
-              background: "#1a1a1a",
-              border: "1px solid #444",
-              borderRadius: "8px",
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.5)",
-              zIndex: 1000,
-              minWidth: "200px",
-              maxHeight: "400px",
-              overflowY: "auto"
-            }}
-          >
+          <div className="absolute top-[calc(100%+0.5rem)] right-0 bg-card border border-border rounded-lg shadow-lg z-[1000] min-w-[200px] max-h-[400px] overflow-y-auto">
             {SUPPORTED_LANGUAGES.map(lang => (
               <button
                 key={lang.code}
                 onClick={() => changeLanguage(lang.code)}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.75rem",
-                  padding: "0.75rem 1rem",
-                  background: i18n.language === lang.code ? "#2a2a2a" : "transparent",
-                  border: "none",
-                  borderBottom: "1px solid #333",
-                  color: "white",
-                  cursor: "pointer",
-                  fontSize: "0.9rem",
-                  textAlign: "left",
-                  transition: "background 0.2s"
-                }}
-                onMouseEnter={e => {
-                  if (i18n.language !== lang.code) {
-                    e.currentTarget.style.background = "#252525";
-                  }
-                }}
-                onMouseLeave={e => {
-                  if (i18n.language !== lang.code) {
-                    e.currentTarget.style.background = "transparent";
-                  }
-                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 border-b border-border text-fg cursor-pointer text-sm text-left transition-colors ${
+                  i18n.language === lang.code ? 'bg-bg-secondary' : 'hover:bg-bg-secondary/50'
+                }`}
               >
-                <span style={{ fontSize: "1.5rem" }}>{lang.flag}</span>
-                <span style={{ flex: 1 }}>{lang.name}</span>
+                <span className="text-2xl">{lang.flag}</span>
+                <span className="flex-1">{lang.name}</span>
                 {i18n.language === lang.code && (
-                  <span style={{ color: "#3b82f6" }}>✓</span>
+                  <span className="text-blue-500">✓</span>
                 )}
               </button>
             ))}

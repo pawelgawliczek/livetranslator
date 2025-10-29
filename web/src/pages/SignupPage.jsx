@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Footer from "../components/Footer";
@@ -14,6 +14,36 @@ export default function SignupPage({ onSignup }) {
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Check for existing session in localStorage
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      const existingToken = localStorage.getItem("token");
+      if (existingToken) {
+        // Validate token with backend
+        try {
+          const response = await fetch("/api/profile", {
+            headers: { "Authorization": `Bearer ${existingToken}` }
+          });
+
+          if (response.ok) {
+            // Token is valid, redirect to rooms
+            onSignup(existingToken);
+            navigate('/rooms');
+            return;
+          } else {
+            // Token is invalid, clear it
+            localStorage.removeItem("token");
+          }
+        } catch (err) {
+          // Network error or invalid token, clear it
+          localStorage.removeItem("token");
+        }
+      }
+    };
+
+    checkExistingSession();
+  }, [onSignup, navigate]);
 
   async function handleSubmit(e) {
     e.preventDefault();

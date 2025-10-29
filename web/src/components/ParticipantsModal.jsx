@@ -45,43 +45,65 @@ export default function ParticipantsModal({ roomCode, token, isOpen, onClose }) 
   if (!isOpen) return null;
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.header}>
-          <h2 style={styles.title}>👥 {t('participants.connectedTitle')}</h2>
-          <button style={styles.closeButton} onClick={onClose}>×</button>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal max-w-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex justify-between items-center p-6 border-b border-border">
+          <h2 className="m-0 text-2xl font-bold text-fg">
+            👥 {t('participants.connectedTitle')}
+          </h2>
+          <button
+            onClick={onClose}
+            className="bg-transparent border-none text-muted text-4xl cursor-pointer p-0 w-10 h-10
+                       flex items-center justify-center rounded-lg hover:bg-bg-secondary transition-all"
+          >
+            ×
+          </button>
         </div>
 
-        <div style={styles.content}>
+        {/* Content */}
+        <div className="flex-1 overflow-auto p-6">
           {loading && participants.length === 0 ? (
-            <div style={styles.loadingContainer}>
-              <div style={styles.spinner}></div>
-              <p style={styles.loadingText}>{t('participants.loadingParticipants')}</p>
+            <div className="flex flex-col items-center gap-4 py-12 px-4">
+              <div className="w-12 h-12 border-4 border-border border-t-accent rounded-full animate-spin"></div>
+              <p className="text-muted m-0">{t('participants.loadingParticipants')}</p>
             </div>
           ) : participants.length === 0 ? (
-            <div style={styles.emptyState}>
-              <p style={styles.emptyText}>{t('participants.emptyState')}</p>
+            <div className="text-center py-12 px-4">
+              <p className="text-muted text-base m-0">{t('participants.emptyState')}</p>
             </div>
           ) : (
-            <div style={styles.participantList}>
+            <div className="flex flex-col gap-3">
               {participants.map((participant, index) => (
-                <div key={index} style={styles.participantCard}>
-                  <div style={styles.participantInfo}>
-                    <div style={styles.participantName}>
-                      {participant.is_guest && <span style={styles.guestBadge}>{t('participants.guestLabel')}</span>}
+                <div
+                  key={index}
+                  className="bg-bg-secondary border border-border rounded-xl p-4 flex justify-between items-center
+                             transition-all hover:border-accent"
+                >
+                  <div className="flex-1">
+                    <div className="text-fg text-base font-semibold mb-2 flex items-center gap-2">
+                      {participant.is_guest && (
+                        <span className="bg-accent text-accent-fg text-[0.65rem] font-bold px-2 py-1 rounded uppercase">
+                          {t('participants.guestLabel')}
+                        </span>
+                      )}
                       {participant.display_name || participant.email}
                     </div>
-                    <div style={styles.participantMeta}>
-                      <span style={styles.languageInfo}>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-muted text-sm">
                         🗣️ {getLanguageName(participant.preferred_lang || "en")}
                       </span>
                     </div>
                   </div>
-                  <div style={styles.statusIndicator}>
+                  <div className="flex items-center gap-2">
                     {participant.is_speaking ? (
-                      <span style={styles.speakingBadge}>🎤 {t('participants.speaking')}</span>
+                      <span className="bg-green-500 text-white text-xs font-semibold px-3 py-1.5 rounded-md animate-pulse">
+                        🎤 {t('participants.speaking')}
+                      </span>
                     ) : (
-                      <span style={styles.connectedBadge}>✓ {t('participants.connected')}</span>
+                      <span className="text-green-500 text-sm font-semibold">
+                        ✓ {t('participants.connected')}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -90,8 +112,9 @@ export default function ParticipantsModal({ roomCode, token, isOpen, onClose }) 
           )}
         </div>
 
-        <div style={styles.footer}>
-          <p style={styles.footerText}>
+        {/* Footer */}
+        <div className="p-4 border-t border-border bg-bg-secondary">
+          <p className="m-0 text-muted text-sm text-center">
             {participants.length} participant{participants.length !== 1 ? 's' : ''} connected
           </p>
         </div>
@@ -114,166 +137,3 @@ function getLanguageName(code) {
   const baseLang = code?.split('-')[0] || code;
   return languages[baseLang] || code.toUpperCase();
 }
-
-const styles = {
-  overlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "rgba(0, 0, 0, 0.8)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1000,
-    padding: "1rem"
-  },
-  modal: {
-    background: "#1a1a1a",
-    borderRadius: "16px",
-    border: "1px solid #333",
-    maxWidth: "600px",
-    width: "100%",
-    maxHeight: "80vh",
-    display: "flex",
-    flexDirection: "column",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.5)"
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "1.5rem",
-    borderBottom: "1px solid #333"
-  },
-  title: {
-    margin: 0,
-    fontSize: "1.5rem",
-    fontWeight: "700",
-    color: "white"
-  },
-  closeButton: {
-    background: "none",
-    border: "none",
-    color: "#999",
-    fontSize: "2rem",
-    cursor: "pointer",
-    padding: "0",
-    width: "40px",
-    height: "40px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: "8px",
-    transition: "all 0.2s"
-  },
-  content: {
-    flex: 1,
-    overflow: "auto",
-    padding: "1.5rem"
-  },
-  loadingContainer: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "1rem",
-    padding: "3rem 1rem"
-  },
-  spinner: {
-    width: "50px",
-    height: "50px",
-    border: "4px solid #333",
-    borderTop: "4px solid #3b82f6",
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite"
-  },
-  loadingText: {
-    color: "#999",
-    margin: 0
-  },
-  emptyState: {
-    textAlign: "center",
-    padding: "3rem 1rem"
-  },
-  emptyText: {
-    color: "#666",
-    fontSize: "1rem",
-    margin: 0
-  },
-  participantList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.75rem"
-  },
-  participantCard: {
-    background: "#2a2a2a",
-    border: "1px solid #444",
-    borderRadius: "12px",
-    padding: "1rem",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    transition: "all 0.2s"
-  },
-  participantInfo: {
-    flex: 1
-  },
-  participantName: {
-    color: "white",
-    fontSize: "1rem",
-    fontWeight: "600",
-    marginBottom: "0.5rem",
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem"
-  },
-  guestBadge: {
-    background: "#3b82f6",
-    color: "white",
-    fontSize: "0.65rem",
-    fontWeight: "700",
-    padding: "0.25rem 0.5rem",
-    borderRadius: "4px",
-    textTransform: "uppercase"
-  },
-  participantMeta: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.25rem"
-  },
-  languageInfo: {
-    color: "#999",
-    fontSize: "0.85rem"
-  },
-  statusIndicator: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem"
-  },
-  speakingBadge: {
-    background: "#10b981",
-    color: "white",
-    fontSize: "0.75rem",
-    fontWeight: "600",
-    padding: "0.375rem 0.75rem",
-    borderRadius: "6px",
-    animation: "pulse 2s infinite"
-  },
-  connectedBadge: {
-    color: "#10b981",
-    fontSize: "0.85rem",
-    fontWeight: "600"
-  },
-  footer: {
-    padding: "1rem 1.5rem",
-    borderTop: "1px solid #333",
-    background: "#141414"
-  },
-  footerText: {
-    margin: 0,
-    color: "#666",
-    fontSize: "0.85rem",
-    textAlign: "center"
-  }
-};

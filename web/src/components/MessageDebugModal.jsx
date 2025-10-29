@@ -226,6 +226,54 @@ export default function MessageDebugModal({ isOpen, onClose, roomCode, segmentId
                     🎤 Speech-to-Text (STT)
                   </h3>
 
+                  {/* Fallback Warning - Show Prominently at Top */}
+                  {debugData.stt.fallback_triggered && (
+                    <div style={{
+                      background: '#3a2515',
+                      border: '2px solid #fa3',
+                      borderRadius: '6px',
+                      padding: '0.75rem',
+                      marginBottom: '1rem'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        marginBottom: '0.5rem'
+                      }}>
+                        <span style={{ fontSize: '1.25rem' }}>⚠️</span>
+                        <strong style={{ color: '#fa3', fontSize: '0.9rem' }}>
+                          FALLBACK TRIGGERED
+                        </strong>
+                      </div>
+
+                      {debugData.stt.fallback_from_provider && (
+                        <div style={{ color: '#ffc', fontSize: '0.8rem', marginBottom: '0.5rem' }}>
+                          <strong>Original Provider:</strong> {debugData.stt.fallback_from_provider}
+                        </div>
+                      )}
+
+                      {debugData.stt.fallback_error && (
+                        <div style={{
+                          color: '#faa',
+                          fontSize: '0.75rem',
+                          fontFamily: 'monospace',
+                          background: '#2a1a1a',
+                          padding: '0.5rem',
+                          borderRadius: '4px',
+                          marginTop: '0.5rem',
+                          overflowX: 'auto'
+                        }}>
+                          <strong>Error:</strong> {debugData.stt.fallback_error}
+                        </div>
+                      )}
+
+                      <div style={{ color: '#9f9', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                        ✓ Automatically switched to {debugData.stt.provider}
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ fontSize: '0.85rem' }}>
                     <div style={{ marginBottom: '0.5rem' }}>
                       <span style={{ color: '#999' }}>Provider:</span>{' '}
@@ -285,11 +333,6 @@ export default function MessageDebugModal({ isOpen, onClose, roomCode, segmentId
                           <strong>Routing:</strong>
                         </div>
                         <div style={{ color: '#ccc' }}>{debugData.stt.routing_reason}</div>
-                        {debugData.stt.fallback_triggered && (
-                          <div style={{ color: '#fa3', marginTop: '0.25rem' }}>
-                            ⚠️ Fallback triggered
-                          </div>
-                        )}
                       </div>
                     )}
 

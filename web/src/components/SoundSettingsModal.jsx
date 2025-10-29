@@ -110,9 +110,9 @@ export default function SoundSettingsModal({
     >
       <div
         style={{
-          background: "#1a1a1a",
+          background: "var(--card)",
           borderRadius: "12px",
-          border: "1px solid #333",
+          border: "1px solid var(--border)",
           width: "100%",
           maxWidth: "500px",
           overflow: "hidden",
@@ -123,7 +123,7 @@ export default function SoundSettingsModal({
         {/* Header */}
         <div style={{
           padding: "1rem 1.25rem",
-          borderBottom: "1px solid #333",
+          borderBottom: "1px solid var(--border)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between"
@@ -138,7 +138,7 @@ export default function SoundSettingsModal({
               margin: 0,
               fontSize: "1.1rem",
               fontWeight: "600",
-              color: "white"
+              color: "var(--fg)"
             }}>
               {t('settings.soundSettingsTitle')}
             </h3>
@@ -148,7 +148,7 @@ export default function SoundSettingsModal({
             style={{
               background: "transparent",
               border: "none",
-              color: "#999",
+              color: "var(--muted)",
               fontSize: "1.5rem",
               cursor: "pointer",
               padding: "0",
@@ -171,7 +171,7 @@ export default function SoundSettingsModal({
             <div style={{
               fontSize: "0.9rem",
               fontWeight: "600",
-              color: "#999"
+              color: "var(--muted)"
             }}>
               {t('settings.status')}
             </div>
@@ -195,7 +195,7 @@ export default function SoundSettingsModal({
             <div style={{
               fontSize: "0.9rem",
               fontWeight: "600",
-              color: "#999",
+              color: "var(--muted)",
               marginBottom: "0.75rem"
             }}>
               {t('settings.audioInputLevel')}
@@ -215,10 +215,10 @@ export default function SoundSettingsModal({
               justifyContent: "space-between",
               marginTop: "0.5rem",
               fontSize: "0.85rem",
-              color: "#6b7280"
+              color: "var(--muted)"
             }}>
               <span>
-                {t('settings.level')} <strong style={{ color: '#fff' }}>
+                {t('settings.level')} <strong style={{ color: 'var(--fg)' }}>
                   {(currentLevel * 100).toFixed(0)}%
                 </strong>
               </span>
@@ -235,7 +235,7 @@ export default function SoundSettingsModal({
             <div style={{
               fontSize: "0.9rem",
               fontWeight: "600",
-              color: "#999",
+              color: "var(--muted)",
               marginBottom: "0.75rem"
             }}>
               {t('settings.noiseThreshold')}
@@ -262,7 +262,7 @@ export default function SoundSettingsModal({
               justifyContent: "space-between",
               marginTop: "0.5rem",
               fontSize: "0.75rem",
-              color: "#6b7280"
+              color: "var(--muted)"
             }}>
               <span>{t('settings.moreSensitive')}</span>
               <span>{t('settings.lessSensitive')}</span>
@@ -270,7 +270,7 @@ export default function SoundSettingsModal({
             <div style={{
               marginTop: "0.75rem",
               fontSize: "0.8rem",
-              color: "#9ca3af",
+              color: "var(--muted)",
               lineHeight: "1.4"
             }}>
               {t('settings.sensitivityHelp')}
@@ -281,7 +281,7 @@ export default function SoundSettingsModal({
           <div style={{
             marginTop: "1.5rem",
             paddingTop: "1.5rem",
-            borderTop: "1px solid #333"
+            borderTop: "1px solid var(--border)"
           }}>
             <button
               onClick={() => {
@@ -324,7 +324,7 @@ export default function SoundSettingsModal({
             <div style={{
               marginTop: "0.5rem",
               fontSize: "0.75rem",
-              color: "#6b7280",
+              color: "var(--muted)",
               textAlign: "center"
             }}>
               {isTesting ? t('settings.testModeInstructions') : t('settings.testModeReady')}
