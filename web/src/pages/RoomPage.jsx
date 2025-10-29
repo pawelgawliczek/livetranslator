@@ -61,6 +61,23 @@ export default function RoomPage({ token, onLogout }) {
     }
   }, [token, isGuest, navigate]);
 
+  // Add animations for processing indicator and speaking status
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      .processing-spinner {
+        display: inline-block;
+        animation: spin 1s linear infinite;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
   // ============================================================================
   // Core State
   // ============================================================================
@@ -624,7 +641,14 @@ export default function RoomPage({ token, onLogout }) {
   const myLang = LANGUAGES.find(l => l.code === myLanguage);
 
   return (
-    <div className="h-screen flex flex-col bg-bg text-fg font-sans overflow-hidden">
+    <div
+      className="flex flex-col bg-bg text-fg font-sans overflow-hidden"
+      style={{
+        height: '100vh',
+        height: '100dvh', // Modern browsers: dynamic viewport height (accounts for mobile toolbars)
+        maxHeight: '-webkit-fill-available' // Safari/iOS fallback
+      }}
+    >
       {/* Room Header */}
       <RoomHeader
         roomId={roomId}

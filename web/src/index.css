@@ -46,12 +46,26 @@
     @apply scroll-smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Mobile viewport fix: account for dynamic browser UI */
+    height: 100%;
+    height: 100dvh;
   }
 
   body {
     @apply bg-bg text-fg font-sans;
     margin: 0;
     padding: 0;
+    /* Mobile viewport fix: ensure body fills available space */
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: 100dvh;
+  }
+
+  /* Root app container - mobile viewport support */
+  #root {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: 100dvh;
   }
 
   /* Typography */
