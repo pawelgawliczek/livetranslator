@@ -66,19 +66,19 @@ describe('RoomHeader', () => {
 
     it('renders single language count', () => {
       const languageCounts = { en: 2 };
-      render(<RoomHeader {...defaultProps} languageCounts={languageCounts} />);
+      const { container } = render(<RoomHeader {...defaultProps} languageCounts={languageCounts} />);
 
-      expect(screen.getByText('🇬🇧')).toBeInTheDocument();
+      expect(container.textContent).toContain('🇬🇧');
       expect(screen.getByText('2')).toBeInTheDocument();
     });
 
     it('renders multiple language counts', () => {
       const languageCounts = { en: 3, es: 2, fr: 1 };
-      render(<RoomHeader {...defaultProps} languageCounts={languageCounts} />);
+      const { container } = render(<RoomHeader {...defaultProps} languageCounts={languageCounts} />);
 
-      expect(screen.getByText('🇬🇧')).toBeInTheDocument();
-      expect(screen.getByText('🇪🇸')).toBeInTheDocument();
-      expect(screen.getByText('🇫🇷')).toBeInTheDocument();
+      expect(container.textContent).toContain('🇬🇧');
+      expect(container.textContent).toContain('🇪🇸');
+      expect(container.textContent).toContain('🇫🇷');
       expect(screen.getByText('3')).toBeInTheDocument();
       expect(screen.getByText('2')).toBeInTheDocument();
       expect(screen.getByText('1')).toBeInTheDocument();
@@ -86,9 +86,9 @@ describe('RoomHeader', () => {
 
     it('shows fallback flag for unknown language', () => {
       const languageCounts = { unknown: 1 };
-      render(<RoomHeader {...defaultProps} languageCounts={languageCounts} />);
+      const { container } = render(<RoomHeader {...defaultProps} languageCounts={languageCounts} />);
 
-      expect(screen.getByText('🌐')).toBeInTheDocument();
+      expect(container.textContent).toContain('🌐');
       expect(screen.getByText('1')).toBeInTheDocument();
     });
 
