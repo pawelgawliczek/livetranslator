@@ -1,3 +1,4 @@
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
@@ -16,7 +17,7 @@ import PropTypes from 'prop-types';
  * @param {Function} [props.formatTime] - Function to format timestamps
  * @param {Function} [props.onDebugClick] - Callback when debug icon is clicked
  */
-export default function ChatMessage({
+function ChatMessage({
   segId,
   segment,
   isAdmin = false,
@@ -124,6 +125,7 @@ export default function ChatMessage({
           🔍
         </span>
       )}
+      {isAdmin && <div style={{display: 'none'}}>DEBUG_ICON_SHOULD_RENDER</div>}
 
       {segment.translation ? (
         <>
@@ -193,3 +195,6 @@ ChatMessage.propTypes = {
   formatTime: PropTypes.func,
   onDebugClick: PropTypes.func
 };
+
+// Memoize to prevent re-renders when parent updates but props don't change
+export default React.memo(ChatMessage);

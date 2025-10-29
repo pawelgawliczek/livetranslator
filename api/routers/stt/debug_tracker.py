@@ -170,6 +170,8 @@ async def create_stt_debug_info(
         routing_info: Dictionary containing:
             - routing_reason: Human-readable routing decision
             - fallback_triggered: Boolean indicating if fallback was used
+            - fallback_error: Error message that triggered fallback (optional)
+            - fallback_from_provider: Original provider that failed (optional)
     """
     try:
         # Calculate STT cost
@@ -198,6 +200,8 @@ async def create_stt_debug_info(
                 },
                 "routing_reason": routing_info["routing_reason"],
                 "fallback_triggered": routing_info["fallback_triggered"],
+                "fallback_error": routing_info.get("fallback_error"),
+                "fallback_from_provider": routing_info.get("fallback_from_provider"),
                 "text": stt_data["text"]
             },
 

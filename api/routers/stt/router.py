@@ -37,6 +37,7 @@ from language_router import get_stt_provider_for_language, init_db_pool, clear_c
 
 # Import streaming manager
 from streaming_manager import get_streaming_manager
+from language_router import normalize_language_code
 
 # Import debug tracker
 from debug_tracker import create_stt_debug_info
@@ -338,15 +339,47 @@ async def router_loop():
                                 print(f"[STT Router] ✓ Stream final: {text[:80]}...")
 
                         async def on_error(error):
-                            """Handle streaming errors."""
-                            print(f"[STT Router] ✗ Streaming error: {error}")
+                            """Handle streaming errors - fallback to OpenAI on quota/connection issues."""
+                            error_str = str(error) if not isinstance(error, dict) else error.get('error', str(error))
+                            print(f"[STT Router] ✗ Streaming error: {error_str}")
+
+                            # Detect quota exceeded or connection errors that should trigger fallback
+                            should_fallback = any(pattern in error_str.lower() for pattern in [
+                                'quota_exceeded', 'quota exceeded', '4005',
+                                'connection', 'timeout', 'unavailable'
+                            ])
+
+                            if should_fallback and room in partial_sessions:
+                                print(f"[STT Router] 🔄 Fallback triggered: switching to OpenAI for {room}")
+
+                                # Store fallback reason for debug tracking
+                                original_provider = session["provider"]
+                                session["fallback_error"] = error_str
+                                session["fallback_from_provider"] = original_provider
+
+                                # Close the failing streaming connection
+                                await streaming_manager.close_connection(room, original_provider)
+
+                                # Switch session to OpenAI batch mode
+                                session["provider"] = "openai"
+                                session["streaming_connection"] = None
+                                print(f"[STT Router] ✓ Switched to OpenAI fallback for {room} (error: {error_str[:80]}...)")
 
                         # Get or create streaming connection
                         if session["streaming_connection"] is None:
+                            # Speechmatics uses simple codes (pl, en, ar)
+                            # Other providers use locale format (pl-PL, en-EN, ar-EG)
+                            if session["provider"] == "speechmatics":
+                                # Keep simple format for Speechmatics
+                                provider_lang = language_hint.split('-')[0] if '-' in language_hint else language_hint
+                            else:
+                                # Normalize to locale format for Google/Azure
+                                provider_lang = normalize_language_code(language_hint)
+
                             conn = await streaming_manager.get_or_create_connection(
                                 room_id=room,
                                 provider=session["provider"],
-                                language=language_hint,
+                                language=provider_lang,
                                 config=session["provider_config"],
                                 on_partial=on_partial,
                                 on_final=on_final,
@@ -652,6 +685,15 @@ async def router_loop():
 
                         # Track debug info (fire-and-forget)
                         final_text = streaming_conn.finalized_text if streaming_conn and streaming_conn.finalized_text else last_partial_text
+
+                        # Check if fallback was triggered for this session
+                        fallback_triggered = "fallback_error" in session
+                        routing_reason = f"{session.get('language_hint', 'auto')}/streaming/{session.get('quality_tier', 'standard')} → {session['provider']}"
+                        if fallback_triggered:
+                            routing_reason += f" (fallback from {session.get('fallback_from_provider', 'unknown')})"
+                        else:
+                            routing_reason += " (streaming)"
+
                         await create_stt_debug_info(
                             redis=r,
                             segment_id=session["segment_id"],
@@ -665,8 +707,10 @@ async def router_loop():
                                 "text": final_text
                             },
                             routing_info={
-                                "routing_reason": f"{session.get('language_hint', 'auto')}/streaming/{session.get('quality_tier', 'standard')} → {session['provider']} (streaming)",
-                                "fallback_triggered": session.get("fallback", False)
+                                "routing_reason": routing_reason,
+                                "fallback_triggered": fallback_triggered,
+                                "fallback_error": session.get("fallback_error"),
+                                "fallback_from_provider": session.get("fallback_from_provider")
                             }
                         )
 

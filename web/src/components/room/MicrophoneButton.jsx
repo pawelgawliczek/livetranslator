@@ -31,12 +31,6 @@ export default function MicrophoneButton({
   const isIdle = status === 'idle';
   const isStreaming = status === 'streaming';
 
-  // Determine button color
-  const getBackgroundColor = () => {
-    if (isIdle) return '#16a34a'; // green-600
-    return '#dc2626'; // red-600
-  };
-
   // Determine button content based on state
   const getButtonContent = () => {
     if (isIdle) {
@@ -107,24 +101,12 @@ export default function MicrophoneButton({
       onMouseUp={handlePressEnd}
       onContextMenu={handleContextMenu}
       aria-label={isIdle ? t('room.start') : t('room.stop')}
+      className={`w-full h-14 rounded-[28px] text-white border-0 text-lg font-semibold cursor-pointer flex items-center justify-center gap-2 shadow-lg select-none ${
+        isIdle ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+      }`}
       style={{
-        width: '100%',
-        height: '56px',
-        borderRadius: '28px',
-        background: getBackgroundColor(),
-        color: 'white',
-        border: 'none',
-        fontSize: '1.05rem',
-        fontWeight: '600',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '0.5rem',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
         WebkitTapHighlightColor: 'transparent',
         touchAction: 'manipulation',
-        userSelect: 'none',
         WebkitUserSelect: 'none',
         MozUserSelect: 'none',
         msUserSelect: 'none',

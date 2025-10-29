@@ -44,7 +44,9 @@ export default function useRoomWebSocket({ myLanguage, userEmail }) {
    * Debounces rapid message updates for performance
    */
   function scheduleRender() {
-    if (dirtyRef.current) return;
+    if (dirtyRef.current) {
+      return;
+    }
     dirtyRef.current = true;
 
     setTimeout(() => {
@@ -103,7 +105,6 @@ export default function useRoomWebSocket({ myLanguage, userEmail }) {
   function onMessage(ev) {
     try {
       const m = JSON.parse(ev.data);
-      console.log('[WS] Received:', m);
 
       // Silently ignore non-STT/translation messages (they're handled elsewhere)
       const messageTypes = ["translation_partial", "translation_final", "partial", "stt_partial", "final", "stt_final", "stt_finalize", "speech_started"];
@@ -113,7 +114,6 @@ export default function useRoomWebSocket({ myLanguage, userEmail }) {
 
       // Handle speech_started event
       if (m.type === 'speech_started') {
-        console.log('[RoomWS] Speech started from:', m.speaker, 'segment_id:', m.segment_id);
 
         // Use the real segment ID from the backend
         const segmentId = m.segment_id;
@@ -124,17 +124,16 @@ export default function useRoomWebSocket({ myLanguage, userEmail }) {
           placeholderSegmentKeyRef.current = placeholderKey;
         }
 
-        segsRef.current.set(placeholderKey, {
+        const placeholder = {
           segment_id: segmentId,
-          source: {
-            type: 'stt_partial',
-            text: '___SPEAKING___',
-            speaker: m.speaker,
-            final: false,
-            ts_iso: new Date().toISOString()
-          },
+          type: 'stt_partial',
+          text: '___SPEAKING___',
+          speaker: m.speaker,
+          final: false,
+          ts_iso: new Date().toISOString(),
           is_placeholder: true
-        });
+        };
+        segsRef.current.set(placeholderKey, placeholder);
         scheduleRender();
 
         // Auto-remove placeholder after 5 seconds if no text arrives
@@ -148,8 +147,6 @@ export default function useRoomWebSocket({ myLanguage, userEmail }) {
             }
             scheduleRender();
             console.log('[VAD] Removed stale placeholder after timeout for:', m.speaker);
-          } else if (segment) {
-            console.log('[VAD] Placeholder already replaced with real text, keeping it for:', m.speaker);
           }
         }, 5000);
 
@@ -178,13 +175,11 @@ export default function useRoomWebSocket({ myLanguage, userEmail }) {
 
       // Check if text field exists (not undefined)
       if (!('text' in m)) {
-        console.log('[WS] Rejected: no text field');
         return;
       }
 
-      // Skip messages with empty text (but log them)
+      // Skip messages with empty text
       if (!m.text || m.text.trim() === '') {
-        console.log('[WS] Skipping empty text message:', m.type, 'segment:', m.segment_id);
         return;
       }
 
@@ -193,8 +188,6 @@ export default function useRoomWebSocket({ myLanguage, userEmail }) {
       m.ts_iso = m.ts_iso || new Date().toISOString();
       const id = m.segment_id | 0;
 
-      console.log('[WS] Processing:', m.type, 'segment:', id, 'speaker:', m.speaker);
-
       // Remove placeholder segment when real text arrives (only if it matches this segment AND is still a placeholder)
       if (placeholderSegmentKeyRef.current) {
         const placeholderSegmentKey = `s-${id}`;
@@ -202,13 +195,8 @@ export default function useRoomWebSocket({ myLanguage, userEmail }) {
           const existingSegment = segsRef.current.get(placeholderSegmentKeyRef.current);
           if (existingSegment && existingSegment.is_placeholder) {
             segsRef.current.delete(placeholderSegmentKeyRef.current);
-            console.log('[WS] Removed placeholder segment:', placeholderSegmentKeyRef.current);
-          } else {
-            console.log('[WS] Placeholder already replaced, keeping real segment:', placeholderSegmentKeyRef.current);
           }
           placeholderSegmentKeyRef.current = null;
-        } else {
-          console.log('[WS] Skipping placeholder removal - segment mismatch:', placeholderSegmentKeyRef.current, 'vs', placeholderSegmentKey);
         }
       }
 

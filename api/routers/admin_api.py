@@ -562,10 +562,10 @@ async def get_message_debug_info(
         translated_text = None
 
         # Match by cost amount (rough heuristic)
-        for lang, text in translations_map.items():
+        for lang, trans_text in translations_map.items():
             if lang not in [segment[3], "auto"]:  # Not source language
                 tgt_lang = lang
-                translated_text = text
+                translated_text = trans_text
                 break
 
         mt_entry = {

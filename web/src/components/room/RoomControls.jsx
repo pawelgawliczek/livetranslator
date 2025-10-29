@@ -40,44 +40,20 @@ export default function RoomControls({
 
   return (
     <div
+      className="bg-card border-t border-border p-3 shrink-0"
       style={{
-        background: '#1a1a1a',
-        borderTop: '1px solid #333',
-        padding: '0.75rem',
-        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
-        flexShrink: 0
+        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))'
       }}
     >
       {/* Push-to-talk checkbox and Network Status */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '1rem',
-          marginBottom: '0.65rem'
-        }}
-      >
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            fontSize: '0.8rem',
-            color: '#999',
-            cursor: 'pointer'
-          }}
-        >
+      <div className="flex items-center justify-center gap-4 mb-2.5">
+        <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
           <input
             type="checkbox"
             checked={pushToTalk}
             onChange={handlePushToTalkToggle}
             aria-label={t('room.pushToTalk')}
-            style={{
-              cursor: 'pointer',
-              width: '18px',
-              height: '18px'
-            }}
+            className="cursor-pointer w-[18px] h-[18px]"
           />
           {t('room.pushToTalk')}
         </label>

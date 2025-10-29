@@ -114,6 +114,10 @@ def _normalize_language(lang: str) -> str:
     return mappings.get(lang.lower(), "*")
 
 
+# Public API for normalizing language codes
+normalize_language_code = _normalize_language
+
+
 async def check_provider_health(provider: str, service_type: str) -> Dict[str, Any]:
     """
     Check health status of a provider.

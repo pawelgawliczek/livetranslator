@@ -30,17 +30,17 @@ export default function AdminLeaveModal({ isOpen, onStay, onLeave }) {
         </div>
 
         {/* Title */}
-        <h3 className="m-0 mb-4 text-[1.3rem] text-center font-semibold text-fg-dark">
+        <h3 className="m-0 mb-4 text-[1.3rem] text-center font-semibold text-fg">
           {t('room.adminLeaveModal.title')}
         </h3>
 
         {/* Subtitle */}
-        <p className="m-0 mb-6 text-[0.95rem] text-[#ccc] leading-relaxed">
+        <p className="m-0 mb-6 text-[0.95rem] text-muted leading-relaxed">
           {t('room.adminLeaveModal.subtitle')}
         </p>
 
         {/* Warning Points List */}
-        <ul className="m-0 mb-6 text-sm text-[#ccc] leading-relaxed pl-6">
+        <ul className="m-0 mb-6 text-sm text-muted leading-relaxed pl-6">
           <li>{t('room.adminLeaveModal.point1')}</li>
           <li>{t('room.adminLeaveModal.point2')}</li>
           <li>{t('room.adminLeaveModal.point3')}</li>
@@ -48,7 +48,7 @@ export default function AdminLeaveModal({ isOpen, onStay, onLeave }) {
         </ul>
 
         {/* Rejoin Note */}
-        <p className="m-0 mb-6 text-[0.85rem] text-muted-dark italic">
+        <p className="m-0 mb-6 text-[0.85rem] text-muted italic">
           {t('room.adminLeaveModal.rejoinNote')}
         </p>
 

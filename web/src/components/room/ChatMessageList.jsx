@@ -1,3 +1,4 @@
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 import ChatMessage from './ChatMessage';
@@ -23,7 +24,7 @@ import AdminLeftToast from '../AdminLeftToast';
  * @param {number} [props.timeRemaining] - Seconds remaining before room closes
  * @param {Function} [props.formatCountdown] - Function to format countdown
  */
-export default function ChatMessageList({
+function ChatMessageList({
   messages = [],
   isAdmin = false,
   loadingHistory = false,
@@ -37,15 +38,8 @@ export default function ChatMessageList({
   const { t } = useTranslation();
 
   return (
-    <div
+    <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 flex flex-col gap-3"
       style={{
-        flex: 1,
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        padding: '0.75rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0.75rem',
         WebkitOverflowScrolling: 'touch'
       }}
     >
@@ -59,30 +53,14 @@ export default function ChatMessageList({
 
       {/* Loading History */}
       {loadingHistory && messages.length === 0 && (
-        <div
-          style={{
-            textAlign: 'center',
-            color: '#666',
-            padding: '2rem 1rem',
-            margin: 'auto',
-            fontSize: '0.9rem'
-          }}
-        >
+        <div className="text-center text-muted py-8 px-4 m-auto text-sm">
           📜 Loading history...
         </div>
       )}
 
       {/* Empty State */}
       {!loadingHistory && messages.length === 0 && (
-        <div
-          style={{
-            textAlign: 'center',
-            color: '#666',
-            padding: '2rem 1rem',
-            margin: 'auto',
-            fontSize: '0.9rem'
-          }}
-        >
+        <div className="text-center text-muted py-8 px-4 m-auto text-sm">
           {t('room.pressToStart')}
         </div>
       )}
@@ -134,3 +112,6 @@ ChatMessageList.propTypes = {
   timeRemaining: PropTypes.number,
   formatCountdown: PropTypes.func
 };
+
+// Memoize to prevent re-renders when parent updates but props don't change
+export default React.memo(ChatMessageList);

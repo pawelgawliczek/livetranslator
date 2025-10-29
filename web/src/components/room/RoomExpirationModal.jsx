@@ -2,65 +2,62 @@ import React from 'react';
 import PropTypes from 'prop-types';
 
 /**
- * RoomExpirationModal - Full-screen modal shown when room is closed
+ * RoomExpirationModal - Full-screen modal shown when room is closing or closed
  *
  * Displayed when:
- * - Room admin has been away for 30 minutes
+ * - Room admin has been away and room is about to expire
  * - Room is automatically closed and deleted
  *
  * Features:
  * - Cannot be closed (no backdrop click, no ESC)
- * - Two action buttons: Create Account or Sign In
- * - Centered layout with promotional message
+ * - Shows countdown timer
+ * - Close button to leave room
  */
-export default function RoomExpirationModal({ isOpen, onCreateAccount, onSignIn }) {
-  if (!isOpen) return null;
+export default function RoomExpirationModal({ timeRemaining, formatCountdown, onClose }) {
+  if (!timeRemaining && timeRemaining !== 0) return null;
 
   return (
     <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4">
-      <div className="bg-card-dark rounded-2xl px-8 py-10 max-w-[450px] w-full border-2 border-red-600 text-center">
-        {/* Goodbye Icon */}
+      <div className="bg-card rounded-2xl px-8 py-10 max-w-[450px] w-full border-2 border-red-600 text-center">
+        {/* Warning Icon */}
         <div className="text-[3rem] mb-4">
-          👋
+          ⚠️
         </div>
 
         {/* Title */}
-        <h2 className="m-0 mb-4 text-2xl text-white font-semibold">
-          Thank you for joining!
+        <h2 className="m-0 mb-4 text-2xl text-fg font-semibold">
+          Room Closing Soon
         </h2>
 
         {/* Main Message */}
-        <p className="m-0 mb-6 text-base text-[#ccc] leading-relaxed">
-          This room has been closed because the admin has been away for 30 minutes.
+        <p className="m-0 mb-6 text-base text-muted leading-relaxed">
+          The admin has left the room. The room will close in:
         </p>
 
-        {/* Promotional Message */}
-        <p className="m-0 mb-8 text-sm text-muted-dark">
-          Create your own account to host unlimited translation rooms.
-        </p>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col gap-3">
-          <button
-            onClick={onCreateAccount}
-            className="w-full px-4 py-4 bg-blue-500 text-white border-0 rounded-xl cursor-pointer font-semibold text-[1.05rem] hover:bg-blue-600 transition-colors"
-          >
-            Create Account
-          </button>
-          <button
-            onClick={onSignIn}
-            className="w-full px-4 py-4 bg-[#2a2a2a] text-white border border-[#444] rounded-xl cursor-pointer font-semibold text-[1.05rem] hover:bg-[#333] transition-colors"
-          >
-            Sign In
-          </button>
+        {/* Countdown */}
+        <div className="text-[2.5rem] font-bold text-red-500 mb-6">
+          {formatCountdown(timeRemaining)}
         </div>
+
+        {/* Info Message */}
+        <p className="m-0 mb-8 text-sm text-muted">
+          The room will remain open if the admin rejoins.
+        </p>
+
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="w-full px-4 py-4 bg-red-600 text-white border-0 rounded-xl cursor-pointer font-semibold text-[1.05rem] hover:bg-red-700 transition-colors"
+        >
+          Leave Room
+        </button>
       </div>
     </div>
   );
 }
 
 RoomExpirationModal.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  onCreateAccount: PropTypes.func.isRequired,
-  onSignIn: PropTypes.func.isRequired
+  timeRemaining: PropTypes.number,
+  formatCountdown: PropTypes.func.isRequired,
+  onClose: PropTypes.func.isRequired
 };

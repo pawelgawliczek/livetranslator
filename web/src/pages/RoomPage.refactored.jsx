@@ -5,7 +5,7 @@
  * Orchestrates all room functionality with clean separation of concerns.
  */
 
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -60,40 +60,6 @@ export default function RoomPage({ token, onLogout }) {
       navigate('/login');
     }
   }, [token, isGuest, navigate]);
-
-  // Add animations for processing indicator and speaking status
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-      }
-      .processing-spinner {
-        display: inline-block;
-        animation: spin 1s linear infinite;
-      }
-      .debug-icon {
-        position: absolute;
-        top: 0.35rem;
-        right: 0.35rem;
-        font-size: 0.8rem;
-        cursor: pointer;
-        opacity: 0.4;
-        transition: opacity 0.2s ease, transform 0.2s ease;
-        padding: 0.2rem;
-        line-height: 1;
-        user-select: none;
-        z-index: 10;
-      }
-      .debug-icon:hover {
-        opacity: 1;
-        transform: scale(1.15);
-      }
-    `;
-    document.head.appendChild(style);
-    return () => document.head.removeChild(style);
-  }, []);
 
   // ============================================================================
   // Core State
@@ -181,7 +147,6 @@ export default function RoomPage({ token, onLogout }) {
     participants,
     languageCounts,
     showWelcome,
-    dismissWelcome,
     notifications,
     networkQuality,
     networkRTT
@@ -198,7 +163,6 @@ export default function RoomPage({ token, onLogout }) {
   const audioStream = useAudioStream({
     ws: presenceWs,
     roomId,
-    userEmail,
     myLanguage,
     pushToTalk,
     isPressing,
@@ -225,7 +189,7 @@ export default function RoomPage({ token, onLogout }) {
     }
   }
 
-  const formatTime = useCallback((isoString) => {
+  function formatTime(isoString) {
     if (!isoString) return "";
     try {
       const date = new Date(isoString);
@@ -233,35 +197,14 @@ export default function RoomPage({ token, onLogout }) {
     } catch {
       return "";
     }
-  }, []);
+  }
 
-  const formatCountdown = useCallback((milliseconds) => {
+  function formatCountdown(milliseconds) {
     if (milliseconds === null || milliseconds === undefined) return "";
     const minutes = Math.floor(milliseconds / 60000);
     const seconds = Math.floor((milliseconds % 60000) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }, []);
-
-  const handleDebugClick = useCallback((segmentId) => {
-    setDebugSegmentId(segmentId);
-    setDebugModalOpen(true);
-  }, [isAdmin]);
-
-  // ============================================================================
-  // Adaptive Send Interval Logging
-  // ============================================================================
-
-  const prevSendIntervalRef = useRef(null);
-
-  useEffect(() => {
-    const newInterval = getSendIntervalForQuality(networkQuality);
-
-    if (prevSendIntervalRef.current !== null && newInterval !== prevSendIntervalRef.current) {
-      console.log(`[Adaptive] Changing send interval: ${prevSendIntervalRef.current}ms → ${newInterval}ms (quality: ${networkQuality})`);
-    }
-
-    prevSendIntervalRef.current = newInterval;
-  }, [networkQuality]);
+  }
 
   // ============================================================================
   // User Profile Loading
@@ -367,26 +310,12 @@ export default function RoomPage({ token, onLogout }) {
   useEffect(() => {
     if (!roomId || !token || isGuest) return;
 
-    // Get current user ID from token
-    const getUserIdFromToken = (token) => {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        return payload.sub;
-      } catch (e) {
-        console.error('[RoomOwner] Failed to parse token:', e);
-        return null;
-      }
-    };
-
-    const currentUserId = getUserIdFromToken(token);
-    if (!currentUserId) return;
-
-    fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
+    fetch(`/api/rooms/${encodeURIComponent(roomId)}/check-owner`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(r => r.json())
       .then(data => {
-        setIsRoomOwner(data.owner_id === parseInt(currentUserId));
+        setIsRoomOwner(data.is_owner || false);
       })
       .catch(e => console.error('[RoomOwner] Failed to check:', e));
   }, [roomId, token, isGuest]);
@@ -396,21 +325,14 @@ export default function RoomPage({ token, onLogout }) {
   // ============================================================================
 
   useEffect(() => {
-    if (!roomId) return;
+    if (!roomId || !token || isGuest) return;
 
-    // Guests don't have persistence, mark as initialized immediately
-    if (isGuest || !token) {
-      setPersistenceEnabled(false);
-      setPersistenceInitialized(true);
-      return;
-    }
-
-    fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
+    fetch(`/api/rooms/${encodeURIComponent(roomId)}/persistence`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(r => r.json())
       .then(data => {
-        setPersistenceEnabled(data.recording || false);
+        setPersistenceEnabled(data.enabled || false);
         setPersistenceInitialized(true);
       })
       .catch(e => {
@@ -589,8 +511,7 @@ export default function RoomPage({ token, onLogout }) {
     if (isRoomAdmin && audioStream.isRecording) {
       setShowAdminLeaveWarning(true);
     } else {
-      // Navigate to rooms list if logged in, otherwise home
-      navigate(isGuest ? '/' : '/rooms');
+      navigate('/');
     }
   };
 
@@ -678,35 +599,28 @@ export default function RoomPage({ token, onLogout }) {
   const myLang = LANGUAGES.find(l => l.code === myLanguage);
 
   return (
-    <div
-      className="flex flex-col bg-bg text-fg font-sans overflow-hidden"
-      style={{
-        height: '100vh',
-        height: '100dvh', // Modern browsers: dynamic viewport height (accounts for mobile toolbars)
-        maxHeight: '-webkit-fill-available' // Safari/iOS fallback
-      }}
-    >
+    <div className="h-screen flex flex-col bg-gray-950 text-white font-sans overflow-hidden">
       {/* Room Header */}
       <RoomHeader
         roomId={roomId}
         vadStatus={vadStatus}
         vadReady={audioStream.vadReady}
         languageCounts={languageCounts}
-        languages={LANGUAGES}
         onBackClick={handleBackClick}
         onMenuClick={() => setShowSettings(true)}
       />
 
+      {/* Network Status Indicator */}
+      {networkQuality !== 'unknown' && (
+        <NetworkStatusIndicator
+          quality={networkQuality}
+          rtt={networkRTT}
+        />
+      )}
+
       {/* Welcome Banner */}
       {showWelcome && (
-        <WelcomeBanner
-          isOpen={showWelcome}
-          roomId={roomId}
-          participants={participants}
-          currentUserId={userEmail}
-          isGuest={isGuest}
-          onClose={dismissWelcome}
-        />
+        <WelcomeBanner onDismiss={() => {}} />
       )}
 
       {/* Admin Leave Warning Modal */}
@@ -732,10 +646,10 @@ export default function RoomPage({ token, onLogout }) {
       {/* Language Picker Modal */}
       {showLangPicker && (
         <LanguagePickerModal
-          isOpen={showLangPicker}
           currentLanguage={myLanguage}
-          onLanguageChange={(lang) => {
+          onSelectLanguage={(lang) => {
             handleLanguageChange(lang);
+            setShowLangPicker(false);
           }}
           onClose={() => setShowLangPicker(false)}
         />
@@ -744,7 +658,6 @@ export default function RoomPage({ token, onLogout }) {
       {/* Costs Modal */}
       {showCosts && (
         <CostsModal
-          isOpen={showCosts}
           costs={costs}
           onClose={() => setShowCosts(false)}
         />
@@ -757,23 +670,41 @@ export default function RoomPage({ token, onLogout }) {
         loadingHistory={loadingHistory}
         formatTime={formatTime}
         chatEndRef={chatEndRef}
-        onDebugClick={handleDebugClick}
+        onDebugClick={(segmentId) => {
+          setDebugSegmentId(segmentId);
+          setDebugModalOpen(true);
+        }}
         showAdminLeftToast={roomStatus && !roomStatus.admin_present && !isRoomAdmin}
         timeRemaining={timeRemaining}
         formatCountdown={formatCountdown}
       />
 
-      {/* Room Controls (includes PTT toggle, network status, and microphone button) */}
+      {/* Room Controls */}
       <RoomControls
+        myLanguage={myLanguage}
+        myLang={myLang}
+        onLanguageClick={() => setShowLangPicker(true)}
+        onParticipantsClick={() => setShowParticipantsPanel(true)}
+        onCostsClick={async () => {
+          try {
+            const response = await fetch(`/api/costs/room/${encodeURIComponent(roomId)}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            setCosts(data);
+            setShowCosts(true);
+          } catch (error) {
+            console.error('[Costs] Failed to fetch:', error);
+          }
+        }}
+      />
+
+      {/* Microphone Button */}
+      <MicrophoneButton
         status={status}
+        vadReady={audioStream.vadReady}
         pushToTalk={pushToTalk}
         isPressing={isPressing}
-        networkQuality={networkQuality}
-        networkRTT={networkRTT}
-        onPushToTalkChange={(enabled) => {
-          setPushToTalk(enabled);
-          localStorage.setItem('lt_push_to_talk', enabled.toString());
-        }}
         onStart={handleStart}
         onStop={handleStop}
         onPressStart={() => setIsPressing(true)}
@@ -783,106 +714,68 @@ export default function RoomPage({ token, onLogout }) {
       {/* Legacy Modals (not yet refactored) */}
       {showInvite && (
         <InviteModal
-          roomCode={roomId}
+          roomId={roomId}
           onClose={() => setShowInvite(false)}
         />
       )}
 
       {showSettings && (
         <SettingsMenu
-          isOpen={showSettings}
           onClose={() => setShowSettings(false)}
-          isGuest={isGuest}
-          myLanguage={myLanguage}
-          languages={LANGUAGES}
-          onLanguageChange={() => {
-            setShowSettings(false);
-            setShowLangPicker(true);
-          }}
-          onShowParticipants={() => {
-            setShowSettings(false);
-            setShowParticipantsPanel(true);
-          }}
-          onShowInvite={() => {
+          onInvite={() => {
             setShowSettings(false);
             setShowInvite(true);
           }}
-          onShowCosts={async () => {
-            setShowSettings(false);
-            try {
-              const response = await fetch(`/api/costs/room/${encodeURIComponent(roomId)}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-              });
-              const data = await response.json();
-              setCosts(data);
-              setShowCosts(true);
-            } catch (error) {
-              console.error('[Costs] Failed to fetch:', error);
-            }
-          }}
-          onShowSound={() => {
+          onSoundSettings={() => {
             setShowSettings(false);
             setShowSoundSettings(true);
           }}
           onLogout={onLogout}
-          canChangeLanguage={status === 'idle'}
+          token={token}
+          roomId={roomId}
+          isRoomOwner={isRoomOwner}
           persistenceEnabled={persistenceEnabled}
-          onTogglePersistence={(enabled) => {
+          setPersistenceEnabled={setPersistenceEnabled}
+          onPersistenceChange={(enabled) => {
             setPersistenceEnabled(enabled);
             if (enabled && persistenceInitialized) {
               fetchHistory();
             }
           }}
-          isRoomAdmin={isRoomAdmin}
           isPublic={isPublic}
-          onTogglePublic={async () => {
-            const newValue = !isPublic;
-            setIsPublic(newValue);
-            try {
-              await fetch(`/api/rooms/${encodeURIComponent(roomId)}/public`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ is_public: newValue })
-              });
-            } catch (error) {
-              console.error('[Public] Failed to toggle:', error);
-              setIsPublic(!newValue); // Revert on error
-            }
-          }}
+          setIsPublic={setIsPublic}
+          isPublicInitialized={isPublicInitialized}
+          isGuest={isGuest}
         />
       )}
 
       {showSoundSettings && (
         <SoundSettingsModal
-          isOpen={showSoundSettings}
           onClose={() => setShowSoundSettings(false)}
-          currentLevel={audioLevel}
-          threshold={audioThreshold}
-          onThresholdChange={setAudioThreshold}
-          isActive={status === 'recording'}
-          status={vadStatus}
-          onTest={handleTestMode}
+          audioLevel={audioLevel}
+          audioThreshold={audioThreshold}
+          setAudioThreshold={setAudioThreshold}
+          testMode={testMode}
+          setTestMode={handleTestMode}
+          pushToTalk={pushToTalk}
+          setPushToTalk={(enabled) => {
+            setPushToTalk(enabled);
+            localStorage.setItem('lt_push_to_talk', enabled.toString());
+          }}
         />
       )}
 
       {showParticipantsPanel && (
         <ParticipantsPanel
           participants={participants}
-          languages={LANGUAGES}
-          isOpen={showParticipantsPanel}
-          onToggle={() => setShowParticipantsPanel(false)}
+          onClose={() => setShowParticipantsPanel(false)}
         />
       )}
 
       {debugModalOpen && (
         <MessageDebugModal
-          isOpen={debugModalOpen}
-          roomCode={roomId}
           segmentId={debugSegmentId}
-          token={token}
+          messages={roomWebSocket.segsRef.current}
           onClose={() => {
             setDebugModalOpen(false);
             setDebugSegmentId(null);

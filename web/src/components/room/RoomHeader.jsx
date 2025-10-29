@@ -20,13 +20,13 @@ export default function RoomHeader({
   onMenuClick
 }) {
   return (
-    <div className="bg-card-dark border-b border-border-dark flex items-center justify-between gap-2 px-3 py-2 shrink-0 relative z-[999]"
+    <div className="bg-card border-b border-border flex items-center justify-between gap-2 px-3 py-2 shrink-0 relative z-[999]"
          style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
 
       {/* Back button - left */}
       <button
         onClick={onBackClick}
-        className="bg-[#2a2a2a] border border-[#444] rounded-lg text-white cursor-pointer px-3 py-2 text-lg flex items-center justify-center min-w-[40px] shrink-0 hover:bg-[#333] transition-colors"
+        className="bg-bg-secondary border border-border rounded-lg text-fg cursor-pointer px-3 py-2 text-lg flex items-center justify-center min-w-[40px] shrink-0 hover:bg-card transition-colors"
         aria-label="Go back"
       >
         ←
@@ -34,7 +34,7 @@ export default function RoomHeader({
 
       {/* Room name and status - center */}
       <div className="flex-1 text-center min-w-0">
-        <div className="text-sm font-semibold overflow-hidden text-ellipsis whitespace-nowrap flex items-center justify-center gap-2">
+        <div className="text-sm font-semibold text-fg overflow-hidden text-ellipsis whitespace-nowrap flex items-center justify-center gap-2">
           <span>{roomId}</span>
 
           {/* Language participant counts */}
@@ -45,7 +45,7 @@ export default function RoomHeader({
                 return (
                   <span
                     key={langCode}
-                    className="inline-flex items-center gap-0.5 bg-white/10 px-1.5 py-0.5 rounded"
+                    className="inline-flex items-center gap-0.5 bg-bg-secondary border border-border px-1.5 py-0.5 rounded"
                   >
                     {lang?.flag || '🌐'} {count}
                   </span>
@@ -58,7 +58,7 @@ export default function RoomHeader({
         {/* VAD Status indicator */}
         {vadStatus !== 'idle' && (
           <div className={`text-[0.65rem] overflow-hidden text-ellipsis whitespace-nowrap ${
-            vadReady ? 'text-green-600' : 'text-muted-dark'
+            vadReady ? 'text-green-600' : 'text-muted'
           }`}>
             {vadStatus}
           </div>
@@ -68,7 +68,7 @@ export default function RoomHeader({
       {/* Menu button - right */}
       <button
         onClick={onMenuClick}
-        className="bg-[#2a2a2a] border border-[#444] rounded-lg text-white cursor-pointer px-3 py-2 text-lg flex items-center justify-center min-w-[40px] shrink-0 hover:bg-[#333] transition-colors"
+        className="bg-bg-secondary border border-border rounded-lg text-fg cursor-pointer px-3 py-2 text-lg flex items-center justify-center min-w-[40px] shrink-0 hover:bg-card transition-colors"
         title="Menu"
         aria-label="Open menu"
       >

@@ -47,7 +47,7 @@ export default function CostsModal({ isOpen, costs, onClose }) {
               {Object.entries(costs.breakdown || {}).map(([pipeline, data]) => (
                 <div
                   key={pipeline}
-                  className="bg-[#2a2a2a] px-3.5 py-3.5 rounded-lg"
+                  className="bg-bg-secondary px-3.5 py-3.5 rounded-lg"
                 >
                   <div className="font-semibold text-[0.95rem] mb-1">
                     {getPipelineLabel(pipeline)}

@@ -27,12 +27,12 @@ export default function LanguagePickerModal({
     <Modal isOpen={isOpen} onClose={onClose}>
       <div className="space-y-4">
         {/* Header */}
-        <h3 className="text-xl font-semibold text-fg-dark m-0">
+        <h3 className="text-xl font-semibold text-fg m-0">
           {t('settings.myLanguage')}
         </h3>
 
         {/* Description */}
-        <p className="text-sm text-muted-dark m-0">
+        <p className="text-sm text-muted m-0">
           {t('settings.selectLanguage')}
           {' '}
           {t('settings.selectLanguageRequired')}
@@ -40,7 +40,7 @@ export default function LanguagePickerModal({
 
         {/* Language Selector */}
         <div>
-          <label className="block text-sm text-muted-dark mb-2">
+          <label className="block text-sm text-muted mb-2">
             {t('settings.languageLabel')}
           </label>
           <select
