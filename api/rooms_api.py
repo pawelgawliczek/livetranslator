@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 from datetime import datetime
 import redis
 import json
@@ -294,8 +295,15 @@ async def update_room_recording(
     """
     user_id = int(user.get("sub"))
 
-    # Get room
-    room = db.query(Room).filter(Room.code == room_code).first()
+    # Get room - support both sync and async sessions
+    if hasattr(db, 'execute'):
+        # AsyncSession
+        result = await db.execute(select(Room).where(Room.code == room_code))
+        room = result.scalar_one_or_none()
+    else:
+        # Sync Session
+        room = db.query(Room).filter(Room.code == room_code).first()
+
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -305,8 +313,14 @@ async def update_room_recording(
 
     # Update recording setting
     room.recording = request.recording
-    db.commit()
-    db.refresh(room)
+
+    # Commit - support both sync and async
+    if hasattr(db, 'execute'):
+        await db.commit()
+        await db.refresh(room)
+    else:
+        db.commit()
+        db.refresh(room)
 
     return RoomResponse(
         id=room.id,
