@@ -1,5 +1,68 @@
 # Feature 1: Multi-Speaker Diarization (Single Device)
 
+## Implementation Status (Updated: 2025-10-30)
+
+### ✅ Completed (Phase 1 Backend - 100%)
+
+**Phase 1.1 & 1.2: Database Schema & API Endpoints**
+- ✅ Database models created ([api/models.py](../api/models.py))
+  - `Room.discovery_mode` (VARCHAR(20): "disabled", "enabled", "locked")
+  - `Room.speakers_locked` (BOOLEAN)
+  - `RoomSpeaker` table with speaker_id (INTEGER), display_name, language, color
+  - `Event.speaker_id` (INTEGER, nullable) for speaker attribution
+- ✅ Migration 013 created and applied ([migrations/013_add_multi_speaker_diarization.sql](../migrations/013_add_multi_speaker_diarization.sql))
+- ✅ Speaker CRUD API endpoints implemented ([api/rooms_api.py](../api/rooms_api.py)):
+  - `GET /api/rooms/{room_code}/speakers` - List speakers with discovery settings
+  - `POST /api/rooms/{room_code}/speakers` - Bulk update speakers (for discovery)
+  - `PATCH /api/rooms/{room_code}/speakers/{speaker_id}` - Update speaker details
+  - `DELETE /api/rooms/{room_code}/speakers/{speaker_id}` - Delete speaker
+  - `PATCH /api/rooms/{room_code}/discovery-mode` - Update discovery mode
+- ✅ Owner-only permissions with locked state protection
+- ✅ All tests passing (501/501 unit + integration tests)
+
+**Phase 1.3: STT Event Enrichment**
+- ✅ WebSocket manager enhanced ([api/ws_manager.py](../api/ws_manager.py))
+  - `get_speaker_info()` method to fetch speaker details from database
+  - STT events enriched with `speaker_info: {speaker_id, display_name, language, color}`
+  - MT events enriched with speaker metadata
+  - Redis caching for speaker-to-segment mapping (1 hour TTL)
+- ✅ Automatic speaker lookup for numeric speaker IDs (0, 1, 2...)
+- ✅ Graceful fallback for single-speaker mode (speaker_info = null)
+
+**Implementation Notes:**
+- Used INTEGER speaker_id (0, 1, 2...) instead of STRING ("S1", "S2", "S3") for simpler indexing
+- Added `color` field to RoomSpeaker for UI color-coding support
+- discovery_mode is enum string ("disabled", "enabled", "locked") for more granular control
+- Speaker info automatically flows through WebSocket events without frontend changes
+
+### 🚧 In Progress
+
+None - Phase 1 backend complete, ready for Phase 2 (Frontend)
+
+### 📋 Remaining Work
+
+**Phase 1.4: Backend Unit Tests** (2 days)
+- Write comprehensive tests for speaker management APIs
+- Test speaker enrichment in STT/MT events
+- Test discovery mode transitions
+
+**Phase 2: Frontend Discovery UI** (1.5 weeks)
+- SpeakerDiscoveryModal component
+- Settings menu integration
+- MultiSpeakerRoomPage view
+
+**Phase 3: Translation Routing & Cost Tracking** (1.5 weeks)
+- MT router N×(N-1) translation logic
+- Multi-speaker cost tracking
+- Admin cost management views
+
+**Phase 4: Testing & Polish** (1 week)
+- E2E tests
+- Performance testing
+- Documentation
+
+---
+
 ## Overview
 
 Enable multiple speakers to participate in a single translation room using one device. The system will use speaker diarization to identify who is speaking and provide translations for each speaker in their respective target languages.
@@ -27,100 +90,162 @@ One device captures all audio. System identifies who is speaking and provides ap
 - **WebSocket audio streaming** - Working real-time audio capture from browser
 - **Room participant management** - Database models for rooms and participants
 - **Multi-provider MT routing** - Translation system ready
+- **✨ Speaker enrollment system** - ✅ IMPLEMENTED (Phase 1.1-1.3)
+- **✨ Database schema for speakers** - ✅ IMPLEMENTED (Phase 1.1)
+- **✨ Speaker CRUD APIs** - ✅ IMPLEMENTED (Phase 1.2)
+- **✨ STT/MT event enrichment with speaker info** - ✅ IMPLEMENTED (Phase 1.3)
 
 ### What's Missing ❌
-- **Speaker enrollment system** - No way to assign names/languages to speaker IDs (S1, S2, S3...)
-- **Speaker discovery UI** - No interface for the discovery phase
-- **Speaker-aware translation routing** - MT router doesn't know which speaker needs which translation
-- **Database schema for speakers** - No persistence of speaker profiles
+- **Speaker discovery UI** - No frontend interface for the discovery phase
+- **Speaker-aware translation routing** - MT router needs N×(N-1) logic implementation
+- **Multi-speaker room view** - Need dedicated UI for multi-speaker sessions
+- **Cost tracking for multi-speaker** - Need per-speaker and per-pair cost tracking
 
 ---
 
 ## Technical Implementation
 
-### Phase 1: Backend Speaker Management (1 week)
+### Phase 1: Backend Speaker Management ✅ COMPLETED
 
-#### 1.1 Database Schema Changes (1 day)
-Add to [api/models.py](api/models.py):
+#### 1.1 Database Schema Changes ✅ COMPLETED
+**Implemented in:** [api/models.py](../api/models.py), [migrations/013_add_multi_speaker_diarization.sql](../migrations/013_add_multi_speaker_diarization.sql)
 
+**Actual Implementation:**
 ```python
 class Room(Base):
     # ... existing fields ...
-    discovery_mode = Column(Boolean, default=False)
-    speakers_locked = Column(Boolean, default=False)
+    discovery_mode: Mapped[str] = mapped_column(String(20), default="disabled", nullable=False)  # "disabled", "enabled", "locked"
+    speakers_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    speakers = relationship("RoomSpeaker", back_populates="room", cascade="all, delete-orphan")
 
 class RoomSpeaker(Base):
     __tablename__ = "room_speakers"
-    id = Column(Integer, primary_key=True)
-    room_id = Column(Integer, ForeignKey("rooms.id"))
-    speaker_id = Column(String(10))  # "S1", "S2", "S3" from Speechmatics
-    name = Column(String(100))
-    language = Column(String(10))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), index=True, nullable=False)
+    speaker_id: Mapped[int] = mapped_column(Integer, nullable=False)  # 0, 1, 2, 3... (auto-assigned during discovery)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    language: Mapped[str] = mapped_column(String(10), nullable=False)
+    color: Mapped[str] = mapped_column(String(7), nullable=False)  # Hex color like #FF5733
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     room = relationship("Room", back_populates="speakers")
+    __table_args__ = (Index('ix_room_speakers_room_speaker', 'room_id', 'speaker_id', unique=True),)
+
+class Event(Base):
+    # ... existing fields ...
+    speaker_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)  # NULL for single-speaker mode
 ```
 
-#### 1.2 API Endpoints (2 days)
-Create new endpoints in [api/rooms_api.py](api/rooms_api.py):
+**Changes from original spec:**
+- `speaker_id` is INTEGER (0, 1, 2...) instead of STRING ("S1", "S2", "S3") for simpler indexing
+- Added `color` field for UI color-coding
+- `discovery_mode` is enum string ("disabled", "enabled", "locked") for more granular control
+- Added `speaker_id` to Event model for speaker attribution
 
-- `POST /api/rooms/{room_id}/discovery/start`
-  - Enable discovery mode
-  - Clear existing speaker enrollments (optional)
-  - Response: `{discovery_mode: true}`
+#### 1.2 API Endpoints ✅ COMPLETED
+**Implemented in:** [api/rooms_api.py](../api/rooms_api.py#L510-L823)
 
-- `POST /api/rooms/{room_id}/speakers`
-  - Enroll a speaker during discovery
-  - Body: `{speaker_id: "S1", name: "Alice", language: "en"}`
-  - Response: Speaker object
+**Implemented Endpoints:**
 
-- `PATCH /api/rooms/{room_id}/speakers/{speaker_id}`
-  - Edit speaker name or language
-  - Body: `{name: "Alice Smith", language: "en-US"}`
+- ✅ `GET /api/rooms/{room_code}/speakers`
+  - List all enrolled speakers with discovery settings
+  - Response: `{speakers: [...], discovery_mode: "disabled", speakers_locked: false}`
 
-- `DELETE /api/rooms/{room_id}/speakers/{speaker_id}`
+- ✅ `POST /api/rooms/{room_code}/speakers`
+  - Bulk update speakers (for discovery phase)
+  - Body: `{speakers: [{speaker_id: 0, display_name: "Alice", language: "en", color: "#FF5733"}]}`
+  - Response: Updated speaker list with discovery settings
+
+- ✅ `PATCH /api/rooms/{room_code}/speakers/{speaker_id}`
+  - Edit speaker name, language, or color
+  - Body: `{display_name: "Alice Smith", language: "en-US", color: "#00FF00"}`
+  - Response: Updated speaker object
+
+- ✅ `DELETE /api/rooms/{room_code}/speakers/{speaker_id}`
   - Remove enrolled speaker
+  - Response: `{message: "Speaker deleted successfully"}`
 
-- `POST /api/rooms/{room_id}/discovery/complete`
-  - Lock speaker list (start session)
-  - Set `speakers_locked = true`
-  - Response: List of enrolled speakers
+- ✅ `PATCH /api/rooms/{room_code}/discovery-mode`
+  - Update discovery mode (disabled/enabled/locked)
+  - Body: `{discovery_mode: "locked"}`
+  - Automatically sets `speakers_locked = true` when mode = "locked"
+  - Response: Updated room object
 
-- `GET /api/rooms/{room_id}/speakers`
-  - List all enrolled speakers
-  - Response: Array of speaker objects
+**Features:**
+- Owner-only permissions (403 if not room owner)
+- Cannot modify speakers when `speakers_locked = true` (403)
+- Discovery mode validation (400 for invalid values)
+- Cascade delete when room deleted
 
-#### 1.3 STT Event Processing (2 days)
-Modify [api/routers/stt/speechmatics_streaming.py:150-200](api/routers/stt/speechmatics_streaming.py#L150-L200):
+#### 1.3 STT Event Processing ✅ COMPLETED
+**Implemented in:** [api/ws_manager.py](../api/ws_manager.py#L36-L227)
 
-**Current behavior:**
+**Implementation Details:**
+
+1. **Speaker Info Lookup** (`get_speaker_info()` method)
+   - Fetches speaker details from `room_speakers` table
+   - Queries by room_id and numeric speaker_id (0, 1, 2...)
+   - Returns `{speaker_id, display_name, language, color}` or None
+   - Handles non-numeric speaker IDs gracefully (returns None for "system", user IDs)
+
+2. **STT Event Enrichment** (`_handle_stt_event()` method)
+   - Caches speaker_id in Redis per segment: `room:{room}:segment:{seg_id}:speaker` (1 hour TTL)
+   - Looks up speaker info from database
+   - Enriches event with `speaker_info` before broadcasting
+   - Broadcasts to all clients with complete speaker metadata
+
+3. **MT Event Enrichment** (`_handle_mt_event()` method)
+   - Retrieves speaker from MT event or Redis cache
+   - Looks up speaker info from database
+   - Enriches translation event with `speaker_info`
+   - Includes both `speaker` and `speaker_info` fields
+
+**Event Structure Examples:**
+
+STT Event (enriched):
 ```json
 {
+  "type": "stt_final",
+  "room_id": "ABC123",
+  "segment_id": 42,
   "text": "Hello everyone",
-  "speaker_labels": [
-    {"speaker": "S1", "text": "Hello everyone", "start": 0.5, "end": 1.2}
-  ]
+  "speaker": "0",
+  "speaker_info": {
+    "speaker_id": 0,
+    "display_name": "Alice",
+    "language": "en",
+    "color": "#FF5733"
+  }
 }
 ```
 
-**New behavior:**
-1. Look up speaker_id "S1" in database for this room
-2. If found: Replace with speaker name
-3. If not found and `speakers_locked=true`: Filter out (ignore unknown speakers)
-4. If not found and `discovery_mode=true`: Pass through for enrollment
-
+MT Event (enriched):
 ```json
 {
-  "text": "Hello everyone",
-  "speaker": "Alice",
-  "speaker_language": "en",
-  "speaker_labels": [
-    {"speaker": "Alice", "text": "Hello everyone", "start": 0.5, "end": 1.2}
-  ]
+  "type": "translation_final",
+  "room_id": "ABC123",
+  "segment_id": 42,
+  "src": "en",
+  "tgt": "pl",
+  "text": "Cześć wszystkim",
+  "speaker": "0",
+  "speaker_info": {
+    "speaker_id": 0,
+    "display_name": "Alice",
+    "language": "en",
+    "color": "#FF5733"
+  }
 }
 ```
 
-#### 1.4 Testing (2 days)
+**Benefits:**
+- Frontend receives complete speaker metadata without additional API calls
+- Single database query per speaker (cached in WSManager instance)
+- Redis caching ensures speaker info available for delayed translations
+- Graceful fallback for single-speaker mode (speaker_info = null)
+
+#### 1.4 Testing 📋 TODO
 - Unit tests for speaker CRUD operations
 - Integration test: Discovery phase → enrollment → locked session
 - Test speaker filtering (unknown speakers ignored)
