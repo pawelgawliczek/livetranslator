@@ -8,7 +8,7 @@ import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import RoomsPage from "./pages/RoomsPage";
-import RoomPage from "./pages/RoomPage";
+import RoomPageWrapper from "./pages/RoomPageWrapper";
 import JoinPage from "./pages/JoinPage";
 import ProfilePage from "./pages/ProfilePage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
@@ -43,7 +43,7 @@ function App() {
         />
         <Route
           path="/room/:roomId"
-          element={<RoomPage token={token} onLogout={logout} />}
+          element={<RoomPageWrapper token={token} onLogout={logout} />}
         />
         <Route
           path="/profile"
