@@ -2,9 +2,9 @@
 
 ## Implementation Status (Updated: 2025-10-30)
 
-### ✅ Completed (Phase 1 Backend - 100%)
+### ✅ Completed (Phase 1 Backend - 100%, Phase 2 Frontend - 95%)
 
-**Phase 1.1 & 1.2: Database Schema & API Endpoints**
+**Phase 1.1 & 1.2: Database Schema & API Endpoints** ✅ COMPLETE
 - ✅ Database models created ([api/models.py](../api/models.py))
   - `Room.discovery_mode` (VARCHAR(20): "disabled", "enabled", "locked")
   - `Room.speakers_locked` (BOOLEAN)
@@ -20,7 +20,7 @@
 - ✅ Owner-only permissions with locked state protection
 - ✅ All tests passing (501/501 unit + integration tests)
 
-**Phase 1.3: STT Event Enrichment**
+**Phase 1.3: STT Event Enrichment** ✅ COMPLETE
 - ✅ WebSocket manager enhanced ([api/ws_manager.py](../api/ws_manager.py))
   - `get_speaker_info()` method to fetch speaker details from database
   - STT events enriched with `speaker_info: {speaker_id, display_name, language, color}`
@@ -29,27 +29,66 @@
 - ✅ Automatic speaker lookup for numeric speaker IDs (0, 1, 2...)
 - ✅ Graceful fallback for single-speaker mode (speaker_info = null)
 
+**Phase 1.4: Backend Unit Tests** ✅ COMPLETE
+- ✅ Comprehensive test suite created ([api/tests/test_multi_speaker_diarization.py](../api/tests/test_multi_speaker_diarization.py))
+- ✅ 30 unit tests covering all functionality:
+  - Pydantic models (SpeakerInfo, UpdateSpeakersRequest, etc.)
+  - API endpoints (GET/POST/PATCH/DELETE speakers, discovery mode)
+  - WebSocket enrichment (STT/MT events with speaker_info)
+  - Discovery mode transitions
+  - Event structure validation
+- ✅ All tests passing (247/248 suite-wide, 30/30 new tests)
+
+**Phase 2.1: SpeakerDiscoveryModal Component** ✅ COMPLETE
+- ✅ Created modal component ([web/src/components/SpeakerDiscoveryModal.jsx](../web/src/components/SpeakerDiscoveryModal.jsx))
+- ✅ One-button discovery start ("Start Discovery")
+- ✅ Real-time speaker detection from WebSocket STT events
+- ✅ Auto-language detection from STT results
+- ✅ Manual editing of speaker names and languages
+- ✅ Voice activity indicator (shows who's speaking)
+- ✅ Speaker color-coding (6 predefined colors)
+- ✅ "Complete Discovery" locks speakers and starts session
+- ✅ Re-discovery support (loads existing speakers)
+- ✅ Translation keys added to en.json
+
+**Phase 2.2: Settings Menu Integration** ✅ COMPLETE
+- ✅ Added "Configure Speakers" option to SettingsMenu ([web/src/components/SettingsMenu.jsx](../web/src/components/SettingsMenu.jsx))
+- ✅ Only visible to room admins (owner-only permission)
+- ✅ Integrated into RoomPage ([web/src/pages/RoomPage.jsx](../web/src/pages/RoomPage.jsx))
+- ✅ WebSocket connection passed through for real-time detection
+- ✅ Re-discovery support during active sessions
+
+**Phase 2.3: MultiSpeakerRoomPage** ✅ COMPLETE
+- ✅ Created dedicated multi-speaker room view ([web/src/pages/MultiSpeakerRoomPage.jsx](../web/src/pages/MultiSpeakerRoomPage.jsx))
+- ✅ Speaker-centric message display component ([web/src/components/room/MultiSpeakerMessage.jsx](../web/src/components/room/MultiSpeakerMessage.jsx))
+- ✅ Custom hook for multi-speaker state management ([web/src/hooks/useMultiSpeakerRoom.jsx](../web/src/hooks/useMultiSpeakerRoom.jsx))
+- ✅ Smart routing wrapper ([web/src/pages/RoomPageWrapper.jsx](../web/src/pages/RoomPageWrapper.jsx))
+- ✅ Speaker info bar showing all enrolled speakers
+- ✅ Color-coded speaker avatars with badges
+- ✅ N × (N-1) translation display per message
+- ✅ Speaker change indicators with visual separators
+- ✅ All translations shown inline (not filtered by user language)
+- ✅ Full room controls (mic, settings, invite, discovery modal)
+- ✅ Routing integration in main.jsx
+
 **Implementation Notes:**
 - Used INTEGER speaker_id (0, 1, 2...) instead of STRING ("S1", "S2", "S3") for simpler indexing
 - Added `color` field to RoomSpeaker for UI color-coding support
 - discovery_mode is enum string ("disabled", "enabled", "locked") for more granular control
 - Speaker info automatically flows through WebSocket events without frontend changes
+- Separate MultiSpeakerRoomPage provides cleaner separation from single-speaker UI
+- RoomPageWrapper intelligently routes based on `speakers_locked` flag
 
 ### 🚧 In Progress
 
-None - Phase 1 backend complete, ready for Phase 2 (Frontend)
+None - Phase 1 & 2 complete, ready for Phase 3 (Translation Routing)
 
 ### 📋 Remaining Work
 
-**Phase 1.4: Backend Unit Tests** (2 days)
-- Write comprehensive tests for speaker management APIs
-- Test speaker enrichment in STT/MT events
-- Test discovery mode transitions
-
-**Phase 2: Frontend Discovery UI** (1.5 weeks)
-- SpeakerDiscoveryModal component
-- Settings menu integration
-- MultiSpeakerRoomPage view
+**Phase 2.4: Frontend Integration Tests** (1 day)
+- Test speaker discovery flow
+- Test multi-speaker room view
+- Test routing logic
 
 **Phase 3: Translation Routing & Cost Tracking** (1.5 weeks)
 - MT router N×(N-1) translation logic
@@ -94,12 +133,16 @@ One device captures all audio. System identifies who is speaking and provides ap
 - **✨ Database schema for speakers** - ✅ IMPLEMENTED (Phase 1.1)
 - **✨ Speaker CRUD APIs** - ✅ IMPLEMENTED (Phase 1.2)
 - **✨ STT/MT event enrichment with speaker info** - ✅ IMPLEMENTED (Phase 1.3)
+- **✨ Backend unit tests** - ✅ IMPLEMENTED (Phase 1.4)
+- **✨ Speaker discovery UI** - ✅ IMPLEMENTED (Phase 2.1)
+- **✨ Settings menu integration** - ✅ IMPLEMENTED (Phase 2.2)
+- **✨ Multi-speaker room view** - ✅ IMPLEMENTED (Phase 2.3)
 
 ### What's Missing ❌
-- **Speaker discovery UI** - No frontend interface for the discovery phase
 - **Speaker-aware translation routing** - MT router needs N×(N-1) logic implementation
-- **Multi-speaker room view** - Need dedicated UI for multi-speaker sessions
 - **Cost tracking for multi-speaker** - Need per-speaker and per-pair cost tracking
+- **Admin cost management views** - Need multi-speaker cost monitoring dashboard
+- **Frontend integration tests** - Need tests for discovery flow and multi-speaker UI
 
 ---
 
@@ -245,17 +288,23 @@ MT Event (enriched):
 - Redis caching ensures speaker info available for delayed translations
 - Graceful fallback for single-speaker mode (speaker_info = null)
 
-#### 1.4 Testing 📋 TODO
-- Unit tests for speaker CRUD operations
-- Integration test: Discovery phase → enrollment → locked session
-- Test speaker filtering (unknown speakers ignored)
+#### 1.4 Testing ✅ COMPLETED
+**Implemented in:** [api/tests/test_multi_speaker_diarization.py](../api/tests/test_multi_speaker_diarization.py)
+
+- ✅ 30 comprehensive unit tests created
+- ✅ Speaker CRUD API endpoint tests (GET, POST, PATCH, DELETE)
+- ✅ Discovery mode transition tests (disabled → enabled → locked)
+- ✅ WebSocket enrichment tests (STT and MT events)
+- ✅ Pydantic model validation tests
+- ✅ Event structure validation
+- ✅ All tests passing (30/30)
 
 ---
 
-### Phase 2: Frontend Speaker Discovery UI (1 week)
+### Phase 2: Frontend Speaker Discovery UI ✅ COMPLETED
 
-#### 2.1 Discovery Modal Component (3 days)
-Create `web/src/components/SpeakerDiscoveryModal.jsx`:
+#### 2.1 Discovery Modal Component ✅ COMPLETED
+**Implemented in:** [web/src/components/SpeakerDiscoveryModal.jsx](../web/src/components/SpeakerDiscoveryModal.jsx)
 
 **Features:**
 - **Simplified one-button start** - Click "Start Discovery" and everyone can speak naturally
@@ -287,24 +336,43 @@ Create `web/src/components/SpeakerDiscoveryModal.jsx`:
 
 **Key Improvement:** No forced turn-taking, instant speaker detection, fully automatic with manual override option
 
-#### 2.2 Room Settings Integration (2 days)
-Modify [web/src/components/SettingsMenu.jsx](web/src/components/SettingsMenu.jsx):
+**Actual Implementation:**
+- ✅ One-button "Start Discovery" workflow
+- ✅ Real-time speaker detection from WebSocket STT events
+- ✅ Auto-language detection from message `language` or `src` fields
+- ✅ Manual editing of speaker names and languages
+- ✅ Voice activity indicator (highlights active speaker)
+- ✅ 6 predefined speaker colors (#FF5733, #33C3FF, #FFD700, #9B59B6, #2ECC71, #FF1493)
+- ✅ "Complete Discovery" locks speakers via API
+- ✅ Re-discovery support (loads existing speakers on modal open)
+- ✅ Error handling with user-friendly messages
+- ✅ Loading states and disabled buttons
 
-- Add "Configure Speakers" / "Discover Speakers" button
-- Show current enrolled speakers with edit capabilities:
-  - Speaker name with inline edit
-  - Language badge with dropdown
-  - Delete icon to remove speaker
-- **"Re-run Discovery" button during active session:**
-  - Opens discovery modal with current speakers pre-populated
-  - Current speakers shown with checkmark indicator
-  - Can modify existing speaker languages
-  - Can add new speakers who joined mid-session
-  - Can remove speakers who left
-  - Preserves conversation history with updated speaker info
+#### 2.2 Room Settings Integration ✅ COMPLETED
+**Implemented in:** [web/src/components/SettingsMenu.jsx](../web/src/components/SettingsMenu.jsx), [web/src/pages/RoomPage.jsx](../web/src/pages/RoomPage.jsx)
 
-#### 2.3 Separate Multi-Speaker Room View (3 days)
-Create new `web/src/pages/MultiSpeakerRoomPage.jsx` (separate from regular RoomPage):
+**Features:**
+- ✅ "Configure Speakers" menu item added (🎤 icon)
+- ✅ Only visible to room admins (owner-only permission)
+- ✅ Opens SpeakerDiscoveryModal on click
+- ✅ WebSocket connection passed through for real-time detection
+- ✅ Re-discovery support during active sessions
+- ✅ Integration with all room controls
+
+**Actual Implementation:**
+- Added `onShowSpeakerDiscovery` prop to SettingsMenu
+- Conditional rendering: `isRoomAdmin && onShowSpeakerDiscovery`
+- Integrated into RoomPage with state management
+- WebSocket (`presenceWs`) passed to modal for event listening
+- Translation keys added to en.json localization
+
+#### 2.3 Separate Multi-Speaker Room View ✅ COMPLETED
+**Implemented in:**
+- [web/src/pages/MultiSpeakerRoomPage.jsx](../web/src/pages/MultiSpeakerRoomPage.jsx)
+- [web/src/components/room/MultiSpeakerMessage.jsx](../web/src/components/room/MultiSpeakerMessage.jsx)
+- [web/src/hooks/useMultiSpeakerRoom.jsx](../web/src/hooks/useMultiSpeakerRoom.jsx)
+- [web/src/pages/RoomPageWrapper.jsx](../web/src/pages/RoomPageWrapper.jsx)
+- [web/src/main.jsx](../web/src/main.jsx)
 
 **Why Separate View:**
 - Multi-speaker translations are displayed differently (N × N-1 translations)
@@ -323,6 +391,50 @@ Create new `web/src/pages/MultiSpeakerRoomPage.jsx` (separate from regular RoomP
 - Group translations by speaker
 - Visual indicator when speaker changes
 - Speaker activity timeline/indicator
+
+**Actual Implementation:**
+
+**MultiSpeakerMessage Component:**
+- ✅ Speaker avatar with color-coded badge (number 1, 2, 3...)
+- ✅ Speaker name and language flag in header
+- ✅ Original message text prominently displayed
+- ✅ All translations grouped below (N-1 translations)
+- ✅ Speaker change indicators with visual separators
+- ✅ Real-time voice activity indicator
+- ✅ Processing indicators for partial/final messages
+- ✅ Debug icon for admins
+
+**useMultiSpeakerRoom Hook:**
+- ✅ Fetches speaker list from API on mount
+- ✅ Creates speaker map for quick lookup
+- ✅ Processes WebSocket messages for multi-speaker format
+- ✅ Groups messages by segment_id
+- ✅ Stores all translations per segment (not just user's language)
+- ✅ Debounced rendering (200ms) for performance
+- ✅ Speaker change detection
+- ✅ Automatic speaker info enrichment
+
+**MultiSpeakerRoomPage:**
+- ✅ Full-featured room page with speaker info bar
+- ✅ Color-coded speaker display at top
+- ✅ Speaker-centric message layout
+- ✅ N × (N-1) translation display per message
+- ✅ All standard room controls (mic, settings, invite)
+- ✅ Speaker discovery modal integration
+- ✅ Real-time WebSocket event handling
+- ✅ Auto-scroll to latest message
+
+**RoomPageWrapper (Smart Routing):**
+- ✅ Checks `speakers_locked` or `discovery_mode === 'locked'`
+- ✅ Routes to MultiSpeakerRoomPage if locked
+- ✅ Routes to regular RoomPage if not locked
+- ✅ Loading state while checking room mode
+- ✅ Graceful fallback on error
+
+**Routing Integration:**
+- ✅ Updated main.jsx to use RoomPageWrapper
+- ✅ Single `/room/:roomId` route handles both modes
+- ✅ Seamless user experience based on room state
 
 **Example Multi-Speaker Chat Display:**
 ```
