@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import InviteModal from "../components/InviteModal";
 import SettingsMenu from "../components/SettingsMenu";
 import SoundSettingsModal from "../components/SoundSettingsModal";
+import SpeakerDiscoveryModal from "../components/SpeakerDiscoveryModal";
 import ParticipantsPanel from "../components/ParticipantsPanel";
 import MessageDebugModal from "../components/MessageDebugModal";
 
@@ -140,6 +141,7 @@ export default function RoomPage({ token, onLogout }) {
   const [showInvite, setShowInvite] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showSoundSettings, setShowSoundSettings] = useState(false);
+  const [showSpeakerDiscovery, setShowSpeakerDiscovery] = useState(false);
   const [showAdminLeaveWarning, setShowAdminLeaveWarning] = useState(false);
   const [showExpirationModal, setShowExpirationModal] = useState(false);
   const [showParticipantsPanel, setShowParticipantsPanel] = useState(false);
@@ -857,6 +859,10 @@ export default function RoomPage({ token, onLogout }) {
             setShowSettings(false);
             setShowSoundSettings(true);
           }}
+          onShowSpeakerDiscovery={() => {
+            setShowSettings(false);
+            setShowSpeakerDiscovery(true);
+          }}
           onLogout={onLogout}
           canChangeLanguage={status === 'idle'}
           persistenceEnabled={persistenceEnabled}
@@ -913,6 +919,21 @@ export default function RoomPage({ token, onLogout }) {
           onTest={handleTestMode}
           selectedDeviceId={selectedMicDeviceId}
           onDeviceChange={handleDeviceChange}
+        />
+      )}
+
+      {showSpeakerDiscovery && (
+        <SpeakerDiscoveryModal
+          isOpen={showSpeakerDiscovery}
+          onClose={() => setShowSpeakerDiscovery(false)}
+          roomCode={roomId}
+          token={token}
+          isGuest={isGuest}
+          ws={presenceWs}
+          onComplete={(speakers) => {
+            console.log('[SpeakerDiscovery] Discovery complete:', speakers);
+            // TODO: Reload room state or redirect to multi-speaker view
+          }}
         />
       )}
 

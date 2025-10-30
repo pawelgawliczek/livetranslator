@@ -12,6 +12,7 @@ export default function SettingsMenu({
   onShowInvite,
   onShowCosts,
   onShowSound,
+  onShowSpeakerDiscovery,
   onLogout,
   canChangeLanguage = true,
   persistenceEnabled = false,
@@ -82,6 +83,12 @@ export default function SettingsMenu({
       label: t('settings.soundSettings'),
       onClick: onShowSound
     },
+    // Only show speaker discovery for room admins
+    ...(isRoomAdmin && onShowSpeakerDiscovery ? [{
+      icon: "🎤",
+      label: t('settings.speakerDiscovery', 'Configure Speakers'),
+      onClick: onShowSpeakerDiscovery
+    }] : []),
     {
       icon: isDarkMode ? "🌙" : "☀️",
       label: isDarkMode ? "Dark Mode" : "Light Mode",

@@ -242,6 +242,7 @@
     "invite": "Invite",
     "costs": "Costs",
     "soundSettings": "Sound Settings",
+    "speakerDiscovery": "Configure Speakers",
     "saveHistory": "Save History",
     "publicRoom": "Public Room",
     "privateRoom": "Private Room",
@@ -260,7 +261,10 @@
     "sensitivityHelp": "Adjust how sensitive the microphone is to detecting speech",
     "stopTest": "Stop Test",
     "testModeInstructions": "Test mode active - speak to see input levels",
-    "testModeReady": "Ready to test microphone"
+    "testModeReady": "Ready to test microphone",
+    "selectMicrophone": "Select Microphone",
+    "defaultMicrophone": "Default Microphone",
+    "microphoneError": "Microphone Error"
   },
   "errors": {
     "networkError": "Network error. Please check your connection.",
@@ -423,5 +427,25 @@
     "createYourFirstRoom": "Create Your First Room",
     "oneHourPerMonth": "1 hour per month",
     "languageControlsBoth": "Language controls both UI and translation language"
+  },
+  "discovery": {
+    "title": "Speaker Discovery",
+    "intro": "Configure speakers for multi-speaker translation",
+    "detecting": "Speak naturally to be detected...",
+    "instructions": "Click \"Start Discovery\" and have each speaker introduce themselves. The system will automatically detect speakers and their languages.",
+    "start": "Start Discovery",
+    "starting": "Starting...",
+    "complete": "Complete Discovery",
+    "completing": "Completing...",
+    "cancel": "Cancel",
+    "detectedSpeakers": "Detected Speakers",
+    "waitingForSpeakers": "Waiting for speakers...",
+    "noSpeakers": "No speakers detected yet. Start speaking to be detected.",
+    "speaking": "Speaking",
+    "speakerName": "Name",
+    "enterName": "Enter speaker name",
+    "language": "Language",
+    "removeSpeaker": "Remove",
+    "completeHelp": "Complete discovery to lock speakers and start the session. You can re-run discovery later from settings."
   }
 }
