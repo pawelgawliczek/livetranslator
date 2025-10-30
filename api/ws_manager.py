@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from .persistence import save_stt_event, upsert_final_translation
 from .metrics import MET_STT_EVENTS, MET_MT_REQ, MET_MT_ERR, MET_MT_LAT, E2E_LAT
-from .models import Room
+from .models import Room, RoomSpeaker
 from .db import SessionLocal
 
 
@@ -32,6 +32,53 @@ class WSManager:
             lang = getattr(ws.state, 'preferred_lang', 'en')
             languages.add(lang)
         return languages
+
+    async def get_speaker_info(self, room_code: str, speaker_id: str) -> dict | None:
+        """
+        Get speaker information from database for multi-speaker rooms.
+
+        Args:
+            room_code: The room code
+            speaker_id: The speaker ID (0, 1, 2, etc.) as string
+
+        Returns:
+            Dict with speaker info (display_name, language, color) or None if not found
+        """
+        # Check if speaker_id is a number (multi-speaker mode)
+        try:
+            speaker_num = int(speaker_id)
+        except (ValueError, TypeError):
+            # Not a number, probably "system" or a user identifier
+            return None
+
+        # Query database for speaker info
+        try:
+            db: Session = SessionLocal()
+            try:
+                # Get room
+                room = db.query(Room).filter(Room.code == room_code).first()
+                if not room:
+                    return None
+
+                # Get speaker
+                speaker = db.query(RoomSpeaker).filter(
+                    RoomSpeaker.room_id == room.id,
+                    RoomSpeaker.speaker_id == speaker_num
+                ).first()
+
+                if speaker:
+                    return {
+                        "speaker_id": speaker.speaker_id,
+                        "display_name": speaker.display_name,
+                        "language": speaker.language,
+                        "color": speaker.color
+                    }
+                return None
+            finally:
+                db.close()
+        except Exception as e:
+            self.log.error("get_speaker_info_error", room=room_code, speaker_id=speaker_id, err=str(e))
+            return None
 
     async def run_pubsub(self):
         pubsub = self.redis.pubsub()
@@ -76,7 +123,18 @@ class WSManager:
         MET_STT_EVENTS.labels(kind=kind).inc()
         self.log.info("stt_event", kind=kind, room=room, segment=seg_id, revision=rev, speaker=speaker)
 
-        # broadcast raw STT to all participants
+        # Cache speaker ID in Redis for MT router to use (expires after 1 hour)
+        speaker_key = f"room:{room}:segment:{seg_id}:speaker"
+        await self.redis.setex(speaker_key, 3600, speaker)
+
+        # Enrich with speaker information for multi-speaker rooms
+        speaker_info = await self.get_speaker_info(room, speaker)
+        if speaker_info:
+            # Add speaker metadata to the event
+            data["speaker_info"] = speaker_info
+            self.log.info("speaker_enriched", room=room, speaker_id=speaker, info=speaker_info)
+
+        # broadcast STT event (with speaker info if available) to all participants
         await self.broadcast(room, data)
 
         # Get all target languages needed in this room
@@ -119,8 +177,24 @@ class WSManager:
         tgt_lang = data.get("tgt_lang") or data.get("tgt") or self.default_tgt
         text = (data.get("text") or "").strip()
         kind = "final" if is_final else "partial"
+        speaker = data.get("speaker", "system")
 
-        self.log.info("mt_event", kind=kind, room=room, segment=seg_id, tgt=tgt_lang)
+        self.log.info("mt_event", kind=kind, room=room, segment=seg_id, tgt=tgt_lang, speaker=speaker)
+
+        # Get speaker info from segment (if speaker is a number, it's multi-speaker mode)
+        # If not provided in MT event, try to get from Redis cache
+        if not speaker or speaker == "system":
+            # Try to get speaker from Redis cache
+            speaker_key = f"room:{room}:segment:{seg_id}:speaker"
+            cached_speaker = await self.redis.get(speaker_key)
+            if cached_speaker:
+                speaker = cached_speaker
+                self.log.info("speaker_from_cache", room=room, segment=seg_id, speaker=speaker)
+
+        # Enrich with speaker information for multi-speaker rooms
+        speaker_info = None
+        if speaker and speaker != "system":
+            speaker_info = await self.get_speaker_info(room, speaker)
 
         # Targeted broadcast: only send translation to users who need this target language
         out = {
@@ -131,7 +205,12 @@ class WSManager:
             "tgt": tgt_lang,
             "text": text,
             "final": is_final,
+            "speaker": speaker,
         }
+
+        # Add speaker info if available
+        if speaker_info:
+            out["speaker_info"] = speaker_info
 
         # Send to participants who have this language as their preference
         sent_count = 0
