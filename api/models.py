@@ -34,7 +34,12 @@ class Room(Base):
     requires_login: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     max_participants: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
 
+    # Multi-speaker diarization fields
+    discovery_mode: Mapped[str] = mapped_column(String(20), default="disabled", nullable=False)  # disabled, enabled, locked
+    speakers_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     owner = relationship("User")
+    speakers = relationship("RoomSpeaker", back_populates="room", cascade="all, delete-orphan")
 
 class Device(Base):
     __tablename__ = "devices"
@@ -43,6 +48,22 @@ class Device(Base):
     name: Mapped[str] = mapped_column(String(64), default="dev", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     room = relationship("Room")
+
+class RoomSpeaker(Base):
+    __tablename__ = "room_speakers"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), index=True, nullable=False)
+    speaker_id: Mapped[int] = mapped_column(Integer, nullable=False)  # Auto-assigned during discovery (0, 1, 2, ...)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    language: Mapped[str] = mapped_column(String(10), nullable=False)
+    color: Mapped[str] = mapped_column(String(7), nullable=False)  # Hex color like #FF5733
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    room = relationship("Room", back_populates="speakers")
+
+    __table_args__ = (
+        Index('ix_room_speakers_room_speaker', 'room_id', 'speaker_id', unique=True),
+    )
 
 class Event(Base):
     __tablename__ = "events"
@@ -55,6 +76,10 @@ class Event(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     translated_text: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Multi-speaker diarization field
+    speaker_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)  # NULL for single-speaker mode
+
     room = relationship("Room")
 
 class RoomCost(Base):

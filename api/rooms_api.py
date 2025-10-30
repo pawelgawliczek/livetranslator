@@ -19,7 +19,7 @@ import json
 import os
 
 from .db import SessionLocal
-from .models import Room, RoomArchive
+from .models import Room, RoomArchive, RoomSpeaker
 from .jwt_tools import verify_token
 
 router = APIRouter(prefix="/api/rooms", tags=["rooms"])
@@ -48,6 +48,8 @@ class RoomResponse(BaseModel):
     max_participants: int
     created_at: datetime
     admin_left_at: datetime | None = None
+    discovery_mode: str = "disabled"
+    speakers_locked: bool = False
 
 
 class RoomStatusResponse(BaseModel):
@@ -158,7 +160,9 @@ async def create_room(
         requires_login=room.requires_login,
         max_participants=room.max_participants,
         created_at=room.created_at,
-        admin_left_at=room.admin_left_at
+        admin_left_at=room.admin_left_at,
+        discovery_mode=room.discovery_mode,
+        speakers_locked=room.speakers_locked
     )
 
 
@@ -193,7 +197,9 @@ async def get_room(
         requires_login=room.requires_login,
         max_participants=room.max_participants,
         created_at=room.created_at,
-        admin_left_at=room.admin_left_at
+        admin_left_at=room.admin_left_at,
+        discovery_mode=room.discovery_mode,
+        speakers_locked=room.speakers_locked
     )
 
 
@@ -331,7 +337,9 @@ async def update_room_recording(
         requires_login=room.requires_login,
         max_participants=room.max_participants,
         created_at=room.created_at,
-        admin_left_at=room.admin_left_at
+        admin_left_at=room.admin_left_at,
+        discovery_mode=room.discovery_mode,
+        speakers_locked=room.speakers_locked
     )
 
 
@@ -387,7 +395,9 @@ async def update_room_public(
         requires_login=room.requires_login,
         max_participants=room.max_participants,
         created_at=room.created_at,
-        admin_left_at=room.admin_left_at
+        admin_left_at=room.admin_left_at,
+        discovery_mode=room.discovery_mode,
+        speakers_locked=room.speakers_locked
     )
 
 
@@ -461,3 +471,364 @@ async def get_room_status(
 # NOTE: Per-room STT settings removed in favor of language-based routing (Migration 006)
 # STT provider selection is now based on detected/selected language globally
 # See: api/routers/stt/language_router.py for new routing logic
+
+
+# ===== Multi-Speaker Diarization Endpoints =====
+
+class SpeakerInfo(BaseModel):
+    """Information about a speaker in a room."""
+    speaker_id: int
+    display_name: str
+    language: str
+    color: str
+
+
+class SpeakerResponse(BaseModel):
+    """Response with speaker details."""
+    id: int
+    speaker_id: int
+    display_name: str
+    language: str
+    color: str
+    created_at: datetime
+
+
+class SpeakersListResponse(BaseModel):
+    """Response with list of speakers."""
+    speakers: List[SpeakerResponse]
+    discovery_mode: str
+    speakers_locked: bool
+
+
+class UpdateSpeakersRequest(BaseModel):
+    """Request to add or update speakers (bulk operation for discovery)."""
+    speakers: List[SpeakerInfo]
+
+
+class UpdateSpeakerRequest(BaseModel):
+    """Request to update a single speaker."""
+    display_name: Optional[str] = None
+    language: Optional[str] = None
+    color: Optional[str] = None
+
+
+class UpdateDiscoveryModeRequest(BaseModel):
+    """Request to update room discovery mode."""
+    discovery_mode: str  # "disabled", "enabled", "locked"
+
+
+@router.get("/{room_code}/speakers", response_model=SpeakersListResponse)
+async def get_room_speakers(
+    room_code: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Get list of speakers in a room.
+
+    Args:
+        room_code: The room code
+        db: Database session
+        user: Authenticated user
+
+    Returns:
+        SpeakersListResponse with list of speakers and discovery settings
+
+    Raises:
+        HTTPException: 404 if room not found
+    """
+    # Get room
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # Get all speakers for this room
+    speakers = db.query(RoomSpeaker).filter(
+        RoomSpeaker.room_id == room.id
+    ).order_by(RoomSpeaker.speaker_id).all()
+
+    speaker_responses = [
+        SpeakerResponse(
+            id=s.id,
+            speaker_id=s.speaker_id,
+            display_name=s.display_name,
+            language=s.language,
+            color=s.color,
+            created_at=s.created_at
+        )
+        for s in speakers
+    ]
+
+    return SpeakersListResponse(
+        speakers=speaker_responses,
+        discovery_mode=room.discovery_mode,
+        speakers_locked=room.speakers_locked
+    )
+
+
+@router.post("/{room_code}/speakers", response_model=SpeakersListResponse)
+async def update_room_speakers(
+    room_code: str,
+    request: UpdateSpeakersRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Add or update speakers in a room (bulk operation for discovery).
+
+    This endpoint replaces all existing speakers with the provided list.
+    Used during speaker discovery phase.
+
+    Args:
+        room_code: The room code
+        request: List of speakers to set
+        db: Database session
+        user: Authenticated user (must be room owner)
+
+    Returns:
+        SpeakersListResponse with updated speakers
+
+    Raises:
+        HTTPException: 404 if room not found, 403 if not owner or speakers locked
+    """
+    user_id = int(user.get("sub"))
+
+    # Get room
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # Verify user owns the room
+    if room.owner_id != user_id:
+        raise HTTPException(status_code=403, detail="Only room owner can manage speakers")
+
+    # Check if speakers are locked
+    if room.speakers_locked:
+        raise HTTPException(status_code=403, detail="Speakers are locked. Cannot modify.")
+
+    # Delete existing speakers
+    db.query(RoomSpeaker).filter(RoomSpeaker.room_id == room.id).delete()
+
+    # Add new speakers
+    for speaker_info in request.speakers:
+        speaker = RoomSpeaker(
+            room_id=room.id,
+            speaker_id=speaker_info.speaker_id,
+            display_name=speaker_info.display_name,
+            language=speaker_info.language,
+            color=speaker_info.color,
+            created_at=datetime.utcnow()
+        )
+        db.add(speaker)
+
+    db.commit()
+
+    # Get updated speakers
+    speakers = db.query(RoomSpeaker).filter(
+        RoomSpeaker.room_id == room.id
+    ).order_by(RoomSpeaker.speaker_id).all()
+
+    speaker_responses = [
+        SpeakerResponse(
+            id=s.id,
+            speaker_id=s.speaker_id,
+            display_name=s.display_name,
+            language=s.language,
+            color=s.color,
+            created_at=s.created_at
+        )
+        for s in speakers
+    ]
+
+    return SpeakersListResponse(
+        speakers=speaker_responses,
+        discovery_mode=room.discovery_mode,
+        speakers_locked=room.speakers_locked
+    )
+
+
+@router.patch("/{room_code}/speakers/{speaker_id}", response_model=SpeakerResponse)
+async def update_speaker(
+    room_code: str,
+    speaker_id: int,
+    request: UpdateSpeakerRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Update a specific speaker's details.
+
+    Args:
+        room_code: The room code
+        speaker_id: The speaker ID to update
+        request: Speaker update fields
+        db: Database session
+        user: Authenticated user (must be room owner)
+
+    Returns:
+        SpeakerResponse with updated speaker details
+
+    Raises:
+        HTTPException: 404 if room or speaker not found, 403 if not owner or speakers locked
+    """
+    user_id = int(user.get("sub"))
+
+    # Get room
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # Verify user owns the room
+    if room.owner_id != user_id:
+        raise HTTPException(status_code=403, detail="Only room owner can manage speakers")
+
+    # Check if speakers are locked
+    if room.speakers_locked:
+        raise HTTPException(status_code=403, detail="Speakers are locked. Cannot modify.")
+
+    # Get speaker
+    speaker = db.query(RoomSpeaker).filter(
+        RoomSpeaker.room_id == room.id,
+        RoomSpeaker.speaker_id == speaker_id
+    ).first()
+
+    if not speaker:
+        raise HTTPException(status_code=404, detail="Speaker not found")
+
+    # Update fields
+    if request.display_name is not None:
+        speaker.display_name = request.display_name
+    if request.language is not None:
+        speaker.language = request.language
+    if request.color is not None:
+        speaker.color = request.color
+
+    db.commit()
+    db.refresh(speaker)
+
+    return SpeakerResponse(
+        id=speaker.id,
+        speaker_id=speaker.speaker_id,
+        display_name=speaker.display_name,
+        language=speaker.language,
+        color=speaker.color,
+        created_at=speaker.created_at
+    )
+
+
+@router.delete("/{room_code}/speakers/{speaker_id}")
+async def delete_speaker(
+    room_code: str,
+    speaker_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Delete a speaker from a room.
+
+    Args:
+        room_code: The room code
+        speaker_id: The speaker ID to delete
+        db: Database session
+        user: Authenticated user (must be room owner)
+
+    Returns:
+        Success message
+
+    Raises:
+        HTTPException: 404 if room or speaker not found, 403 if not owner or speakers locked
+    """
+    user_id = int(user.get("sub"))
+
+    # Get room
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # Verify user owns the room
+    if room.owner_id != user_id:
+        raise HTTPException(status_code=403, detail="Only room owner can manage speakers")
+
+    # Check if speakers are locked
+    if room.speakers_locked:
+        raise HTTPException(status_code=403, detail="Speakers are locked. Cannot modify.")
+
+    # Get speaker
+    speaker = db.query(RoomSpeaker).filter(
+        RoomSpeaker.room_id == room.id,
+        RoomSpeaker.speaker_id == speaker_id
+    ).first()
+
+    if not speaker:
+        raise HTTPException(status_code=404, detail="Speaker not found")
+
+    db.delete(speaker)
+    db.commit()
+
+    return {"message": "Speaker deleted successfully"}
+
+
+@router.patch("/{room_code}/discovery-mode", response_model=RoomResponse)
+async def update_discovery_mode(
+    room_code: str,
+    request: UpdateDiscoveryModeRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Update room discovery mode.
+
+    Args:
+        room_code: The room code
+        request: Discovery mode setting
+        db: Database session
+        user: Authenticated user (must be room owner)
+
+    Returns:
+        RoomResponse with updated room details
+
+    Raises:
+        HTTPException: 404 if room not found, 403 if not owner, 400 if invalid mode
+    """
+    user_id = int(user.get("sub"))
+
+    # Validate discovery mode
+    valid_modes = ["disabled", "enabled", "locked"]
+    if request.discovery_mode not in valid_modes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid discovery mode. Must be one of: {', '.join(valid_modes)}"
+        )
+
+    # Get room
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # Verify user owns the room
+    if room.owner_id != user_id:
+        raise HTTPException(status_code=403, detail="Only room owner can modify discovery mode")
+
+    # Update discovery mode
+    room.discovery_mode = request.discovery_mode
+
+    # If setting to "locked", also set speakers_locked flag
+    if request.discovery_mode == "locked":
+        room.speakers_locked = True
+
+    db.commit()
+    db.refresh(room)
+
+    return RoomResponse(
+        id=room.id,
+        code=room.code,
+        owner_id=room.owner_id,
+        is_public=room.is_public,
+        recording=room.recording,
+        requires_login=room.requires_login,
+        max_participants=room.max_participants,
+        created_at=room.created_at,
+        admin_left_at=room.admin_left_at,
+        discovery_mode=room.discovery_mode,
+        speakers_locked=room.speakers_locked
+    )
