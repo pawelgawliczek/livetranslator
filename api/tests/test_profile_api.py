@@ -212,3 +212,130 @@ class TestProfileAPI:
         user = db.query(User).filter(User.email == test_user.email).first()
         assert user is None
         db.close()
+
+
+class TestAudioSettings:
+    """Test audio settings endpoints."""
+
+    def test_get_profile_includes_audio_settings(self, client, test_user, auth_token):
+        """Test that profile includes audio settings with defaults."""
+        response = client.get(
+            "/api/profile",
+            headers={"Authorization": f"Bearer {auth_token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "audio_threshold" in data
+        assert "preferred_mic_device_id" in data
+        assert data["audio_threshold"] == 0.02  # Default value
+        assert data["preferred_mic_device_id"] is None
+
+    def test_update_audio_threshold(self, client, test_user, auth_token):
+        """Test updating audio threshold."""
+        response = client.patch(
+            "/api/profile",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"audio_threshold": 0.05}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["audio_threshold"] == 0.05
+
+        # Verify persistence
+        response = client.get(
+            "/api/profile",
+            headers={"Authorization": f"Bearer {auth_token}"}
+        )
+        assert response.json()["audio_threshold"] == 0.05
+
+    def test_update_preferred_mic_device(self, client, test_user, auth_token):
+        """Test updating preferred microphone device ID."""
+        device_id = "default_device_12345"
+        response = client.patch(
+            "/api/profile",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"preferred_mic_device_id": device_id}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["preferred_mic_device_id"] == device_id
+
+        # Verify persistence
+        response = client.get(
+            "/api/profile",
+            headers={"Authorization": f"Bearer {auth_token}"}
+        )
+        assert response.json()["preferred_mic_device_id"] == device_id
+
+    def test_update_both_audio_settings(self, client, test_user, auth_token):
+        """Test updating both audio settings simultaneously."""
+        device_id = "usb_microphone_67890"
+        response = client.patch(
+            "/api/profile",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "audio_threshold": 0.03,
+                "preferred_mic_device_id": device_id
+            }
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["audio_threshold"] == 0.03
+        assert data["preferred_mic_device_id"] == device_id
+
+    def test_clear_preferred_mic_device(self, client, test_user, auth_token):
+        """Test clearing (setting to null) preferred microphone."""
+        # First set a device
+        client.patch(
+            "/api/profile",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"preferred_mic_device_id": "some_device"}
+        )
+
+        # Then clear it
+        response = client.patch(
+            "/api/profile",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"preferred_mic_device_id": None}
+        )
+        assert response.status_code == 200
+        assert response.json()["preferred_mic_device_id"] is None
+
+    def test_audio_threshold_edge_values(self, client, test_user, auth_token):
+        """Test audio threshold with minimum and maximum values."""
+        # Test minimum value (0.001)
+        response = client.patch(
+            "/api/profile",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"audio_threshold": 0.001}
+        )
+        assert response.status_code == 200
+        assert response.json()["audio_threshold"] == 0.001
+
+        # Test maximum value (0.1)
+        response = client.patch(
+            "/api/profile",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"audio_threshold": 0.1}
+        )
+        assert response.status_code == 200
+        assert response.json()["audio_threshold"] == 0.1
+
+    def test_update_audio_settings_with_other_fields(self, client, test_user, auth_token):
+        """Test updating audio settings along with other profile fields."""
+        response = client.patch(
+            "/api/profile",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "display_name": "New Name",
+                "preferred_lang": "pl",
+                "audio_threshold": 0.04,
+                "preferred_mic_device_id": "headset_device"
+            }
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["display_name"] == "New Name"
+        assert data["preferred_lang"] == "pl"
+        assert data["audio_threshold"] == 0.04
+        assert data["preferred_mic_device_id"] == "headset_device"

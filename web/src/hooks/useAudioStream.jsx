@@ -32,7 +32,6 @@ import { useEffect, useRef, useState } from 'react';
 // VAD Configuration
 const SILENCE_THRESHOLD = 20;  // frames
 const SPEECH_THRESHOLD = 5;    // frames
-const ENERGY_THRESHOLD = 0.02; // RMS level
 const MAX_RECORDING_TIME = 30000; // 30 seconds safety timeout
 
 export default function useAudioStream({
@@ -45,7 +44,9 @@ export default function useAudioStream({
   sendInterval,
   networkQuality,
   onStatusChange,
-  onVadStatusChange
+  onVadStatusChange,
+  threshold = 0.02,           // Energy threshold for VAD (default 0.02)
+  deviceId = null             // Microphone device ID (null = browser default)
 }) {
   // Audio state
   const [isRecording, setIsRecording] = useState(false);
@@ -251,14 +252,21 @@ export default function useAudioStream({
       console.log('[VAD] Starting voice activity detection...');
 
       // Request microphone access
+      const audioConstraints = {
+        channelCount: 1,
+        sampleRate: { ideal: 48000 },
+        echoCancellation: true,
+        noiseSuppression: false,
+        autoGainControl: true
+      };
+
+      // Add deviceId constraint if specified
+      if (deviceId) {
+        audioConstraints.deviceId = { exact: deviceId };
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          sampleRate: { ideal: 48000 },
-          echoCancellation: true,
-          noiseSuppression: false,
-          autoGainControl: true
-        }
+        audio: audioConstraints
       });
 
       streamRef.current = stream;
@@ -313,7 +321,7 @@ export default function useAudioStream({
         const rms = calculateRMS(resampled);
         setAudioLevel(rms);
 
-        const isSpeech = rms > ENERGY_THRESHOLD;
+        const isSpeech = rms > threshold;
 
         // Update VAD state
         if (isSpeech) {

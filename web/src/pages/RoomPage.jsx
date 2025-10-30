@@ -155,6 +155,7 @@ export default function RoomPage({ token, onLogout }) {
   const testStreamRef = useRef(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [audioThreshold, setAudioThreshold] = useState(0.02);
+  const [selectedMicDeviceId, setSelectedMicDeviceId] = useState(null);
 
   // Refs
   const chatEndRef = useRef(null);
@@ -200,7 +201,9 @@ export default function RoomPage({ token, onLogout }) {
     sendInterval: getSendIntervalForQuality(networkQuality),
     networkQuality,
     onStatusChange: setStatus,
-    onVadStatusChange: setVadStatus
+    onVadStatusChange: setVadStatus,
+    threshold: audioThreshold,
+    deviceId: selectedMicDeviceId
   });
 
   // ============================================================================
@@ -280,6 +283,14 @@ export default function RoomPage({ token, onLogout }) {
       .then(data => {
         setUserEmail(data.email || 'User');
         setIsAdmin(data.is_admin || false);
+
+        // Load audio settings from profile
+        if (data.audio_threshold !== undefined && data.audio_threshold !== null) {
+          setAudioThreshold(data.audio_threshold);
+        }
+        if (data.preferred_mic_device_id) {
+          setSelectedMicDeviceId(data.preferred_mic_device_id);
+        }
       })
       .catch(e => console.error('[Profile] Failed to load:', e));
   }, [token, isGuest, guestName]);
@@ -659,6 +670,50 @@ export default function RoomPage({ token, onLogout }) {
   };
 
   // ============================================================================
+  // Audio Settings Handlers
+  // ============================================================================
+
+  const handleThresholdChange = async (newThreshold) => {
+    setAudioThreshold(newThreshold);
+
+    // Save to backend for authenticated users
+    if (!isGuest && token) {
+      try {
+        await fetch('/api/profile', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ audio_threshold: newThreshold })
+        });
+      } catch (error) {
+        console.error('[AudioSettings] Failed to save threshold:', error);
+      }
+    }
+  };
+
+  const handleDeviceChange = async (newDeviceId) => {
+    setSelectedMicDeviceId(newDeviceId);
+
+    // Save to backend for authenticated users
+    if (!isGuest && token) {
+      try {
+        await fetch('/api/profile', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ preferred_mic_device_id: newDeviceId })
+        });
+      } catch (error) {
+        console.error('[AudioSettings] Failed to save device:', error);
+      }
+    }
+  };
+
+  // ============================================================================
   // Auto-scroll
   // ============================================================================
 
@@ -852,10 +907,12 @@ export default function RoomPage({ token, onLogout }) {
           onClose={() => setShowSoundSettings(false)}
           currentLevel={audioLevel}
           threshold={audioThreshold}
-          onThresholdChange={setAudioThreshold}
+          onThresholdChange={handleThresholdChange}
           isActive={status === 'recording'}
           status={vadStatus}
           onTest={handleTestMode}
+          selectedDeviceId={selectedMicDeviceId}
+          onDeviceChange={handleDeviceChange}
         />
       )}
 

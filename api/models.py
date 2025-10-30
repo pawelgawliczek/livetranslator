@@ -1,7 +1,7 @@
 from decimal import Decimal
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import BigInteger, func, Numeric, String, Integer, Text, DateTime, Boolean, ForeignKey, Index
+from sqlalchemy import BigInteger, func, Numeric, String, Integer, Text, DateTime, Boolean, ForeignKey, Index, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .db import Base
 
@@ -15,6 +15,10 @@ class User(Base):
     preferred_lang: Mapped[str] = mapped_column(String(16), default="en", nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Audio settings
+    audio_threshold: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=0.02)
+    preferred_mic_device_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
 class Room(Base):
     __tablename__ = "rooms"

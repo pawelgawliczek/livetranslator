@@ -5,6 +5,7 @@ import { loadLanguageFromProfile, getUserLanguage } from "../utils/languageSync"
 import LanguageSelector from "../components/LanguageSelector";
 import ThemeToggle from "../components/ThemeToggle";
 import Footer from "../components/Footer";
+import { useAudioDevices } from "../hooks/useAudioDevices";
 
 const LANGUAGES = [
   { code: "en", name: "English" },
@@ -40,6 +41,11 @@ export default function ProfilePage({ token, onLogout }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  // Audio settings
+  const [audioThreshold, setAudioThreshold] = useState(0.02);
+  const [selectedMicDeviceId, setSelectedMicDeviceId] = useState(null);
+  const { devices } = useAudioDevices();
+
   useEffect(() => {
     if (!token) {
       navigate("/login");
@@ -63,6 +69,14 @@ export default function ProfilePage({ token, onLogout }) {
         setDisplayName(profileData.display_name);
         setIsAdmin(profileData.is_admin || false);
         // Language is now handled by unified system, no need to set state
+
+        // Load audio settings
+        if (profileData.audio_threshold !== undefined && profileData.audio_threshold !== null) {
+          setAudioThreshold(profileData.audio_threshold);
+        }
+        if (profileData.preferred_mic_device_id) {
+          setSelectedMicDeviceId(profileData.preferred_mic_device_id);
+        }
       }
 
       // Fetch subscription
@@ -168,6 +182,36 @@ export default function ProfilePage({ token, onLogout }) {
       }
     } catch (e) {
       setError("Failed to change password");
+    }
+  }
+
+  async function handleSaveAudioSettings(e) {
+    e.preventDefault();
+    setMessage("");
+    setError("");
+
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          audio_threshold: audioThreshold,
+          preferred_mic_device_id: selectedMicDeviceId || null
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setProfile(data);
+        setMessage(t('settings.audioSettingsSaved'));
+      } else {
+        setError(t('settings.audioSettingsFailed'));
+      }
+    } catch (e) {
+      setError(t('settings.audioSettingsFailed'));
     }
   }
 
@@ -308,6 +352,73 @@ export default function ProfilePage({ token, onLogout }) {
                   {t('profile.saveChanges')}
                 </button>
               </form>
+
+              {/* Audio Settings Section */}
+              <div className="mt-8 pt-6 border-t border-border">
+                <h3 className="text-xl font-bold mb-4 text-fg">{t('settings.audioSettings')}</h3>
+                <form onSubmit={handleSaveAudioSettings} className="flex flex-col gap-5">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-semibold text-muted">{t('settings.selectMicrophone')}</label>
+                    <select
+                      value={selectedMicDeviceId || ''}
+                      onChange={(e) => setSelectedMicDeviceId(e.target.value || null)}
+                      className="px-3 py-3 border border-border rounded-lg text-sm outline-none transition-colors
+                                 bg-card text-fg focus:border-accent cursor-pointer"
+                    >
+                      <option value="">{t('settings.defaultMicrophone')}</option>
+                      {devices.map((device) => (
+                        <option key={device.deviceId} value={device.deviceId}>
+                          {device.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="text-xs text-muted">
+                      {t('settings.microphoneHelp')}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-semibold text-muted">{t('settings.noiseThreshold')}</label>
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="range"
+                        min="0.001"
+                        max="0.1"
+                        step="0.001"
+                        value={audioThreshold}
+                        onChange={(e) => setAudioThreshold(parseFloat(e.target.value))}
+                        className="flex-1"
+                        style={{
+                          height: "6px",
+                          borderRadius: "3px",
+                          background: `linear-gradient(to right, #ef4444 0%, #ef4444 ${audioThreshold * 1000}%, #333 ${audioThreshold * 1000}%, #333 100%)`,
+                          outline: "none",
+                          appearance: "none",
+                          cursor: "pointer"
+                        }}
+                      />
+                      <span className="text-sm font-semibold text-fg min-w-[60px] text-right">
+                        {(audioThreshold * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted">
+                      <span>{t('settings.moreSensitive')}</span>
+                      <span>{t('settings.lessSensitive')}</span>
+                    </div>
+                    <div className="text-xs text-muted">
+                      {t('settings.sensitivityHelp')}
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="px-6 py-3 bg-accent text-white border-none rounded-lg cursor-pointer text-sm font-semibold
+                               self-start hover:bg-accent-dark transition-colors"
+                  >
+                    {t('settings.saveAudioSettings')}
+                  </button>
+                </form>
+              </div>
             </div>
           )}
 

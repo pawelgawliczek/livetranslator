@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from "react-i18next";
+import { useAudioDevices } from '../hooks/useAudioDevices';
 
 export default function SoundSettingsModal({
   isOpen,
@@ -9,12 +10,15 @@ export default function SoundSettingsModal({
   onThresholdChange, // Callback when threshold changes
   isActive,          // Is VAD currently detecting speech?
   status,            // VAD status text
-  onTest             // Callback to start/stop test mode
+  onTest,            // Callback to start/stop test mode
+  selectedDeviceId,  // Currently selected microphone device ID
+  onDeviceChange     // Callback when device selection changes
 }) {
   const { t } = useTranslation();
   const canvasRef = useRef(null);
   const [localThreshold, setLocalThreshold] = useState(threshold);
   const [isTesting, setIsTesting] = useState(false);
+  const { devices, error: devicesError } = useAudioDevices();
 
   // Update local threshold when prop changes
   useEffect(() => {
@@ -86,6 +90,13 @@ export default function SoundSettingsModal({
     setLocalThreshold(newThreshold);
     if (onThresholdChange) {
       onThresholdChange(newThreshold);
+    }
+  };
+
+  const handleDeviceChange = (e) => {
+    const newDeviceId = e.target.value;
+    if (onDeviceChange) {
+      onDeviceChange(newDeviceId);
     }
   };
 
@@ -186,6 +197,49 @@ export default function SoundSettingsModal({
               <span>{isActive ? '●' : '○'}</span>
               <span>{status}</span>
             </div>
+          </div>
+
+          {/* Microphone Selection */}
+          <div style={{ marginBottom: "1.5rem" }}>
+            <div style={{
+              fontSize: "0.9rem",
+              fontWeight: "600",
+              color: "var(--muted)",
+              marginBottom: "0.75rem"
+            }}>
+              {t('settings.selectMicrophone')}
+            </div>
+            <select
+              value={selectedDeviceId || ''}
+              onChange={handleDeviceChange}
+              style={{
+                width: "100%",
+                padding: "0.75rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                background: "var(--bg)",
+                color: "var(--fg)",
+                fontSize: "0.9rem",
+                cursor: "pointer",
+                outline: "none"
+              }}
+            >
+              <option value="">{t('settings.defaultMicrophone')}</option>
+              {devices.map((device) => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label}
+                </option>
+              ))}
+            </select>
+            {devicesError && (
+              <div style={{
+                marginTop: "0.5rem",
+                fontSize: "0.75rem",
+                color: "#ef4444"
+              }}>
+                {t('settings.microphoneError')}: {devicesError}
+              </div>
+            )}
           </div>
 
           {/* Audio Level Visualization */}

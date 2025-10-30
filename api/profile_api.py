@@ -25,10 +25,14 @@ class ProfileOut(BaseModel):
     has_password: bool
     is_admin: bool
     created_at: datetime
+    audio_threshold: Optional[float] = 0.02
+    preferred_mic_device_id: Optional[str] = None
 
 class ProfileUpdateIn(BaseModel):
     display_name: Optional[str] = None
     preferred_lang: Optional[str] = None
+    audio_threshold: Optional[float] = None
+    preferred_mic_device_id: Optional[str] = None
 
 class PasswordChangeIn(BaseModel):
     current_password: Optional[str] = None
@@ -50,7 +54,9 @@ def get_profile(user: dict = Depends(get_current_user), db: Session = Depends(ge
         google_id=user.google_id,
         has_password=user.password_hash is not None,
         is_admin=user.is_admin,
-        created_at=user.created_at
+        created_at=user.created_at,
+        audio_threshold=user.audio_threshold,
+        preferred_mic_device_id=user.preferred_mic_device_id
     )
 
 @router.patch("", response_model=ProfileOut)
@@ -71,6 +77,13 @@ def update_profile(
     if update.preferred_lang is not None:
         user.preferred_lang = update.preferred_lang
 
+    if update.audio_threshold is not None:
+        user.audio_threshold = update.audio_threshold
+
+    # Allow explicitly setting to None to clear device selection
+    if "preferred_mic_device_id" in update.model_fields_set:
+        user.preferred_mic_device_id = update.preferred_mic_device_id
+
     db.commit()
     db.refresh(user)
 
@@ -82,7 +95,9 @@ def update_profile(
         google_id=user.google_id,
         has_password=user.password_hash is not None,
         is_admin=user.is_admin,
-        created_at=user.created_at
+        created_at=user.created_at,
+        audio_threshold=user.audio_threshold,
+        preferred_mic_device_id=user.preferred_mic_device_id
     )
 
 @router.post("/password")
