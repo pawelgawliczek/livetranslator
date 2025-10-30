@@ -87,6 +87,24 @@ async def active_room(test_db_session, test_user):
     return room
 
 
+@pytest_asyncio.fixture
+async def preserved_room(test_db_session, test_user):
+    """Create a room where admin left but recording=True (Save History enabled)."""
+    room = Room(
+        code="test-rec",
+        owner_id=test_user.id,
+        admin_left_at=datetime.utcnow() - timedelta(minutes=60),  # Admin left 60 minutes ago
+        recording=True,  # Save History enabled - should prevent cleanup
+        is_public=False,
+        requires_login=False,
+        max_participants=10
+    )
+    test_db_session.add(room)
+    await test_db_session.commit()
+    await test_db_session.refresh(room)
+    return room
+
+
 @pytest.mark.integration
 class TestRoomCleanupIntegration:
     """Integration tests for room cleanup with real database."""
@@ -302,6 +320,47 @@ class TestRoomCleanupIntegration:
         assert float(archive.stt_cost_usd) == 0.018
         assert float(archive.mt_cost_usd) == 0.002
         assert float(archive.total_cost_usd) == 0.020
+
+    @pytest.mark.asyncio
+    async def test_cleanup_preserves_room_with_recording_enabled(self, test_db_session, preserved_room):
+        """
+        Test that cleanup does NOT delete rooms with recording=True (Save History enabled).
+
+        This is the critical preservation feature:
+        - Admin has left 60+ minutes ago (well past the 30-minute threshold)
+        - BUT recording=True (Save History enabled)
+        - Room should NOT be deleted, allowing room creator to access it days/weeks later
+        """
+        room_id = preserved_room.id
+        room_code = preserved_room.code
+
+        # Verify initial state
+        assert preserved_room.recording is True
+        assert preserved_room.admin_left_at is not None
+
+        # Verify admin has been gone for more than 30 minutes
+        time_since_admin_left = datetime.utcnow() - preserved_room.admin_left_at
+        assert time_since_admin_left.total_seconds() > 1800  # More than 30 minutes
+
+        # Run cleanup
+        await cleanup_abandoned_rooms(test_db_session)
+
+        # Verify room still exists (NOT deleted)
+        result = await test_db_session.execute(
+            select(Room).where(Room.id == room_id)
+        )
+        room = result.scalar_one_or_none()
+        assert room is not None, "Room with recording=True should NOT be deleted"
+        assert room.recording is True
+        assert room.code == room_code
+
+        # Verify room was NOT archived
+        result = await test_db_session.execute(
+            text("SELECT * FROM room_archive WHERE room_code = :code"),
+            {"code": room_code}
+        )
+        archived = result.first()
+        assert archived is None, "Preserved room should NOT be archived"
 
 
 @pytest.mark.integration

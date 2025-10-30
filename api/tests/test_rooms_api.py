@@ -488,3 +488,38 @@ class TestRoomLifecycleManagement:
         # Test well past expiration
         long_expired = now - timedelta(hours=1)
         assert (now - long_expired).total_seconds() == 3600
+
+
+class TestRoomRecordingAPI:
+    """Test suite for room recording/preservation setting API."""
+
+    def test_update_recording_request_model(self):
+        """Test UpdateRecordingRequest model structure."""
+        from api.rooms_api import UpdateRecordingRequest
+
+        # Test enabling recording
+        request_enable = UpdateRecordingRequest(recording=True)
+        assert request_enable.recording is True
+
+        # Test disabling recording
+        request_disable = UpdateRecordingRequest(recording=False)
+        assert request_disable.recording is False
+
+    def test_update_recording_request_requires_boolean(self):
+        """Test that recording field must be a boolean."""
+        from api.rooms_api import UpdateRecordingRequest
+        from pydantic import ValidationError
+
+        # Valid boolean values
+        request_true = UpdateRecordingRequest(recording=True)
+        assert request_true.recording is True
+
+        request_false = UpdateRecordingRequest(recording=False)
+        assert request_false.recording is False
+
+        # Test with integer (should be coerced to bool)
+        request_int = UpdateRecordingRequest(recording=1)
+        assert request_int.recording is True
+
+        request_zero = UpdateRecordingRequest(recording=0)
+        assert request_zero.recording is False
