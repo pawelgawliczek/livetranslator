@@ -223,7 +223,8 @@ async def router_loop():
                     provider_config = await get_stt_provider_for_language(
                         language=language_hint,
                         mode="partial",
-                        quality_tier=quality_tier
+                        quality_tier=quality_tier,
+                        room_id=room
                     )
 
                     # Check if there's an existing streaming connection we should reuse
@@ -323,10 +324,19 @@ async def router_loop():
                                 "speech_final": False,
                                 "ts_iso": None,
                                 "device": device,
-                                "speaker": speaker,
+                                "speaker": speaker,  # User identity (email or guest ID)
                                 "target_lang": target_lang,
                                 "provider": session["provider"]
                             }
+
+                            # Add speaker_id from Speechmatics diarization
+                            if "speaker_id" in result and result["speaker_id"] is not None:
+                                stt_event["speaker_id"] = result["speaker_id"]
+                                print(f"[STT Router] Added speaker_id={result['speaker_id']} from Speechmatics to partial event")
+
+                            # Add speaker_labels for detailed diarization info
+                            if "speaker_labels" in result and result["speaker_labels"]:
+                                stt_event["speaker_labels"] = result["speaker_labels"]
 
                             await r.publish(STT_OUTPUT_EVENTS, jdumps(stt_event))
                             print(f"[STT Router] ✓ Stream partial {session['segment_id']}:{session['chunk_count']}: {text[:80]}...")
@@ -336,6 +346,11 @@ async def router_loop():
                             text = result.get("text", "").strip()
                             if text:
                                 session["accumulated_text"] = text
+                                # Store speaker information from Speechmatics diarization
+                                if "speaker_id" in result and result["speaker_id"] is not None:
+                                    session["speaker_id"] = result["speaker_id"]
+                                if "speaker_labels" in result and result["speaker_labels"]:
+                                    session["speaker_labels"] = result["speaker_labels"]
                                 print(f"[STT Router] ✓ Stream final: {text[:80]}...")
 
                         async def on_error(error):
@@ -385,6 +400,8 @@ async def router_loop():
                                 on_final=on_final,
                                 on_error=on_error
                             )
+                            # Initialize the new connection with the current segment_id
+                            conn.reset_for_new_segment(session["segment_id"])
                             session["streaming_connection"] = conn
 
                         # Send audio to streaming connection
@@ -537,7 +554,8 @@ async def router_loop():
                     provider_config = await get_stt_provider_for_language(
                         language=stored_language_hint,
                         mode="final",
-                        quality_tier=stored_quality_tier
+                        quality_tier=stored_quality_tier,
+                        room_id=room
                     )
 
                     # Transcribe with final provider (measure latency)
@@ -630,6 +648,9 @@ async def router_loop():
                         print(f"[STT Router] 🔍 [{timestamp:.3f}]   - finalized_text: '{streaming_conn.finalized_text[:80] if streaming_conn.finalized_text else '(empty)'}'")
                         print(f"[STT Router] 🔍 [{timestamp:.3f}]   - accumulated_text: '{streaming_conn.accumulated_text[:80] if streaming_conn.accumulated_text else '(empty)'}'")
 
+                        # Signal end of utterance to provider (triggers final transcription)
+                        await streaming_conn.end_of_utterance()
+
                     # For streaming providers, send a "finalization marker" event
                     # The last partial contains the complete text, we just mark it as finalized
                     if streaming_conn and hasattr(streaming_conn, 'finalized_text'):
@@ -647,7 +668,7 @@ async def router_loop():
                                 "revision": session["chunk_count"],
                                 "text": last_partial_text,
                                 "lang": session.get("detected_lang", session.get("language_hint", "auto")),
-                                "speaker": session.get("speaker", "system"),
+                                "speaker": session.get("speaker", "system"),  # User identity
                                 "target_lang": session.get("target_lang", "en"),
                                 "device": data.get("device", "web"),
                                 "provider": session.get("provider", "unknown"),
@@ -655,6 +676,15 @@ async def router_loop():
                                 "speech_final": True,
                                 "ts_iso": datetime.utcnow().isoformat() + "Z"
                             }
+
+                            # Add speaker_id from Speechmatics diarization
+                            if "speaker_id" in session and session["speaker_id"] is not None:
+                                final_event["speaker_id"] = session["speaker_id"]
+
+                            # Add speaker_labels for detailed diarization info
+                            if "speaker_labels" in session and session["speaker_labels"]:
+                                final_event["speaker_labels"] = session["speaker_labels"]
+
                             await r.publish(STT_OUTPUT_EVENTS, jdumps(final_event))
                             print(f"[STT Router] 🏁 [{timestamp:.3f}] Sent stt_final event to trigger final translation")
 
@@ -792,7 +822,8 @@ async def router_loop():
                             provider_config = await get_stt_provider_for_language(
                                 language=language_hint,
                                 mode="final",
-                                quality_tier=quality_tier
+                                quality_tier=quality_tier,
+                                room_id=room
                             )
 
                             # Measure latency for quality refinement

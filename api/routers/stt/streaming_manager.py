@@ -19,6 +19,14 @@ from datetime import datetime
 from collections import defaultdict
 import threading
 
+# Import speaker mapping function for multi-speaker diarization
+try:
+    # When running in stt_router container (files in /app/)
+    from speechmatics_streaming import map_speechmatics_speaker_to_id
+except ImportError:
+    # When running in api container (package structure)
+    from .speechmatics_streaming import map_speechmatics_speaker_to_id
+
 # Import Google streaming client
 try:
     import google_streaming
@@ -123,6 +131,30 @@ class StreamingConnection:
             print(f"[StreamingConnection] Error sending audio: {e}")
             await self.on_error({"error": str(e), "room_id": self.room_id, "provider": self.provider})
             raise
+
+    async def end_of_utterance(self):
+        """Signal end of utterance to provider without closing connection."""
+        if not self.is_connected or self.is_closing:
+            print(f"[StreamingConnection] Cannot end utterance - connection not ready")
+            return
+
+        import time
+        timestamp = time.time()
+        print(f"[StreamingConnection] 🏁 [{timestamp:.3f}] Signaling end of utterance for {self.provider}")
+
+        try:
+            if self.provider == "speechmatics" and self.ws_client:
+                # Send EndOfStream to trigger final transcription
+                import json
+                end_message = {"message": "EndOfStream"}
+                await self.ws_client.send(json.dumps(end_message))
+                print(f"[StreamingConnection] ✓ [{timestamp:.3f}] Sent EndOfStream to Speechmatics for segment {self.segment_id}")
+            elif self.provider == "google_v2" and self.google_session:
+                # Google doesn't need explicit end signal - finals come automatically
+                print(f"[StreamingConnection] ℹ️  [{timestamp:.3f}] Google doesn't require EndOfStream")
+            # Add other providers as needed
+        except Exception as e:
+            print(f"[StreamingConnection] ❌ [{timestamp:.3f}] Failed to signal end of utterance: {e}")
 
     def reset_for_new_segment(self, segment_id: int):
         """Reset accumulated state for a new audio segment."""
@@ -241,6 +273,24 @@ class StreamingConnection:
         # Send StartRecognition message
         print(f"[StreamingConnection] Config: lang={self.language}, op={operating_point}, delay={max_delay}, diar={diarization}")
 
+        # Build transcription config
+        transcription_config = {
+            "operating_point": operating_point,
+            "max_delay": max_delay,
+            "enable_partials": True,
+            "diarization": "speaker" if diarization else "none"
+        }
+
+        # Handle automatic language detection
+        if self.language == "auto":
+            # For automatic language detection, enable language_detection_enabled
+            # and omit the language field
+            transcription_config["language_detection_enabled"] = True
+            print(f"[StreamingConnection] ✨ Automatic language detection ENABLED for multi-speaker discovery")
+        else:
+            # Specific language provided
+            transcription_config["language"] = self.language
+
         start_recognition = {
             "message": "StartRecognition",
             "audio_format": {
@@ -248,13 +298,7 @@ class StreamingConnection:
                 "encoding": "pcm_s16le",
                 "sample_rate": 16000
             },
-            "transcription_config": {
-                "language": self.language,
-                "operating_point": operating_point,
-                "max_delay": max_delay,
-                "enable_partials": True,
-                "diarization": "speaker" if diarization else "none"
-            }
+            "transcription_config": transcription_config
         }
 
         print(f"[StreamingConnection] Sending StartRecognition...")
@@ -326,8 +370,56 @@ class StreamingConnection:
                         start_time = metadata.get("start_time", None)
                         end_time = metadata.get("end_time", None)
 
+                        # Extract detected language (when language_detection_enabled)
+                        detected_language = metadata.get("language")
+
+                        # Extract speaker labels from word-level results (for multi-speaker diarization)
+                        results = msg.get("results", [])
+                        speaker_labels = []
+                        detected_speakers = set()
+                        speaker_languages = {}  # Map speaker -> detected language
+
+                        if results:
+                            # Parse word-level speaker and language information
+                            for result in results:
+                                if result.get("type") == "word":
+                                    alternatives = result.get("alternatives", [])
+                                    if alternatives:
+                                        word_data = alternatives[0]
+                                        speaker = word_data.get("speaker")
+                                        word_language = word_data.get("language") or detected_language
+
+                                        if speaker:
+                                            detected_speakers.add(speaker)
+                                            # Track language per speaker (if available)
+                                            if word_language and speaker not in speaker_languages:
+                                                speaker_languages[speaker] = word_language
+
+                                            # Store word-level speaker data for frontend
+                                            speaker_labels.append({
+                                                "speaker": speaker,
+                                                "word": word_data.get("content", ""),
+                                                "start": word_data.get("start_time", 0),
+                                                "end": word_data.get("end_time", 0),
+                                                "language": word_language  # Language for this word
+                                            })
+
+                        # Compute primary speaker_id and language (first speaker in the result, or None)
+                        speaker_id = None
+                        primary_speaker_language = detected_language  # Default to session language
+                        if speaker_labels:
+                            primary_speaker_label = speaker_labels[0].get("speaker")
+                            speaker_id = map_speechmatics_speaker_to_id(primary_speaker_label)
+                            # Get language for this speaker
+                            primary_speaker_language = speaker_languages.get(primary_speaker_label) or detected_language
+
                         print(f"[StreamingConnection] 📨 [{timestamp:.3f}] AddTranscript received: '{final_text[:80] if final_text else '(empty)'}' for segment_id={self.segment_id}")
                         print(f"[StreamingConnection] 📨 [{timestamp:.3f}]   - Speechmatics timing: start={start_time}, end={end_time}")
+                        if detected_speakers:
+                            speaker_langs_str = ", ".join([f"{spk}={speaker_languages.get(spk, 'unknown')}" for spk in sorted(detected_speakers)])
+                            print(f"[StreamingConnection] 📨 [{timestamp:.3f}]   - Detected speakers: [{speaker_langs_str}], primary speaker_id: {speaker_id}, lang: {primary_speaker_language}")
+                        elif detected_language:
+                            print(f"[StreamingConnection] 📨 [{timestamp:.3f}]   - Detected language: {detected_language}")
                         print(f"[StreamingConnection] 📨 [{timestamp:.3f}]   - Full metadata: {metadata}")
 
                         if final_text:
@@ -409,12 +501,20 @@ class StreamingConnection:
                                 print(f"[StreamingConnection] 📍 [{timestamp:.3f}]   - updated accumulated_text: '{self.accumulated_text[:80]}'")
 
                                 # Send the punctuation as a final event so frontend appends it
-                                await self.on_final({
+                                result = {
                                     "text": final_text,
-                                    "language": self.language,
+                                    "language": primary_speaker_language or self.language,  # Use detected language if available
                                     "room_id": self.room_id,
                                     "is_final": True
-                                })
+                                }
+                                # Add speaker information if available
+                                if speaker_labels:
+                                    result["speaker_labels"] = speaker_labels
+                                if speaker_id is not None:
+                                    result["speaker_id"] = speaker_id
+                                    # Add detected language for this speaker
+                                    result["detected_language"] = primary_speaker_language
+                                await self.on_final(result)
                                 continue
 
                             # Add to finalized text (normal words)
@@ -428,12 +528,22 @@ class StreamingConnection:
                             print(f"[StreamingConnection] ✓ [{timestamp:.3f}]   - old finalized_text: '{old_finalized[:50] if old_finalized else '(empty)'}'")
                             print(f"[StreamingConnection] ✓ [{timestamp:.3f}]   - new finalized_text: '{self.finalized_text[:80]}'")
 
-                            await self.on_final({
+                            # Build final result with speaker information
+                            result = {
                                 "text": final_text,
-                                "language": self.language,
+                                "language": primary_speaker_language or self.language,  # Use detected language if available
                                 "room_id": self.room_id,
                                 "is_final": True
-                            })
+                            }
+                            # Add speaker information if available
+                            if speaker_labels:
+                                result["speaker_labels"] = speaker_labels
+                            if speaker_id is not None:
+                                result["speaker_id"] = speaker_id
+                                # Add detected language for this speaker
+                                result["detected_language"] = primary_speaker_language
+
+                            await self.on_final(result)
 
                     elif msg_type == "EndOfTranscript":
                         import time
