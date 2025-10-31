@@ -55,8 +55,23 @@ export default function MultiSpeakerRoomPage({ token, onLogout }) {
   const [vadStatus, setVadStatus] = useState("idle");
   const [userEmail, setUserEmail] = useState("");
   const [myLanguage, setMyLanguage] = useState(() => {
-    return isGuest ? guestLang : getUserLanguage() || null;
+    const stored = isGuest ? guestLang : getUserLanguage() || null;
+    return stored;
   });
+
+  // Sync language with localStorage on every mount and when dependencies change
+  // This ensures language changes made outside the room are reflected when returning
+  useEffect(() => {
+    if (isGuest) {
+      // Guests use session storage, no need to sync
+      return;
+    }
+
+    const currentStoredLanguage = getUserLanguage();
+    if (currentStoredLanguage && currentStoredLanguage !== myLanguage) {
+      setMyLanguage(currentStoredLanguage);
+    }
+  }, [roomId, isGuest, myLanguage]); // Re-check when myLanguage changes too
 
   // Push-to-talk state
   const [pushToTalk, setPushToTalk] = useState(() => {
@@ -168,6 +183,7 @@ export default function MultiSpeakerRoomPage({ token, onLogout }) {
     fetch(`/api/rooms/${roomId}`, { headers })
       .then(res => res.json())
       .then(data => {
+        console.log('[MultiSpeakerRoom] Room info:', { is_owner: data.is_owner, is_public: data.is_public });
         setIsRoomOwner(data.is_owner || false);
         setIsRoomAdmin(data.is_owner || false);
         setIsPublic(data.is_public || false);
@@ -230,79 +246,114 @@ export default function MultiSpeakerRoomPage({ token, onLogout }) {
 
   const messagesWithSpeakerChanges = detectSpeakerChanges();
 
+  // Check if we're in discovery phase (no speakers enrolled yet)
+  const isInDiscovery = multiSpeakerRoom.speakers.length === 0 && !multiSpeakerRoom.loadingSpeakers;
+
+  // Calculate language counts for header
+  const languageCounts = multiSpeakerRoom.speakers.reduce((counts, speaker) => {
+    counts[speaker.language] = (counts[speaker.language] || 0) + 1;
+    return counts;
+  }, {});
+
   return (
     <div className="h-screen w-screen flex flex-col bg-bg text-fg overflow-hidden">
-      {/* Header */}
-      <RoomHeader
-        roomId={roomId}
-        isConnected={presenceConnected}
-        onSettingsClick={() => setShowSettings(true)}
-      />
+      {/* Header - Hidden during discovery phase */}
+      {!isInDiscovery && (
+        <RoomHeader
+          roomId={roomId}
+          languageCounts={languageCounts}
+          languages={LANGUAGES}
+          vadStatus={vadStatus}
+          vadReady={status === 'recording'}
+          onBackClick={() => navigate('/rooms')}
+          onMenuClick={() => setShowSettings(true)}
+        />
+      )}
 
-      {/* Network Status Indicator */}
-      <NetworkStatusIndicator
-        isConnected={presenceConnected}
-        networkQuality={networkQuality}
-        networkRTT={networkRTT}
-      />
+      {/* Network Status Indicator - Hidden during discovery phase */}
+      {!isInDiscovery && (
+        <NetworkStatusIndicator
+          isConnected={presenceConnected}
+          networkQuality={networkQuality}
+          networkRTT={networkRTT}
+        />
+      )}
 
       {/* Speakers Info Bar */}
       {!multiSpeakerRoom.loadingSpeakers && multiSpeakerRoom.speakers.length > 0 && (
         <div className="bg-card border-b border-border px-4 py-2 flex items-center gap-2 overflow-x-auto">
           <span className="text-xs text-muted flex-shrink-0">Speakers:</span>
-          {multiSpeakerRoom.speakers.map(speaker => (
-            <div
-              key={speaker.speaker_id}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-bg-secondary text-xs flex-shrink-0"
-              style={{ borderLeft: `3px solid ${speaker.color}` }}
-            >
-              <span className="font-semibold">{speaker.display_name}</span>
-              <span className="text-muted">{speaker.language}</span>
-            </div>
-          ))}
+          {multiSpeakerRoom.speakers.map(speaker => {
+            const langInfo = LANGUAGES.find(l => l.code === speaker.language) || { flag: '🌐', name: speaker.language };
+            return (
+              <div
+                key={speaker.speaker_id}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-bg-secondary text-xs flex-shrink-0"
+                style={{ borderLeft: `3px solid ${speaker.color}` }}
+              >
+                <span className="font-semibold">{speaker.display_name}</span>
+                <span className="text-lg">{langInfo.flag}</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 flex flex-col gap-3">
-        {/* Loading state */}
-        {multiSpeakerRoom.loadingSpeakers && (
-          <div className="text-center text-muted py-8 px-4 m-auto text-sm">
-            Loading speakers...
+      {/* Messages Area - Hidden during discovery phase */}
+      {!isInDiscovery && (
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 flex flex-col gap-3">
+          {/* Loading state */}
+          {multiSpeakerRoom.loadingSpeakers && (
+            <div className="text-center text-muted py-8 px-4 m-auto text-sm">
+              Loading speakers...
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!multiSpeakerRoom.loadingSpeakers && messagesWithSpeakerChanges.length === 0 && (
+            <div className="text-center text-muted py-8 px-4 m-auto text-sm">
+              {t('room.pressToStart')}
+            </div>
+          )}
+
+          {/* Messages */}
+          {messagesWithSpeakerChanges.map((msg) => (
+            <MultiSpeakerMessage
+              key={msg.segId}
+              segId={msg.segId}
+              segment={msg.segment}
+              speakerInfo={msg.speakerInfo}
+              allTranslations={msg.translations}
+              isAdmin={isAdmin}
+              formatTime={formatTime}
+              onDebugClick={(segId) => {
+                setDebugSegmentId(segId);
+                setDebugModalOpen(true);
+              }}
+              isNewSpeaker={msg.isNewSpeaker}
+            />
+          ))}
+
+          {/* Scroll anchor */}
+          <div ref={chatEndRef} />
+        </div>
+      )}
+
+      {/* Placeholder during discovery */}
+      {isInDiscovery && (
+        <div className="flex-1 flex items-center justify-center bg-bg">
+          <div className="text-center text-muted px-4">
+            <p className="text-lg mb-2">🎤</p>
+            <p className="text-sm">
+              {t('discovery.setupInProgress', 'Setting up multi-speaker room...')}
+            </p>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Empty state */}
-        {!multiSpeakerRoom.loadingSpeakers && messagesWithSpeakerChanges.length === 0 && (
-          <div className="text-center text-muted py-8 px-4 m-auto text-sm">
-            {t('room.pressToStart')}
-          </div>
-        )}
-
-        {/* Messages */}
-        {messagesWithSpeakerChanges.map((msg) => (
-          <MultiSpeakerMessage
-            key={msg.segId}
-            segId={msg.segId}
-            segment={msg.segment}
-            speakerInfo={msg.speakerInfo}
-            allTranslations={msg.translations}
-            isAdmin={isAdmin}
-            formatTime={formatTime}
-            onDebugClick={(segId) => {
-              setDebugSegmentId(segId);
-              setDebugModalOpen(true);
-            }}
-            isNewSpeaker={msg.isNewSpeaker}
-          />
-        ))}
-
-        {/* Scroll anchor */}
-        <div ref={chatEndRef} />
-      </div>
-
-      {/* Controls */}
-      <RoomControls
+      {/* Controls - Hidden during discovery phase */}
+      {!isInDiscovery && (
+        <RoomControls
         pushToTalk={pushToTalk}
         onPushToTalkToggle={() => {
           const newValue = !pushToTalk;
@@ -319,6 +370,7 @@ export default function MultiSpeakerRoomPage({ token, onLogout }) {
           />
         }
       />
+      )}
 
       {/* Modals */}
       {showSettings && (
@@ -394,12 +446,16 @@ export default function MultiSpeakerRoomPage({ token, onLogout }) {
         <SpeakerDiscoveryModal
           isOpen={showSpeakerDiscovery}
           onClose={() => setShowSpeakerDiscovery(false)}
+          onCancel={() => navigate('/rooms')}
           roomCode={roomId}
           token={token}
           isGuest={isGuest}
           ws={presenceWs}
           onComplete={(speakers) => {
             console.log('[SpeakerDiscovery] Discovery complete:', speakers);
+            // Clear any messages accumulated during discovery
+            multiSpeakerRoom.clearMessages();
+            // Reload speakers from API
             multiSpeakerRoom.refetchSpeakers();
           }}
         />
@@ -415,7 +471,11 @@ export default function MultiSpeakerRoomPage({ token, onLogout }) {
 
       {showParticipantsPanel && (
         <ParticipantsPanel
-          participants={participants}
+          participants={multiSpeakerRoom.speakers.map(speaker => ({
+            email: speaker.display_name,
+            language: speaker.language,
+            is_speaking: false
+          }))}
           languages={LANGUAGES}
           isOpen={showParticipantsPanel}
           onToggle={() => setShowParticipantsPanel(false)}

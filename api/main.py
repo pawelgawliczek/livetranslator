@@ -121,6 +121,45 @@ async def trigger_room_language_aggregation(room_id: str) -> list[str]:
 
     return list(languages)
 
+async def get_user_language_from_db(user_id: str, user_email: str, fallback: str = "en") -> str:
+    """
+    Get user's current preferred language from database.
+    This ensures we always use the latest value, not stale JWT token data.
+
+    Args:
+        user_id: User ID from JWT token
+        user_email: User email from JWT token
+        fallback: Fallback language if user not found or is guest
+
+    Returns:
+        User's preferred language code
+    """
+    # Guests don't have database records, use fallback
+    if str(user_id).startswith('guest:'):
+        return fallback
+
+    # Query database for current preferred_lang
+    def query_db():
+        from .db import SessionLocal
+        from .models import User
+        from sqlalchemy import select
+
+        db = SessionLocal()
+        try:
+            user = db.scalar(select(User).where(User.email == user_email))
+            if user and user.preferred_lang:
+                return user.preferred_lang
+            return fallback
+        finally:
+            db.close()
+
+    # Run synchronous database query in thread pool
+    try:
+        return await asyncio.to_thread(query_db)
+    except Exception as e:
+        log.warning("failed_to_fetch_user_lang", error=str(e), fallback=fallback)
+        return fallback
+
 @app.websocket("/ws/rooms/{room_id}")
 async def ws_room(ws: WebSocket, room_id: str):
     qtok = getattr(ws, "query_params", {}).get("token") if hasattr(ws, "query_params") else None
@@ -131,7 +170,8 @@ async def ws_room(ws: WebSocket, room_id: str):
         claims = verify_token(token)
         user_id = claims.get("sub")
         user_email = claims.get("email", "unknown")
-        user_lang = claims.get("preferred_lang", "en")  # Get language from token
+        # IMPORTANT: Get language from database, not JWT token (token can be stale)
+        user_lang = await get_user_language_from_db(user_id, user_email, claims.get("preferred_lang", "en"))
         ws.state.user = user_id
         ws.state.email = user_email
         ws.state.preferred_lang = user_lang
@@ -144,10 +184,8 @@ async def ws_room(ws: WebSocket, room_id: str):
     await wsman.connect(room_id, ws)
 
     # IMPORTANT: Immediately register user's language in Redis for translation routing
-    print(f"[WebSocket] About to register language for user={user_id}, lang={user_lang}, room={room_id}")
     await register_user_language(room_id, str(user_id), user_lang)
     active_languages = await trigger_room_language_aggregation(room_id)
-    print(f"[WebSocket] Completed language registration")
 
     # Add presence tracking (debounced, packet-loss resistant)
     is_guest = str(user_id).startswith('guest:')
@@ -162,11 +200,13 @@ async def ws_room(ws: WebSocket, room_id: str):
         room_id, str(user_id), display_name, user_lang, is_guest
     )
     await wsman.broadcast(room_id, presence_event)
-    print(f"[WebSocket] Broadcasted presence event: {presence_event['type']}")
 
     try:
         while True:
             msg = await ws.receive_json()
+            msg_type = msg.get("type", "unknown")
+            if msg_type not in ["ping"]:  # Don't log pings
+                print(f"[WebSocket] 📨 Received message type={msg_type} from room={room_id}")
 
             # Handle ping-pong for network monitoring
             if msg.get("type") == "ping":
@@ -191,7 +231,6 @@ async def ws_room(ws: WebSocket, room_id: str):
                 )
                 if presence_event:
                     await wsman.broadcast(room_id, presence_event)
-                    print(f"[WebSocket] Broadcasted language change: {new_lang}")
                 continue
 
             # Handle speech_started event - allocate segment ID and broadcast to all room participants
@@ -225,6 +264,7 @@ async def ws_room(ws: WebSocket, room_id: str):
                 # Add speaker and their language to message before forwarding
                 msg["speaker"] = user_email
                 msg["speaker_lang"] = ws.state.preferred_lang
+                # Note: speaker_id will be added by Speechmatics diarization in multi-speaker rooms
                 await stt.push_raw(msg)
             else:
                 # forward control events
@@ -244,7 +284,6 @@ async def ws_room(ws: WebSocket, room_id: str):
         # Start grace period for presence (debounced - no immediate "left" notification)
         # Actual "user_left" broadcast happens after 15s grace period if user doesn't reconnect
         await presence_manager.user_disconnected(room_id, str(user_id))
-        print(f"[WebSocket] Started disconnect grace period for user={user_id}")
 
 class TReq(BaseModel):
     src: str
