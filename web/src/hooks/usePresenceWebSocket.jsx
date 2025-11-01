@@ -261,13 +261,32 @@ export default function usePresenceWebSocket({
 
   // Establish WebSocket connection
   useEffect(() => {
+    // Capture token at mount time (not reactive to token changes)
+    // RATIONALE: Backend verifies token once at connection (api/main.py:172)
+    //            WebSocket session persists via ws.state, independent of JWT
+    //            Language preferences fetched from database, not token
+    //            No mid-session re-authentication mechanism exists
+    //            Therefore, token changes should NOT trigger reconnection
     let authToken = token;
     if (isGuest) {
       authToken = sessionStorage.getItem('guest_token');
     }
 
+    // DEFENSIVE: Validate token exists
     if (!authToken) {
       console.log('[usePresenceWebSocket] No auth token, skipping connection');
+      return;
+    }
+
+    // DEFENSIVE: Basic JWT structure validation
+    try {
+      const parts = authToken.split('.');
+      if (parts.length !== 3) {
+        console.error('[usePresenceWebSocket] Invalid token format');
+        return;
+      }
+    } catch (e) {
+      console.error('[usePresenceWebSocket] Token validation failed:', e);
       return;
     }
 
@@ -344,16 +363,16 @@ export default function usePresenceWebSocket({
       console.error('[usePresenceWebSocket] Failed to create WebSocket:', e);
     }
 
-    // Cleanup: close WebSocket on unmount
+    // Cleanup: close WebSocket on unmount or dependency change
     return () => {
       stopNetworkMonitoring();
       if (wsRef.current) {
-        console.log('[usePresenceWebSocket] Closing on unmount');
+        console.log('[usePresenceWebSocket] Closing on unmount/dependency change');
         wsRef.current.close();
         wsRef.current = null;
       }
     };
-  }, [roomId, token, isGuest]);
+  }, [roomId, isGuest]);  // ← CRITICAL: token removed from dependencies
 
   // Send language updates when myLanguage changes
   useEffect(() => {

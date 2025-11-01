@@ -261,8 +261,9 @@ export default function useAudioStream({
       };
 
       // Add deviceId constraint if specified
+      // Use 'ideal' instead of 'exact' to allow fallback to default device
       if (deviceId) {
-        audioConstraints.deviceId = { exact: deviceId };
+        audioConstraints.deviceId = { ideal: deviceId };
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -406,6 +407,12 @@ export default function useAudioStream({
       // Safety timeout (30 seconds max)
       safetyTimeoutRef.current = setTimeout(() => {
         console.warn('[VAD] Safety timeout - stopping recording');
+
+        // ENHANCEMENT: Send finals before timeout cleanup
+        if (isSpeakingRef.current && ws?.readyState === WebSocket.OPEN) {
+          sendFinalTranscription();
+        }
+
         stop();
       }, MAX_RECORDING_TIME);
 
@@ -418,9 +425,25 @@ export default function useAudioStream({
 
   /**
    * Stop audio recording and cleanup
+   *
+   * CRITICAL FIX: Now sends audio_end signal to backend before cleanup
+   * This ensures final transcriptions are delivered when user manually
+   * stops recording or navigates away.
    */
   function stop() {
     console.log('[VAD] Stopping...');
+
+    // CRITICAL FIX: Send audio_end BEFORE cleanup
+    // This triggers backend finalization (api/routers/stt/router.py:629)
+    // Must check:
+    // 1. We're actually speaking (don't finalize empty session)
+    // 2. WebSocket is open (can't send to closed connection)
+    if (isSpeakingRef.current && ws?.readyState === WebSocket.OPEN) {
+      console.log('[VAD] Sending final transcription before cleanup');
+      sendFinalTranscription();
+    } else if (isSpeakingRef.current) {
+      console.warn('[VAD] Cannot send audio_end - WebSocket not ready:', ws?.readyState);
+    }
 
     // Clear safety timeout
     if (safetyTimeoutRef.current) {
