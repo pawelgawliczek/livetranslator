@@ -246,16 +246,21 @@ class TestFix1_SegmentIdInitialization:
 @pytest.mark.integration
 @pytest.mark.asyncio
 class TestFix2_EndOfUtteranceMethod:
-    """Test Fix 2: End of utterance method sends EndOfStream to Speechmatics"""
+    """Test Fix 2: End of utterance method keeps connection alive (no EndOfStream)"""
 
     async def test_end_of_utterance_sends_endofstream(self, mock_streaming_connection):
         """
-        Test that end_of_utterance() sends EndOfStream message to Speechmatics
+        Test that end_of_utterance() keeps connection alive without sending EndOfStream
+
+        NEW BEHAVIOR (connection keep-alive):
+        - end_of_utterance() is called to signal end of audio
+        - Connection stays alive (no EndOfStream sent)
+        - Ready for next segment
 
         Verifies:
-        - EndOfStream message is sent
-        - Message format is correct: {"message": "EndOfStream"}
-        - Only sent when connection is ready
+        - No EndOfStream message is sent (connection keep-alive)
+        - Connection remains ready for next segment
+        - Segment ID is tracked correctly
         """
         conn = mock_streaming_connection
 
@@ -265,14 +270,15 @@ class TestFix2_EndOfUtteranceMethod:
         # Call end_of_utterance (Fix 2)
         await conn.end_of_utterance()
 
-        # Verify EndOfStream was sent
+        # Verify NO EndOfStream was sent (connection keep-alive design)
         end_messages = conn.ws_client.get_end_of_stream_messages()
-        assert len(end_messages) == 1
+        assert len(end_messages) == 0
 
-        # Verify message format
-        assert end_messages[0] == {"message": "EndOfStream"}
+        # Verify connection is still ready
+        assert conn.is_connected
+        assert not conn.is_closing
 
-        print(f"✅ EndOfStream sent to Speechmatics for segment {conn.segment_id}")
+        print(f"✅ Connection kept alive for segment {conn.segment_id} (no EndOfStream)")
 
     async def test_end_of_utterance_logs_segment_id(self, mock_streaming_connection):
         """
@@ -346,11 +352,12 @@ class TestFix2_EndOfUtteranceMethod:
 
         Scenario:
         - User clicks Stop multiple times rapidly
-        - Each call should send EndOfStream
+        - Connection should stay alive (no EndOfStream)
 
         Verifies:
-        - Multiple EndOfStream messages are sent
+        - No EndOfStream messages sent (connection keep-alive)
         - No state corruption
+        - Connection remains ready
         """
         conn = mock_streaming_connection
 
@@ -358,11 +365,15 @@ class TestFix2_EndOfUtteranceMethod:
         for i in range(3):
             await conn.end_of_utterance()
 
-        # Verify all EndOfStream messages sent
+        # Verify NO EndOfStream messages sent (connection keep-alive)
         end_messages = conn.ws_client.get_end_of_stream_messages()
-        assert len(end_messages) == 3
+        assert len(end_messages) == 0
 
-        print("✅ Multiple end_of_utterance calls handled correctly")
+        # Connection should still be ready
+        assert conn.is_connected
+        assert not conn.is_closing
+
+        print("✅ Multiple end_of_utterance calls handled correctly (connection kept alive)")
 
 
 @pytest.mark.e2e
@@ -898,6 +909,7 @@ class TestEdgeCases:
         Verifies:
         - No race condition
         - Correct segment_id used
+        - Connection stays alive (no EndOfStream)
         """
         conn = mock_streaming_connection
 
@@ -914,11 +926,14 @@ class TestEdgeCases:
         # Should use segment 2's ID
         assert conn.segment_id == 2
 
-        # Should have sent 2 EndOfStream messages
+        # Should NOT have sent EndOfStream messages (connection keep-alive)
         end_messages = conn.ws_client.get_end_of_stream_messages()
-        assert len(end_messages) == 2
+        assert len(end_messages) == 0
 
-        print("✅ Stop button during segment transition handled correctly")
+        # Connection should still be ready
+        assert conn.is_connected
+
+        print("✅ Stop button during segment transition handled correctly (connection kept alive)")
 
     async def test_final_arrives_before_audio_end(self, mock_redis, mock_streaming_connection):
         """
@@ -931,7 +946,7 @@ class TestEdgeCases:
 
         Verifies:
         - No duplicate finals
-        - EndOfStream still sent
+        - No EndOfStream sent (connection keep-alive)
         - State remains consistent
         """
         room_id = "early-final-room"
@@ -957,9 +972,12 @@ class TestEdgeCases:
         # NOW user clicks Stop
         await conn.end_of_utterance()
 
-        # Verify EndOfStream still sent
+        # Verify NO EndOfStream sent (connection keep-alive)
         end_messages = conn.ws_client.get_end_of_stream_messages()
-        assert len(end_messages) == 1
+        assert len(end_messages) == 0
+
+        # Connection should still be ready
+        assert conn.is_connected
 
         # Verify only one final published (no duplicate)
         publishes = mock_redis._test_state['publishes']

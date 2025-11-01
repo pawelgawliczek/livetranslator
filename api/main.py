@@ -87,10 +87,10 @@ def metrics():
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 async def register_user_language(room_id: str, user_id: str, language: str):
-    """Register user's language with short TTL for immediate availability"""
+    """Register user's language for translation routing"""
     redis = wsman.redis
     key = f"room:{room_id}:active_lang:{user_id}"
-    await redis.setex(key, 15, language)  # 15s TTL (3x status poll interval)
+    await redis.setex(key, 3600, language)  # 1 hour TTL (expires when room inactive)
     log.info("registered_user_language", room=room_id, user=user_id, lang=language)
 
 async def trigger_room_language_aggregation(room_id: str) -> list[str]:
