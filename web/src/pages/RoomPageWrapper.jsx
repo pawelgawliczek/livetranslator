@@ -1,76 +1,10 @@
 /**
- * RoomPageWrapper - Routes to appropriate room view based on multi-speaker mode
- *
- * Checks if room has multi-speaker mode enabled (speakers_locked = true)
- * and routes to either MultiSpeakerRoomPage or regular RoomPage.
+ * RoomPageWrapper - Simple wrapper to pass props to RoomPage
  */
 
-import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React from 'react';
 import RoomPage from './RoomPage';
-import MultiSpeakerRoomPage from './MultiSpeakerRoomPage';
 
 export default function RoomPageWrapper({ token, onLogout }) {
-  const { roomId } = useParams();
-  const [isMultiSpeaker, setIsMultiSpeaker] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Check if room is in multi-speaker mode
-  useEffect(() => {
-    if (!roomId) return;
-
-    const isGuest = sessionStorage.getItem('is_guest') === 'true';
-    const headers = {};
-
-    if (!isGuest && token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    fetch(`/api/rooms/${roomId}`, { headers })
-      .then(res => res.json())
-      .then(data => {
-        // Check if this is a multi-speaker room
-        // Multi-speaker rooms have code starting with "MS-" OR have discovery mode enabled/locked
-        const isMultiSpeakerRoom =
-          roomId.startsWith('MS-') ||
-          data.discovery_mode === 'enabled' ||
-          data.discovery_mode === 'locked' ||
-          data.speakers_locked === true;
-
-        console.log('[RoomWrapper] Room mode check:', {
-          roomId,
-          discovery_mode: data.discovery_mode,
-          speakers_locked: data.speakers_locked,
-          isMultiSpeaker: isMultiSpeakerRoom
-        });
-
-        setIsMultiSpeaker(isMultiSpeakerRoom);
-        setIsLoading(false);
-      })
-      .catch(err => {
-        console.error('[RoomWrapper] Failed to check room mode:', err);
-        setIsLoading(false);
-        // Default based on room code prefix
-        setIsMultiSpeaker(roomId.startsWith('MS-'));
-      });
-  }, [roomId, token]);
-
-  // Show loading state while checking room mode
-  if (isLoading) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-bg text-fg">
-        <div className="text-center">
-          <div className="text-4xl mb-4">🎤</div>
-          <div className="text-lg">Loading room...</div>
-        </div>
-      </div>
-    );
-  }
-
-  // Route to appropriate room view
-  return isMultiSpeaker ? (
-    <MultiSpeakerRoomPage token={token} onLogout={onLogout} />
-  ) : (
-    <RoomPage token={token} onLogout={onLogout} />
-  );
+  return <RoomPage token={token} onLogout={onLogout} />;
 }

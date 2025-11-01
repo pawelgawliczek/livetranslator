@@ -13,7 +13,6 @@ import JoinPage from "./pages/JoinPage";
 import ProfilePage from "./pages/ProfilePage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AdminCostAnalyticsPage from "./pages/AdminCostAnalyticsPage";
-import MultiSpeakerRoomSetupPage from "./pages/MultiSpeakerRoomSetupPage";
 
 function App() {
   const [token, setToken] = React.useState(localStorage.getItem("token") || "");
@@ -41,10 +40,6 @@ function App() {
         <Route
           path="/rooms"
           element={token ? <RoomsPage token={token} onLogout={logout} onLogin={login} /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/multi-speaker/setup"
-          element={token ? <MultiSpeakerRoomSetupPage token={token} /> : <Navigate to="/login" />}
         />
         <Route
           path="/room/:roomId"

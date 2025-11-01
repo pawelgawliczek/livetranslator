@@ -107,17 +107,6 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
               {t('rooms.createRoom')}
             </h2>
 
-            {/* Multi-Speaker Room Button */}
-            <div className="mb-4">
-              <button
-                onClick={() => navigate('/multi-speaker/setup')}
-                className="w-full p-4 bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-lg font-semibold text-lg flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:-translate-y-0.5"
-              >
-                <span className="text-2xl">🎤</span>
-                {t('rooms.multiSpeakerRoom', 'Multi-Speaker Room')} ({t('rooms.singleDevice', 'Single Device')})
-              </button>
-            </div>
-
             {/* Quick Room Button */}
             <div>
               <button
@@ -159,18 +148,6 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
                         {room.code}
                       </div>
                       <div className="flex gap-2 items-center flex-wrap">
-                        {/* Room Type Badge */}
-                        {room.code.startsWith('MS-') ? (
-                          <TagPill variant="purple">
-                            <span>🎤</span>
-                            <span>{t('rooms.multiSpeaker', 'Multi-Speaker')}</span>
-                          </TagPill>
-                        ) : (
-                          <TagPill variant="blue">
-                            <span>⚡</span>
-                            <span>{t('rooms.standard', 'Standard')}</span>
-                          </TagPill>
-                        )}
                         {room.is_public && (
                           <TagPill variant="success">
                             <span>🌍</span>

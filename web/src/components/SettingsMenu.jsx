@@ -12,7 +12,6 @@ export default function SettingsMenu({
   onShowInvite,
   onShowCosts,
   onShowSound,
-  onShowSpeakerDiscovery,
   onLogout,
   canChangeLanguage = true,
   persistenceEnabled = false,
@@ -45,8 +44,7 @@ export default function SettingsMenu({
     isGuest,
     isRoomAdmin,
     isPublic,
-    persistenceEnabled,
-    hasOnShowSpeakerDiscovery: !!onShowSpeakerDiscovery
+    persistenceEnabled
   });
 
   // Don't allow closing if no language is selected
@@ -89,12 +87,6 @@ export default function SettingsMenu({
       label: t('settings.soundSettings'),
       onClick: onShowSound
     },
-    // Show speaker discovery for multi-speaker rooms (always available on single device)
-    ...(onShowSpeakerDiscovery ? [{
-      icon: "🎤",
-      label: t('settings.speakerDiscovery', 'Configure Speakers'),
-      onClick: onShowSpeakerDiscovery
-    }] : []),
     {
       icon: isDarkMode ? "🌙" : "☀️",
       label: isDarkMode ? "Dark Mode" : "Light Mode",
