@@ -930,3 +930,162 @@ async def update_discovery_mode(
         discovery_mode=room.discovery_mode,
         speakers_locked=room.speakers_locked
     )
+
+
+# ===== TTS (Text-to-Speech) Endpoints =====
+
+class TTSEnableRequest(BaseModel):
+    """Request to enable/disable TTS for a room."""
+    enabled: bool
+
+
+class TTSVoiceSettings(BaseModel):
+    """Room TTS voice settings."""
+    voices: dict  # {"en": "en-US-Wavenet-D", "pl": "pl-PL-Wavenet-A", ...}
+
+
+class TTSSettingsResponse(BaseModel):
+    """Response with TTS settings."""
+    tts_enabled: bool
+    tts_voice_overrides: dict
+
+
+@router.post("/{room_code}/tts/enable")
+async def enable_room_tts(
+    room_code: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Enable TTS for a room.
+
+    Args:
+        room_code: The room code
+        db: Database session
+        user: Authenticated user (must be room owner)
+
+    Returns:
+        dict: {"enabled": true}
+
+    Raises:
+        HTTPException: 404 if room not found, 403 if not owner
+    """
+    user_id = int(user.get("sub"))
+
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    if room.owner_id != user_id:
+        raise HTTPException(status_code=403, detail="Only room owner can modify TTS settings")
+
+    room.tts_enabled = True
+    db.commit()
+
+    return {"enabled": True}
+
+
+@router.post("/{room_code}/tts/disable")
+async def disable_room_tts(
+    room_code: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Disable TTS for a room.
+
+    Args:
+        room_code: The room code
+        db: Database session
+        user: Authenticated user (must be room owner)
+
+    Returns:
+        dict: {"enabled": false}
+
+    Raises:
+        HTTPException: 404 if room not found, 403 if not owner
+    """
+    user_id = int(user.get("sub"))
+
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    if room.owner_id != user_id:
+        raise HTTPException(status_code=403, detail="Only room owner can modify TTS settings")
+
+    room.tts_enabled = False
+    db.commit()
+
+    return {"enabled": False}
+
+
+@router.get("/{room_code}/tts/settings", response_model=TTSSettingsResponse)
+async def get_room_tts_settings(
+    room_code: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Get room TTS settings.
+
+    Args:
+        room_code: The room code
+        db: Database session
+        user: Authenticated user
+
+    Returns:
+        TTSSettingsResponse with TTS enabled status and voice overrides
+
+    Raises:
+        HTTPException: 404 if room not found
+    """
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    return TTSSettingsResponse(
+        tts_enabled=room.tts_enabled if hasattr(room, 'tts_enabled') else True,
+        tts_voice_overrides=room.tts_voice_overrides if hasattr(room, 'tts_voice_overrides') else {}
+    )
+
+
+@router.put("/{room_code}/tts/settings", response_model=TTSSettingsResponse)
+async def update_room_tts_settings(
+    room_code: str,
+    settings: TTSVoiceSettings,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Update room TTS voice settings.
+
+    Args:
+        room_code: The room code
+        settings: Voice settings to update
+        db: Database session
+        user: Authenticated user (must be room owner)
+
+    Returns:
+        TTSSettingsResponse with updated settings
+
+    Raises:
+        HTTPException: 404 if room not found, 403 if not owner
+    """
+    user_id = int(user.get("sub"))
+
+    room = db.query(Room).filter(Room.code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    if room.owner_id != user_id:
+        raise HTTPException(status_code=403, detail="Only room owner can modify TTS settings")
+
+    room.tts_voice_overrides = settings.voices
+    db.commit()
+    db.refresh(room)
+
+    return TTSSettingsResponse(
+        tts_enabled=room.tts_enabled if hasattr(room, 'tts_enabled') else True,
+        tts_voice_overrides=room.tts_voice_overrides if hasattr(room, 'tts_voice_overrides') else {}
+    )

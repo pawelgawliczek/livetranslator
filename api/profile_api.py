@@ -139,3 +139,86 @@ def delete_account(user: dict = Depends(get_current_user), db: Session = Depends
     db.commit()
 
     return {"message": "Account deleted successfully"}
+
+
+# ===== TTS Settings Endpoints =====
+
+class TTSSettingsOut(BaseModel):
+    tts_enabled: bool
+    tts_voice_preferences: dict
+    tts_volume: float
+    tts_rate: float
+    tts_pitch: float
+
+
+class TTSSettingsUpdateIn(BaseModel):
+    tts_enabled: Optional[bool] = None
+    tts_voice_preferences: Optional[dict] = None
+    tts_volume: Optional[float] = None
+    tts_rate: Optional[float] = None
+    tts_pitch: Optional[float] = None
+
+
+@router.get("/tts", response_model=TTSSettingsOut)
+def get_user_tts_settings(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get user TTS settings"""
+    user_email = user.get("email")
+    user = db.scalar(select(User).where(User.email == user_email))
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    return TTSSettingsOut(
+        tts_enabled=user.tts_enabled if hasattr(user, 'tts_enabled') else True,
+        tts_voice_preferences=user.tts_voice_preferences if hasattr(user, 'tts_voice_preferences') else {},
+        tts_volume=user.tts_volume if hasattr(user, 'tts_volume') else 1.0,
+        tts_rate=user.tts_rate if hasattr(user, 'tts_rate') else 1.0,
+        tts_pitch=user.tts_pitch if hasattr(user, 'tts_pitch') else 0.0
+    )
+
+
+@router.put("/tts", response_model=TTSSettingsOut)
+def update_user_tts_settings(
+    update: TTSSettingsUpdateIn,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user TTS settings"""
+    user_email = user.get("email")
+    user = db.scalar(select(User).where(User.email == user_email))
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    if update.tts_enabled is not None:
+        user.tts_enabled = update.tts_enabled
+
+    if update.tts_voice_preferences is not None:
+        user.tts_voice_preferences = update.tts_voice_preferences
+
+    if update.tts_volume is not None:
+        # Validate range
+        if not 0.0 <= update.tts_volume <= 2.0:
+            raise HTTPException(400, "TTS volume must be between 0.0 and 2.0")
+        user.tts_volume = update.tts_volume
+
+    if update.tts_rate is not None:
+        # Validate range
+        if not 0.25 <= update.tts_rate <= 4.0:
+            raise HTTPException(400, "TTS rate must be between 0.25 and 4.0")
+        user.tts_rate = update.tts_rate
+
+    if update.tts_pitch is not None:
+        # Validate range
+        if not -20.0 <= update.tts_pitch <= 20.0:
+            raise HTTPException(400, "TTS pitch must be between -20.0 and 20.0")
+        user.tts_pitch = update.tts_pitch
+
+    db.commit()
+    db.refresh(user)
+
+    return TTSSettingsOut(
+        tts_enabled=user.tts_enabled if hasattr(user, 'tts_enabled') else True,
+        tts_voice_preferences=user.tts_voice_preferences if hasattr(user, 'tts_voice_preferences') else {},
+        tts_volume=user.tts_volume if hasattr(user, 'tts_volume') else 1.0,
+        tts_rate=user.tts_rate if hasattr(user, 'tts_rate') else 1.0,
+        tts_pitch=user.tts_pitch if hasattr(user, 'tts_pitch') else 0.0
+    )

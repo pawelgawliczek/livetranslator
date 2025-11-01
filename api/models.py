@@ -1,7 +1,7 @@
 from decimal import Decimal
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import BigInteger, func, Numeric, String, Integer, Text, DateTime, Boolean, ForeignKey, Index, Float
+from sqlalchemy import BigInteger, func, Numeric, String, Integer, Text, DateTime, Boolean, ForeignKey, Index, Float, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .db import Base
 
@@ -20,6 +20,13 @@ class User(Base):
     audio_threshold: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=0.02)
     preferred_mic_device_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
+    # TTS settings
+    tts_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    tts_voice_preferences: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    tts_volume: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
+    tts_rate: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
+    tts_pitch: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+
 class Room(Base):
     __tablename__ = "rooms"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -37,6 +44,10 @@ class Room(Base):
     # Multi-speaker diarization fields
     discovery_mode: Mapped[str] = mapped_column(String(20), default="disabled", nullable=False)  # disabled, enabled, locked
     speakers_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # TTS settings
+    tts_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    tts_voice_overrides: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
     owner = relationship("User")
     speakers = relationship("RoomSpeaker", back_populates="room", cascade="all, delete-orphan")

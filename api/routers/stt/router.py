@@ -309,7 +309,8 @@ async def router_loop():
                             # Speechmatics sends the FULL accumulated transcript in each partial
                             # So we just use it directly
                             session["accumulated_text"] = text
-                            session["detected_lang"] = result.get("language", language_hint)
+                            # Always use user-selected language (ignore Speechmatics detection)
+                            session["detected_lang"] = language_hint
                             session["chunk_count"] += 1  # Increment revision for each partial update
 
                             # Publish partial event
@@ -438,8 +439,8 @@ async def router_loop():
                         )
 
                         new_text = result["text"].strip()
-                        detected_lang = result.get("language", "auto")
-                        session["detected_lang"] = detected_lang
+                        # Always use user-selected language (ignore provider detection)
+                        session["detected_lang"] = language_hint
 
                         # Strip ending punctuation from partials
                         ending_punctuation = ['.', '?', '!', '。', '？', '！']
@@ -837,7 +838,8 @@ async def router_loop():
                             refine_latency_ms = int((time.time() - refine_start_time) * 1000)
 
                             final_text = result["text"].strip()
-                            detected_lang = result.get("language", session.get("detected_lang", "auto"))
+                            # Always use user-selected language (ignore provider detection)
+                            detected_lang = language_hint
 
                             # Send update if different
                             if final_text != instant_text:

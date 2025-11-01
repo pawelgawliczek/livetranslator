@@ -15,6 +15,7 @@ import SettingsMenu from "../components/SettingsMenu";
 import SoundSettingsModal from "../components/SoundSettingsModal";
 import ParticipantsPanel from "../components/ParticipantsPanel";
 import MessageDebugModal from "../components/MessageDebugModal";
+import { TTSControls } from "../components/TTSControls";
 
 // Extracted Room Components
 import RoomHeader from "../components/room/RoomHeader";
@@ -35,6 +36,7 @@ import AdminLeftToast from "../components/AdminLeftToast";
 import usePresenceWebSocket from "../hooks/usePresenceWebSocket";
 import useRoomWebSocket from "../hooks/useRoomWebSocket";
 import useAudioStream from "../hooks/useAudioStream";
+import { useTTS } from "../hooks/useTTS";
 
 // Utils
 import { getUserLanguage, setUserLanguage, syncLanguageWithProfile } from "../utils/languageSync";
@@ -154,6 +156,7 @@ export default function RoomPage({ token, onLogout }) {
   const [showInvite, setShowInvite] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showSoundSettings, setShowSoundSettings] = useState(false);
+  const [showTTSSettings, setShowTTSSettings] = useState(false);
   const [showAdminLeaveWarning, setShowAdminLeaveWarning] = useState(false);
   const [showExpirationModal, setShowExpirationModal] = useState(false);
   const [showParticipantsPanel, setShowParticipantsPanel] = useState(false);
@@ -170,6 +173,11 @@ export default function RoomPage({ token, onLogout }) {
   const [audioLevel, setAudioLevel] = useState(0);
   const [audioThreshold, setAudioThreshold] = useState(0.02);
   const [selectedMicDeviceId, setSelectedMicDeviceId] = useState(null);
+
+  // TTS state
+  const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [ttsVoices, setTtsVoices] = useState({});
+  const [userTTSSettings, setUserTTSSettings] = useState({ volume: 0.8 });
 
   // Refs
   const chatEndRef = useRef(null);
@@ -218,6 +226,12 @@ export default function RoomPage({ token, onLogout }) {
     onVadStatusChange: setVadStatus,
     threshold: audioThreshold,
     deviceId: selectedMicDeviceId
+  });
+
+  // TTS Hook (handles text-to-speech audio playback)
+  const { playAudio, isPlaying } = useTTS({
+    enabled: ttsEnabled,
+    volume: userTTSSettings.volume || 0.8
   });
 
   // ============================================================================
@@ -308,6 +322,76 @@ export default function RoomPage({ token, onLogout }) {
       })
       .catch(e => console.error('[Profile] Failed to load:', e));
   }, [token, isGuest, guestName]);
+
+  // ============================================================================
+  // TTS Settings Loading
+  // ============================================================================
+
+  useEffect(() => {
+    if (!roomId) return;
+
+    if (isGuest) {
+      // Guest: load from localStorage
+      const storedEnabled = localStorage.getItem(`tts_enabled_${roomId}`);
+      const storedVoices = localStorage.getItem(`tts_voices_${roomId}`);
+
+      if (storedEnabled !== null) {
+        setTtsEnabled(JSON.parse(storedEnabled));
+      }
+      if (storedVoices) {
+        setTtsVoices(JSON.parse(storedVoices));
+      }
+      console.log('[TTS] Guest settings loaded from localStorage');
+    } else if (token) {
+      // Logged-in user: load from API
+      fetch(`/api/rooms/${encodeURIComponent(roomId)}/tts/settings`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          setTtsEnabled(data.tts_enabled || false);
+          setTtsVoices(data.tts_voice_overrides || {});
+          console.log('[TTS] Room settings loaded:', data);
+        })
+        .catch(err => console.error('[TTS] Failed to load room settings:', err));
+
+      // Load user TTS preferences
+      fetch('/api/profile/tts', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          setUserTTSSettings(data);
+          console.log('[TTS] User settings loaded:', data);
+        })
+        .catch(err => console.error('[TTS] Failed to load user settings:', err));
+    }
+  }, [roomId, token, isGuest]);
+
+  // ============================================================================
+  // TTS Audio Event Handler
+  // ============================================================================
+
+  useEffect(() => {
+    if (!presenceWs) return;
+
+    const handleMessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        // Handle TTS audio events
+        if (data.type === 'tts_audio') {
+          console.log('[TTS] Received audio for segment', data.segment_id);
+          playAudio(data.audio_base64, data.format);
+        }
+      } catch (error) {
+        console.error('[TTS] Failed to parse WebSocket message:', error);
+      }
+    };
+
+    presenceWs.addEventListener('message', handleMessage);
+    return () => presenceWs.removeEventListener('message', handleMessage);
+  }, [presenceWs, playAudio]);
 
   // ============================================================================
   // Room Status Polling
@@ -728,6 +812,68 @@ export default function RoomPage({ token, onLogout }) {
   };
 
   // ============================================================================
+  // TTS Handlers
+  // ============================================================================
+
+  const handleTTSToggle = async (enabled) => {
+    try {
+      if (isGuest) {
+        // Guest: save to localStorage
+        localStorage.setItem(`tts_enabled_${roomId}`, JSON.stringify(enabled));
+        setTtsEnabled(enabled);
+        console.log(`[TTS] ${enabled ? 'Enabled' : 'Disabled'} for room (guest)`);
+      } else {
+        // Logged-in user: save to API
+        const endpoint = enabled ? 'enable' : 'disable';
+        const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/tts/${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          setTtsEnabled(enabled);
+          console.log(`[TTS] ${enabled ? 'Enabled' : 'Disabled'} for room`);
+        }
+      }
+    } catch (error) {
+      console.error('[TTS] Toggle failed:', error);
+    }
+  };
+
+  const handleVoiceChange = async (lang, voice) => {
+    try {
+      const newVoices = { ...ttsVoices, [lang]: voice };
+
+      if (isGuest) {
+        // Guest: save to localStorage
+        localStorage.setItem(`tts_voices_${roomId}`, JSON.stringify(newVoices));
+        setTtsVoices(newVoices);
+        console.log('[TTS] Voice updated (guest):', lang, voice);
+      } else {
+        // Logged-in user: save to API
+        const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/tts/settings`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ voice_overrides: newVoices })
+        });
+
+        if (response.ok) {
+          setTtsVoices(newVoices);
+          console.log('[TTS] Voice updated:', lang, voice);
+        }
+      }
+    } catch (error) {
+      console.error('[TTS] Voice change failed:', error);
+    }
+  };
+
+  // ============================================================================
   // Auto-scroll
   // ============================================================================
 
@@ -871,6 +1017,10 @@ export default function RoomPage({ token, onLogout }) {
             setShowSettings(false);
             setShowSoundSettings(true);
           }}
+          onShowTTS={() => {
+            setShowSettings(false);
+            setShowTTSSettings(true);
+          }}
           onLogout={onLogout}
           canChangeLanguage={status === 'idle'}
           persistenceEnabled={persistenceEnabled}
@@ -913,6 +1063,40 @@ export default function RoomPage({ token, onLogout }) {
             }
           }}
         />
+      )}
+
+      {showTTSSettings && (
+        <div
+          className="fixed inset-0 bg-black/85 z-[1000] flex items-center justify-center p-4"
+          onClick={() => setShowTTSSettings(false)}
+        >
+          <div
+            className="bg-card border border-border rounded-xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-fg">{t('tts.settings')}</h2>
+              <button
+                onClick={() => setShowTTSSettings(false)}
+                className="text-muted hover:text-fg transition-colors text-2xl w-8 h-8 flex items-center justify-center"
+              >
+                ×
+              </button>
+            </div>
+            <TTSControls
+              roomCode={roomId}
+              enabled={ttsEnabled}
+              voices={ttsVoices}
+              onToggle={handleTTSToggle}
+              onVoiceChange={handleVoiceChange}
+            />
+            {isPlaying && (
+              <div className="mt-4 text-accent text-sm text-center">
+                🔊 {t('tts.playing')}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {showSoundSettings && (

@@ -255,6 +255,39 @@ services:
       mt_worker: { condition: service_started }
     networks: [stack_appnet]
 
+  tts_router:
+    build:
+      context: ./api/routers/tts
+      dockerfile: Dockerfile
+    restart: always
+    logging: *default-logging
+    environment:
+      PYTHONUNBUFFERED: "1"
+      REDIS_URL: redis://redis:6379/5
+      POSTGRES_DSN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USER: ${POSTGRES_USER:-lt_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-livetranslator}
+      MT_EVENTS_CHANNEL: mt_events
+      TTS_AUDIO_CHANNEL: tts_audio
+      COST_EVENTS_CHANNEL: cost_events
+      # Google Cloud TTS credentials (same as STT)
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us}
+      # Other TTS providers (optional)
+      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
+      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-eastus}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - /opt/stack/secrets:/opt/stack/secrets:ro
+    depends_on:
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    networks: [stack_appnet]
+
   cost_tracker:
     build:
       context: ./api/services

@@ -12,6 +12,7 @@ export default function SettingsMenu({
   onShowInvite,
   onShowCosts,
   onShowSound,
+  onShowTTS,
   onLogout,
   canChangeLanguage = true,
   persistenceEnabled = false,
@@ -38,14 +39,6 @@ export default function SettingsMenu({
   };
 
   if (!isOpen) return null;
-
-  // Debug logging
-  console.log('[SettingsMenu] Props:', {
-    isGuest,
-    isRoomAdmin,
-    isPublic,
-    persistenceEnabled
-  });
 
   // Don't allow closing if no language is selected
   const canClose = !!myLanguage;
@@ -86,6 +79,11 @@ export default function SettingsMenu({
       icon: "🎙️",
       label: t('settings.soundSettings'),
       onClick: onShowSound
+    },
+    {
+      icon: "🔊",
+      label: t('tts.settings'),
+      onClick: onShowTTS
     },
     {
       icon: isDarkMode ? "🌙" : "☀️",
