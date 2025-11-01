@@ -34,7 +34,8 @@ export default function useRoomWebSocket({ myLanguage, userEmail }) {
 
   // Keep myLanguageRef in sync
   useEffect(() => {
-    myLanguageRef.current = myLanguage;
+    // Normalize language code (e.g., "en-US" -> "en") for translation matching
+    myLanguageRef.current = myLanguage ? myLanguage.split('-')[0] : myLanguage;
     // Trigger re-render when language changes (to update translation filtering)
     scheduleRender();
   }, [myLanguage]);
