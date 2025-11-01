@@ -111,8 +111,11 @@ class StreamingConnection:
 
     async def send_audio(self, audio_b64: str):
         """Send audio chunk to the streaming connection."""
+        # Ensure connection is alive before sending audio
+        await self.ensure_connected()
+
         if not self.is_connected or self.is_closing:
-            print(f"[StreamingConnection] Cannot send audio - connection not ready")
+            print(f"[StreamingConnection] Cannot send audio - connection not ready after reconnect attempt")
             return
 
         self.last_activity = datetime.now()
@@ -132,6 +135,45 @@ class StreamingConnection:
             await self.on_error({"error": str(e), "room_id": self.room_id, "provider": self.provider})
             raise
 
+    def is_alive(self) -> bool:
+        """Check if the WebSocket connection is still alive."""
+        if not self.is_connected or self.is_closing:
+            return False
+
+        if self.provider == "speechmatics" and self.ws_client:
+            # Check WebSocket state: OPEN = 1
+            return self.ws_client.state.value == 1
+        elif self.provider == "google_v2" and self.google_session:
+            # Google session is alive if it exists
+            return True
+        # Add other providers as needed
+        return self.is_connected
+
+    async def ensure_connected(self):
+        """Ensure connection is alive, reconnect if needed."""
+        if self.is_alive():
+            return True
+
+        import time
+        timestamp = time.time()
+
+        if not self.is_connected:
+            print(f"[StreamingConnection] ⚠️  [{timestamp:.3f}] Connection not established, connecting...")
+            await self.connect()
+            return True
+
+        # Connection was established but is now dead - reconnect
+        print(f"[StreamingConnection] 🔄 [{timestamp:.3f}] Connection dead (state={getattr(self.ws_client, 'state', 'unknown')}), reconnecting...")
+
+        # Mark as not connected to allow reconnection
+        self.is_connected = False
+        self.ws_client = None
+
+        # Reconnect
+        await self.connect()
+        print(f"[StreamingConnection] ✓ [{timestamp:.3f}] Reconnected successfully")
+        return True
+
     async def end_of_utterance(self):
         """Signal end of utterance to provider without closing connection."""
         if not self.is_connected or self.is_closing:
@@ -140,21 +182,19 @@ class StreamingConnection:
 
         import time
         timestamp = time.time()
-        print(f"[StreamingConnection] 🏁 [{timestamp:.3f}] Signaling end of utterance for {self.provider}")
+        print(f"[StreamingConnection] 🏁 [{timestamp:.3f}] End of utterance for {self.provider} segment {self.segment_id}")
 
-        try:
-            if self.provider == "speechmatics" and self.ws_client:
-                # Send EndOfStream to trigger final transcription
-                import json
-                end_message = {"message": "EndOfStream"}
-                await self.ws_client.send(json.dumps(end_message))
-                print(f"[StreamingConnection] ✓ [{timestamp:.3f}] Sent EndOfStream to Speechmatics for segment {self.segment_id}")
-            elif self.provider == "google_v2" and self.google_session:
-                # Google doesn't need explicit end signal - finals come automatically
-                print(f"[StreamingConnection] ℹ️  [{timestamp:.3f}] Google doesn't require EndOfStream")
-            # Add other providers as needed
-        except Exception as e:
-            print(f"[StreamingConnection] ❌ [{timestamp:.3f}] Failed to signal end of utterance: {e}")
+        # NOTE: For Speechmatics, we do NOT send EndOfStream here!
+        # EndOfStream closes the entire connection. For utterance boundaries,
+        # we just stop sending audio and let the provider finalize naturally.
+        # The connection stays alive for the next segment.
+
+        if self.provider == "speechmatics":
+            print(f"[StreamingConnection] ✓ [{timestamp:.3f}] Speechmatics: Keeping connection alive for next segment")
+        elif self.provider == "google_v2" and self.google_session:
+            # Google doesn't need explicit end signal - finals come automatically
+            print(f"[StreamingConnection] ℹ️  [{timestamp:.3f}] Google doesn't require EndOfStream")
+        # Add other providers as needed
 
     def reset_for_new_segment(self, segment_id: int):
         """Reset accumulated state for a new audio segment."""
