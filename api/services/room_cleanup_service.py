@@ -67,6 +67,15 @@ async def archive_room(session, room_id: int, room_code: str, owner_id: int, cre
                        recording: bool, is_public: bool, requires_login: bool, max_participants: int):
     """Archive room metadata before deletion"""
     try:
+        # Check if room is already archived (handles retry case)
+        check_result = await session.execute(
+            text("SELECT id FROM room_archive WHERE room_code = :room_code"),
+            {"room_code": room_code}
+        )
+        if check_result.scalar() is not None:
+            print(f"[Room Cleanup]   ℹ Room already archived, skipping to deletion")
+            return True
+
         # Get aggregated metrics
         # 1. Count participants
         participants_result = await session.execute(
@@ -239,36 +248,49 @@ async def cleanup_abandoned_rooms(session=None):
             if abandoned_rooms:
                 print(f"[Room Cleanup] Found {len(abandoned_rooms)} abandoned rooms to archive and delete")
 
+                deleted_count = 0
+                skipped_count = 0
+
                 for room in abandoned_rooms:
                     elapsed = datetime.utcnow() - room.admin_left_at
                     elapsed_minutes = int(elapsed.total_seconds() / 60)
 
                     print(f"[Room Cleanup] Processing room {room.code} (admin absent for {elapsed_minutes} minutes)")
 
-                    # Archive room data before deletion
-                    archived = await archive_room(
-                        sess,
-                        room.id,
-                        room.code,
-                        room.owner_id,
-                        room.created_at,
-                        room.recording,
-                        room.is_public,
-                        room.requires_login,
-                        room.max_participants
-                    )
+                    try:
+                        # Archive room data before deletion
+                        archived = await archive_room(
+                            sess,
+                            room.id,
+                            room.code,
+                            room.owner_id,
+                            room.created_at,
+                            room.recording,
+                            room.is_public,
+                            room.requires_login,
+                            room.max_participants
+                        )
 
-                    if archived:
-                        # Delete the room (CASCADE will handle related records)
-                        from sqlalchemy import delete
-                        delete_stmt = delete(rooms_table).where(rooms_table.c.id == room.id)
-                        await sess.execute(delete_stmt)
-                        print(f"[Room Cleanup]   ✓ Deleted room {room.code}")
-                    else:
-                        print(f"[Room Cleanup]   ⚠ Skipped deletion due to archive failure")
+                        if archived:
+                            # Delete the room (CASCADE will handle related records)
+                            from sqlalchemy import delete
+                            delete_stmt = delete(rooms_table).where(rooms_table.c.id == room.id)
+                            await sess.execute(delete_stmt)
+                            await sess.commit()  # Commit each room individually
+                            print(f"[Room Cleanup]   ✓ Deleted room {room.code}")
+                            deleted_count += 1
+                        else:
+                            # Archive failed - rollback and continue
+                            await sess.rollback()
+                            print(f"[Room Cleanup]   ⚠ Skipping room {room.code} - archive failed")
+                            skipped_count += 1
+                    except Exception as e:
+                        # Rollback on any error and continue to next room
+                        await sess.rollback()
+                        print(f"[Room Cleanup]   ⚠ Error processing room {room.code}: {e}")
+                        skipped_count += 1
 
-                await sess.commit()
-                print(f"[Room Cleanup] ✓ Completed cleanup of {len(abandoned_rooms)} rooms")
+                print(f"[Room Cleanup] ✓ Completed cleanup: {deleted_count} deleted, {skipped_count} skipped")
             else:
                 print(f"[Room Cleanup] No abandoned rooms found")
 
