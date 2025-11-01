@@ -41,7 +41,13 @@ export default function SettingsMenu({
   if (!isOpen) return null;
 
   // Debug logging
-  console.log('[SettingsMenu] Props:', { isGuest, isRoomAdmin, isPublic, persistenceEnabled });
+  console.log('[SettingsMenu] Props:', {
+    isGuest,
+    isRoomAdmin,
+    isPublic,
+    persistenceEnabled,
+    hasOnShowSpeakerDiscovery: !!onShowSpeakerDiscovery
+  });
 
   // Don't allow closing if no language is selected
   const canClose = !!myLanguage;
@@ -83,8 +89,8 @@ export default function SettingsMenu({
       label: t('settings.soundSettings'),
       onClick: onShowSound
     },
-    // Only show speaker discovery for room admins
-    ...(isRoomAdmin && onShowSpeakerDiscovery ? [{
+    // Show speaker discovery for multi-speaker rooms (always available on single device)
+    ...(onShowSpeakerDiscovery ? [{
       icon: "🎤",
       label: t('settings.speakerDiscovery', 'Configure Speakers'),
       onClick: onShowSpeakerDiscovery

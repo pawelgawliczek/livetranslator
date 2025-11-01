@@ -117,7 +117,11 @@ async def track_loop():
             mode = data.get("mode") or provider  # For backward compatibility
             units = data.get("units", 0)
             unit_type = data.get("unit_type", "seconds")
-            segment_id = data.get("segment_id")  # NEW: Extract segment_id for per-message tracking
+            segment_id = data.get("segment_id")  # Extract segment_id for per-message tracking
+
+            # Multi-speaker fields
+            speaker_id = data.get("speaker_id")  # Source speaker ID (NULL for single-speaker)
+            target_speaker_id = data.get("target_speaker_id")  # Target speaker ID (NULL for single-speaker)
 
             # Validate required fields
             if not room_id:
@@ -131,19 +135,25 @@ async def track_loop():
             # Calculate cost
             cost = calculate_cost(pipeline, provider, float(units), unit_type, pricing)
 
-            # Store in database with segment_id
+            # Store in database with segment_id and multi-speaker fields
             async with db_pool.acquire() as conn:
                 await conn.execute(
                     """
-                    INSERT INTO room_costs (room_id, pipeline, mode, provider, units, unit_type, amount_usd, segment_id, ts)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+                    INSERT INTO room_costs (room_id, pipeline, mode, provider, units, unit_type, amount_usd, segment_id, speaker_id, target_speaker_id, ts)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
                     """,
-                    room_id, pipeline, mode, provider, units, unit_type, float(cost), segment_id
+                    room_id, pipeline, mode, provider, units, unit_type, float(cost), segment_id, speaker_id, target_speaker_id
                 )
 
-            # Log success with segment_id
+            # Log success with segment_id and speaker info
             seg_info = f" seg={segment_id}" if segment_id else ""
-            print(f"[Cost Tracker] ✓ {room_id}: {pipeline}/{provider} {units}{unit_type} = ${cost:.6f}{seg_info}")
+            speaker_info = ""
+            if speaker_id is not None and target_speaker_id is not None:
+                speaker_info = f" (spk{speaker_id}→spk{target_speaker_id})"
+            elif speaker_id is not None:
+                speaker_info = f" (spk{speaker_id})"
+
+            print(f"[Cost Tracker] ✓ {room_id}: {pipeline}/{provider} {units}{unit_type} = ${cost:.6f}{seg_info}{speaker_info}")
 
         except Exception as e:
             print(f"[Cost Tracker] ✗ Error: {e}")

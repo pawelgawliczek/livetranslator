@@ -13,6 +13,19 @@ export default function JoinPage({ token, onLogin }) {
   const [error, setError] = useState(null);
   const [displayName, setDisplayName] = useState("");
   const [language, setLanguage] = useState(() => getUserLanguage());
+  const [userEmail, setUserEmail] = useState(null);
+
+  // Decode token to get user email
+  useEffect(() => {
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUserEmail(payload.email);
+      } catch (e) {
+        console.error('Failed to decode token:', e);
+      }
+    }
+  }, [token]);
 
   const languages = [
     { code: "en", name: "English", flag: "🇬🇧" },
@@ -85,6 +98,9 @@ export default function JoinPage({ token, onLogin }) {
     try {
       // If user is not logged in, create a guest token
       if (!token) {
+        // Normalize language code (e.g., "en-GB" -> "en") for Speechmatics compatibility
+        const normalizedLanguage = language ? language.split('-')[0] : 'en';
+
         const guestTokenResp = await fetch("/api/guest/token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -92,7 +108,7 @@ export default function JoinPage({ token, onLogin }) {
             display_name: displayName,
             room_code: roomInfo.room_code,
             invite_code: inviteCode,
-            language: language
+            language: normalizedLanguage
           })
         });
 
@@ -262,9 +278,11 @@ export default function JoinPage({ token, onLogin }) {
               >
                 {t('joinPage.joinRoom')}
               </button>
-              <p style={styles.loginNote}>
-                {t('joinPage.joiningAs')} {userEmail}
-              </p>
+              {userEmail && (
+                <p style={styles.loginNote}>
+                  {t('joinPage.joiningAs')} {userEmail}
+                </p>
+              )}
             </>
           )}
         </div>

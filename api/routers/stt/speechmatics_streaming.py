@@ -24,6 +24,39 @@ SPEECHMATICS_REGION = os.getenv("SPEECHMATICS_REGION", "eu2")  # eu2, us2, etc.
 SPEECHMATICS_PRICE_PER_HOUR = 0.08
 
 
+def map_speechmatics_speaker_to_id(speaker_label: str) -> Optional[int]:
+    """
+    Map Speechmatics speaker labels to numeric IDs for multi-speaker diarization.
+
+    Args:
+        speaker_label: Speechmatics speaker label (e.g., "S1", "S2", "S3")
+
+    Returns:
+        Numeric speaker ID (0, 1, 2...) or None if not a valid speaker label
+
+    Examples:
+        "S1" -> 0
+        "S2" -> 1
+        "S3" -> 2
+        "UU" -> None (unknown speaker)
+        None -> None
+    """
+    if not speaker_label or not isinstance(speaker_label, str):
+        return None
+
+    # Match pattern "S" followed by number (S1, S2, S3, etc.)
+    if speaker_label.startswith("S") and len(speaker_label) > 1:
+        try:
+            # Extract number after "S" and convert to 0-indexed
+            speaker_num = int(speaker_label[1:])
+            return speaker_num - 1  # S1 -> 0, S2 -> 1, S3 -> 2, etc.
+        except ValueError:
+            return None
+
+    # Unknown speaker or invalid format
+    return None
+
+
 @dataclass
 class StreamingSession:
     """Manages a single WebSocket streaming session"""
@@ -358,17 +391,25 @@ class SpeechmaticsStreamingClient:
                     "end": last_alt.get("end_time", 0)
                 })
 
+        # Determine primary speaker ID for this segment
+        # Use the first speaker in the segment (most dominant)
+        speaker_id = None
+        if speaker_labels:
+            primary_speaker_label = speaker_labels[0].get("speaker")
+            speaker_id = map_speechmatics_speaker_to_id(primary_speaker_label)
+
         # Build result
         result = {
             "text": transcript,
             "is_final": True,
             "language": session.language,
             "speaker_labels": speaker_labels,
+            "speaker_id": speaker_id,  # Numeric mapping for multi-speaker mode
             "session_id": session.session_id
         }
 
         print(f"[Speechmatics Stream] ✅ Final: {transcript[:50]}... "
-              f"(speakers: {len(speaker_labels)})")
+              f"(speakers: {len(speaker_labels)}, speaker_id: {speaker_id})")
 
         # Call callback
         if session.on_final:

@@ -46,6 +46,10 @@ async def create_guest_token(request: GuestTokenRequest):
     if not request.invite_code or len(request.invite_code) < 10:
         raise HTTPException(status_code=400, detail="Invalid invite code")
 
+    # Normalize language code (e.g., "en-GB" -> "en")
+    # This ensures compatibility with Speechmatics and consistent display
+    normalized_language = request.language.split('-')[0] if request.language else "en"
+
     # Create JWT for guest
     # Use a special subject format for guests: guest:{display_name}:{timestamp}
     now = datetime.utcnow()
@@ -56,7 +60,7 @@ async def create_guest_token(request: GuestTokenRequest):
         "email": f"{request.display_name} (Guest)",
         "display_name": request.display_name,
         "room_code": request.room_code,
-        "preferred_lang": request.language,
+        "preferred_lang": normalized_language,
         "is_guest": True,
         "iat": int(now.timestamp()),
         "exp": int(exp.timestamp())

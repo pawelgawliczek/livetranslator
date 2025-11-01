@@ -106,6 +106,11 @@ export default function RoomCostTable({ rooms, page, totalRooms, onPageChange, o
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{room.is_public ? '🌍' : '🔒'}</span>
                       <span className="text-fg font-medium text-sm">{room.room_code}</span>
+                      {room.is_multi_speaker && room.speaker_count > 0 && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${room.total_cost_usd > 1.0 ? 'bg-red-900 text-red-300' : room.speaker_count >= 3 ? 'bg-yellow-900 text-yellow-300' : 'bg-blue-900 text-blue-300'}`}>
+                          🎤×{room.speaker_count}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="py-3 px-2">

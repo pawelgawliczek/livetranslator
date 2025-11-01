@@ -39,6 +39,10 @@ i18n
     fallbackLng: 'en',
     debug: false,
 
+    // Normalize language codes to base language only (e.g., "en-GB" -> "en")
+    load: 'languageOnly',
+    nonExplicitSupportedLngs: true,
+
     interpolation: {
       escapeValue: false, // React already escapes values
     },

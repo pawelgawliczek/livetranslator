@@ -148,7 +148,9 @@ async def get_user_language_from_db(user_id: str, user_email: str, fallback: str
         try:
             user = db.scalar(select(User).where(User.email == user_email))
             if user and user.preferred_lang:
-                return user.preferred_lang
+                # Normalize language from database (e.g., "en-GB" -> "en")
+                db_lang = user.preferred_lang.split('-')[0] if user.preferred_lang else fallback
+                return db_lang
             return fallback
         finally:
             db.close()
@@ -170,8 +172,11 @@ async def ws_room(ws: WebSocket, room_id: str):
         claims = verify_token(token)
         user_id = claims.get("sub")
         user_email = claims.get("email", "unknown")
+        # Normalize language code from JWT (e.g., "en-GB" -> "en") for Speechmatics compatibility
+        jwt_lang = claims.get("preferred_lang", "en")
+        normalized_jwt_lang = jwt_lang.split('-')[0] if jwt_lang else "en"
         # IMPORTANT: Get language from database, not JWT token (token can be stale)
-        user_lang = await get_user_language_from_db(user_id, user_email, claims.get("preferred_lang", "en"))
+        user_lang = await get_user_language_from_db(user_id, user_email, normalized_jwt_lang)
         ws.state.user = user_id
         ws.state.email = user_email
         ws.state.preferred_lang = user_lang
@@ -219,15 +224,17 @@ async def ws_room(ws: WebSocket, room_id: str):
             # Handle language preference update
             if msg.get("type") == "set_language":
                 new_lang = msg.get("language", "en")
-                ws.state.preferred_lang = new_lang
+                # Normalize language code (e.g., "en-GB" -> "en") for Speechmatics compatibility
+                normalized_lang = new_lang.split('-')[0] if new_lang else "en"
+                ws.state.preferred_lang = normalized_lang
 
                 # IMPORTANT: Immediately update Redis for translation routing
-                await register_user_language(room_id, str(user_id), new_lang)
+                await register_user_language(room_id, str(user_id), normalized_lang)
                 active_languages = await trigger_room_language_aggregation(room_id)
 
                 # Update presence with new language (debounced notifications)
                 presence_event = await presence_manager.user_changed_language(
-                    room_id, str(user_id), new_lang
+                    room_id, str(user_id), normalized_lang
                 )
                 if presence_event:
                     await wsman.broadcast(room_id, presence_event)

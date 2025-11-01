@@ -29,15 +29,29 @@ export default function RoomPageWrapper({ token, onLogout }) {
     fetch(`/api/rooms/${roomId}`, { headers })
       .then(res => res.json())
       .then(data => {
-        // Check if room has locked speakers (multi-speaker mode active)
-        setIsMultiSpeaker(data.speakers_locked === true || data.discovery_mode === 'locked');
+        // Check if this is a multi-speaker room
+        // Multi-speaker rooms have code starting with "MS-" OR have discovery mode enabled/locked
+        const isMultiSpeakerRoom =
+          roomId.startsWith('MS-') ||
+          data.discovery_mode === 'enabled' ||
+          data.discovery_mode === 'locked' ||
+          data.speakers_locked === true;
+
+        console.log('[RoomWrapper] Room mode check:', {
+          roomId,
+          discovery_mode: data.discovery_mode,
+          speakers_locked: data.speakers_locked,
+          isMultiSpeaker: isMultiSpeakerRoom
+        });
+
+        setIsMultiSpeaker(isMultiSpeakerRoom);
         setIsLoading(false);
       })
       .catch(err => {
         console.error('[RoomWrapper] Failed to check room mode:', err);
         setIsLoading(false);
-        // Default to regular room on error
-        setIsMultiSpeaker(false);
+        // Default based on room code prefix
+        setIsMultiSpeaker(roomId.startsWith('MS-'));
       });
   }, [roomId, token]);
 

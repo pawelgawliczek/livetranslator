@@ -21,6 +21,7 @@ import os
 from .db import SessionLocal
 from .models import Room, RoomArchive, RoomSpeaker
 from .jwt_tools import verify_token
+from .auth import get_optional_current_user
 
 router = APIRouter(prefix="/api/rooms", tags=["rooms"])
 
@@ -42,6 +43,7 @@ class RoomResponse(BaseModel):
     id: int
     code: str
     owner_id: int
+    is_owner: bool = False  # Whether the current user is the room owner
     is_public: bool
     recording: bool
     requires_login: bool
@@ -166,10 +168,79 @@ async def create_room(
     )
 
 
+@router.post("/multi-speaker", response_model=RoomResponse)
+async def create_multi_speaker_room(
+    request: CreateRoomRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Create a new multi-speaker room with discovery mode enabled.
+
+    This is a specialized endpoint for creating rooms designed for multi-speaker
+    diarization (single device, multiple speakers). The room is created with
+    discovery_mode set to 'enabled' so speakers can be enrolled immediately.
+
+    Args:
+        request: Room creation parameters
+        db: Database session
+        user: Authenticated user from JWT token
+
+    Returns:
+        RoomResponse with created room details (discovery_mode='enabled')
+
+    Raises:
+        HTTPException: 400 if room code already exists
+    """
+    user_id = user.get("sub")
+
+    # Check if room code already exists in active rooms
+    existing_room = db.query(Room).filter(Room.code == request.code).first()
+    if existing_room:
+        raise HTTPException(status_code=400, detail="Room code already exists")
+
+    # Check if room code exists in archived rooms
+    archived_room = db.query(RoomArchive).filter(RoomArchive.room_code == request.code).first()
+    if archived_room:
+        raise HTTPException(status_code=400, detail="Room code already exists in archive. Please choose a different code.")
+
+    # Create new multi-speaker room with discovery mode enabled
+    room = Room(
+        code=request.code,
+        owner_id=user_id,
+        is_public=request.is_public,
+        requires_login=request.requires_login,
+        max_participants=request.max_participants,
+        recording=False,
+        created_at=datetime.utcnow(),
+        discovery_mode='enabled',  # Start in discovery mode
+        speakers_locked=False  # Not locked yet, will be locked when discovery completes
+    )
+
+    db.add(room)
+    db.commit()
+    db.refresh(room)
+
+    return RoomResponse(
+        id=room.id,
+        code=room.code,
+        owner_id=room.owner_id,
+        is_public=room.is_public,
+        recording=room.recording,
+        requires_login=room.requires_login,
+        max_participants=room.max_participants,
+        created_at=room.created_at,
+        admin_left_at=room.admin_left_at,
+        discovery_mode=room.discovery_mode,
+        speakers_locked=room.speakers_locked
+    )
+
+
 @router.get("/{room_code}", response_model=RoomResponse)
 async def get_room(
     room_code: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_optional_current_user)
 ):
     """
     Get room details by room code.
@@ -177,6 +248,7 @@ async def get_room(
     Args:
         room_code: The room code to look up
         db: Database session
+        user: Optional authenticated user
 
     Returns:
         RoomResponse with room details
@@ -188,10 +260,17 @@ async def get_room(
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
+    # Determine if current user is the owner
+    is_owner = False
+    if user:
+        user_id = int(user.get("sub", 0))
+        is_owner = (user_id == room.owner_id)
+
     return RoomResponse(
         id=room.id,
         code=room.code,
         owner_id=room.owner_id,
+        is_owner=is_owner,
         is_public=room.is_public,
         recording=room.recording,
         requires_login=room.requires_login,
@@ -812,12 +891,31 @@ async def update_discovery_mode(
     # Update discovery mode
     room.discovery_mode = request.discovery_mode
 
-    # If setting to "locked", also set speakers_locked flag
+    # Update speakers_locked flag based on discovery mode
     if request.discovery_mode == "locked":
         room.speakers_locked = True
+    elif request.discovery_mode == "enabled":
+        # Re-enable discovery: unlock speakers for re-configuration
+        room.speakers_locked = False
 
     db.commit()
     db.refresh(room)
+
+    # Invalidate multi-speaker cache for this room
+    # This ensures STT routing picks up the updated speakers_locked state immediately
+    try:
+        r = redis.from_url(REDIS_URL)
+        cache_message = json.dumps({
+            "room_code": room_code,
+            "type": "multi_speaker",
+            "discovery_mode": request.discovery_mode,
+            "speakers_locked": room.speakers_locked
+        })
+        r.publish("routing_cache_clear", cache_message)
+        print(f"[RoomsAPI] Cache invalidated for room {room_code} (discovery_mode={request.discovery_mode})")
+    except Exception as e:
+        print(f"[RoomsAPI] Failed to invalidate cache: {e}")
+        # Non-critical error, continue
 
     return RoomResponse(
         id=room.id,

@@ -7,14 +7,12 @@ import LanguageSelector from "../components/LanguageSelector";
 import ThemeToggle from "../components/ThemeToggle";
 import Footer from "../components/Footer";
 import Card from "../components/ui/Card";
-import Button from "../components/ui/Button";
 import TagPill from "../components/ui/TagPill";
 
 export default function RoomsPage({ token, onLogout, onLogin }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
-  const [newRoomName, setNewRoomName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [rooms, setRooms] = useState([]);
@@ -77,28 +75,6 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
     }
   }
 
-  async function createRoom() {
-    if (!newRoomName.trim()) return;
-
-    try {
-      const response = await fetch("/api/rooms", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ code: newRoomName })
-      });
-
-      if (response.ok) {
-        setNewRoomName("");
-        fetchRooms();
-      }
-    } catch (e) {
-      console.error("Failed to create room:", e);
-    }
-  }
-
   return (
     <div className="min-h-screen bg-bg flex flex-col">
       <div className="flex-1 p-4">
@@ -131,8 +107,19 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
               {t('rooms.createRoom')}
             </h2>
 
-            {/* Quick Room Button */}
+            {/* Multi-Speaker Room Button */}
             <div className="mb-4">
+              <button
+                onClick={() => navigate('/multi-speaker/setup')}
+                className="w-full p-4 bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-lg font-semibold text-lg flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:-translate-y-0.5"
+              >
+                <span className="text-2xl">🎤</span>
+                {t('rooms.multiSpeakerRoom', 'Multi-Speaker Room')} ({t('rooms.singleDevice', 'Single Device')})
+              </button>
+            </div>
+
+            {/* Quick Room Button */}
+            <div>
               <button
                 onClick={() => setShowQuickRoom(true)}
                 className="w-full p-4 bg-gradient-to-r from-accent to-accent-dark text-accent-fg rounded-lg font-semibold text-lg flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:-translate-y-0.5"
@@ -140,28 +127,6 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
                 <span className="text-2xl">⚡</span>
                 {t('rooms.quickRoom')} ({t('quickRoom.createButton')})
               </button>
-            </div>
-
-            <div className="text-center text-muted text-sm my-4">
-              {t('common.or')} {t('rooms.createRoom').toLowerCase()}
-            </div>
-
-            <div className="flex gap-3 flex-wrap">
-              <input
-                type="text"
-                placeholder={t('rooms.roomName') + "..."}
-                value={newRoomName}
-                onChange={e => setNewRoomName(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && createRoom()}
-                className="flex-1 min-w-[200px] px-4 py-3 bg-bg-secondary border border-border rounded-lg text-fg focus:border-accent focus:ring-2 focus:ring-ring transition-colors"
-              />
-              <Button
-                onClick={createRoom}
-                variant="primary"
-                className="whitespace-nowrap"
-              >
-                {t('rooms.createRoom')}
-              </Button>
             </div>
           </Card>
 
@@ -194,6 +159,18 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
                         {room.code}
                       </div>
                       <div className="flex gap-2 items-center flex-wrap">
+                        {/* Room Type Badge */}
+                        {room.code.startsWith('MS-') ? (
+                          <TagPill variant="purple">
+                            <span>🎤</span>
+                            <span>{t('rooms.multiSpeaker', 'Multi-Speaker')}</span>
+                          </TagPill>
+                        ) : (
+                          <TagPill variant="blue">
+                            <span>⚡</span>
+                            <span>{t('rooms.standard', 'Standard')}</span>
+                          </TagPill>
+                        )}
                         {room.is_public && (
                           <TagPill variant="success">
                             <span>🌍</span>

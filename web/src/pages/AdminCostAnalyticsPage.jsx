@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getCostOverview, getUserCosts, getRoomCosts, getDatePresets, exportToCSV } from '../utils/costAnalytics';
+import { getCostOverview, getUserCosts, getRoomCosts, getDatePresets, exportToCSV, getMultiSpeakerOverview } from '../utils/costAnalytics';
 import DateRangePicker from '../components/admin/DateRangePicker';
 import CostOverviewCards from '../components/admin/CostOverviewCards';
 import CostTrendChart from '../components/admin/CostTrendChart';
@@ -8,6 +8,7 @@ import ProviderBreakdownChart from '../components/admin/ProviderBreakdownChart';
 import UserCostTable from '../components/admin/UserCostTable';
 import RoomCostTable from '../components/admin/RoomCostTable';
 import UserDetailModal from '../components/admin/UserDetailModal';
+import MultiSpeakerStatsCard from '../components/admin/MultiSpeakerStatsCard';
 
 export default function AdminCostAnalyticsPage({ token, onLogout }) {
   const navigate = useNavigate();
@@ -46,6 +47,32 @@ export default function AdminCostAnalyticsPage({ token, onLogout }) {
 
   // User detail modal
   const [selectedUser, setSelectedUser] = useState(null);
+
+  // Multi-speaker stats
+  const [multiSpeakerStats, setMultiSpeakerStats] = useState(null);
+  const [multiSpeakerLoading, setMultiSpeakerLoading] = useState(true);
+
+  // Fetch multi-speaker overview when date range changes
+  useEffect(() => {
+    if (!token || !startDate || !endDate) return;
+
+    const fetchMultiSpeakerStats = async () => {
+      setMultiSpeakerLoading(true);
+
+      try {
+        const data = await getMultiSpeakerOverview(token, startDate, endDate);
+        setMultiSpeakerStats(data);
+      } catch (err) {
+        console.error('Error fetching multi-speaker stats:', err);
+        // Don't block the page on error, just show empty state
+        setMultiSpeakerStats(null);
+      } finally {
+        setMultiSpeakerLoading(false);
+      }
+    };
+
+    fetchMultiSpeakerStats();
+  }, [token, startDate, endDate]);
 
   // Fetch overview when date range changes
   useEffect(() => {
@@ -255,6 +282,11 @@ export default function AdminCostAnalyticsPage({ token, onLogout }) {
 
         {/* Overview Cards */}
         <CostOverviewCards overview={overview} loading={overviewLoading} />
+
+        {/* Multi-Speaker Stats Card (only show when not filtering) */}
+        {!roomFilter && !userFilter && (
+          <MultiSpeakerStatsCard stats={multiSpeakerStats} loading={multiSpeakerLoading} />
+        )}
 
         {/* Cost Trend Chart */}
         <CostTrendChart token={token} startDate={startDate} endDate={endDate} roomId={roomFilter} userId={userFilter} />

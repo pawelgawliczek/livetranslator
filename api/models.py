@@ -96,6 +96,10 @@ class RoomCost(Base):
     amount_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=0)
     segment_id: Mapped[Optional[int]] = mapped_column(Integer)
 
+    # Multi-speaker cost tracking fields
+    speaker_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Source speaker (NULL for single-speaker)
+    target_speaker_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Target speaker (NULL for single-speaker)
+
 class RoomParticipant(Base):
     __tablename__ = "room_participants"
 

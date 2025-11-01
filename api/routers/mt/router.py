@@ -88,6 +88,104 @@ def normalize_lang(lang: str) -> str:
     # Return first 2 chars as fallback
     return lang[:2].lower()
 
+# Multi-speaker translation routing cache - stores room_code -> (is_multi_speaker, room_id, speakers_dict)
+multi_speaker_cache = {}
+multi_speaker_cache_expiry = {}
+MULTI_SPEAKER_CACHE_TTL_SECONDS = 60  # Cache for 1 minute
+
+async def check_multi_speaker_mode(room_code: str) -> tuple:
+    """
+    Check if a room is in multi-speaker mode and get speaker info.
+
+    Returns:
+        tuple: (is_multi_speaker: bool, room_id: int or None, speakers_dict: dict or None)
+        speakers_dict format: {speaker_id: {"language": "en", "display_name": "Alice"}}
+    """
+    # Check cache first
+    if room_code in multi_speaker_cache:
+        cache_expiry = multi_speaker_cache_expiry.get(room_code)
+        if cache_expiry and datetime.now() < cache_expiry:
+            return multi_speaker_cache[room_code]
+
+    try:
+        import asyncpg
+
+        conn = await asyncpg.connect(
+            host=POSTGRES_HOST,
+            port=POSTGRES_PORT,
+            user=POSTGRES_USER,
+            password=POSTGRES_PASSWORD,
+            database=POSTGRES_DB
+        )
+
+        # Query room to check if speakers are locked
+        room_row = await conn.fetchrow("""
+            SELECT id, speakers_locked
+            FROM rooms
+            WHERE code = $1
+        """, room_code)
+
+        if not room_row or not room_row['speakers_locked']:
+            await conn.close()
+            result = (False, None, None)
+            # Cache negative result too
+            multi_speaker_cache[room_code] = result
+            multi_speaker_cache_expiry[room_code] = datetime.now() + timedelta(seconds=MULTI_SPEAKER_CACHE_TTL_SECONDS)
+            return result
+
+        room_id = room_row['id']
+
+        # Get all speakers for this room
+        speaker_rows = await conn.fetch("""
+            SELECT speaker_id, language, display_name
+            FROM room_speakers
+            WHERE room_id = $1
+            ORDER BY speaker_id
+        """, room_id)
+
+        await conn.close()
+
+        # Build speakers dictionary
+        speakers_dict = {}
+        for row in speaker_rows:
+            speakers_dict[row['speaker_id']] = {
+                "language": row['language'],
+                "display_name": row['display_name']
+            }
+
+        result = (True, room_id, speakers_dict)
+
+        # Cache result
+        multi_speaker_cache[room_code] = result
+        multi_speaker_cache_expiry[room_code] = datetime.now() + timedelta(seconds=MULTI_SPEAKER_CACHE_TTL_SECONDS)
+
+        return result
+
+    except Exception as e:
+        print(f"[MT Router] Error checking multi-speaker mode for room {room_code}: {e}")
+        return (False, None, None)
+
+def get_multi_speaker_translation_targets(speakers_dict: dict, current_speaker_id: int) -> list:
+    """
+    Get translation targets for multi-speaker mode.
+
+    Args:
+        speakers_dict: Dictionary of speakers {speaker_id: {"language": "en", "display_name": "Alice"}}
+        current_speaker_id: Current speaker's ID
+
+    Returns:
+        list: List of dicts with keys: speaker_id, language, display_name (excluding current speaker)
+    """
+    targets = []
+    for spk_id, spk_info in speakers_dict.items():
+        if spk_id != current_speaker_id:
+            targets.append({
+                "speaker_id": spk_id,
+                "language": spk_info["language"],
+                "display_name": spk_info["display_name"]
+            })
+    return targets
+
 async def load_routing_config_from_db():
     """Load all routing configuration from database into cache."""
     global routing_cache, routing_cache_expiry
@@ -315,17 +413,61 @@ async def router_loop():
                 # Determine quality tier - always use standard for streaming mode (no finals expected)
                 quality_tier = "standard"
 
-                # Get all target languages for this room
-                target_langs_key = f"room:{room}:target_languages"
-                target_langs = await r.smembers(target_langs_key)
+                # Check if room is in multi-speaker mode
+                is_multi_speaker, room_id, speakers_dict = await check_multi_speaker_mode(room)
 
-                if not target_langs:
-                    # Fallback to default if no languages registered
-                    target_langs = {DEFAULT_TGT}
-                    print(f"[MT Router] ⚠ No languages registered for room={room}, using default: {DEFAULT_TGT}")
+                # Determine translation targets based on mode
+                translation_targets = []  # List of (tgt_lang, target_speaker_id) tuples
 
-                print(f"[MT Router] Processing {kind}: room={room} seg={segment} speaker={speaker} src={src_lang}")
-                print(f"[MT Router] Translation matrix: {src_lang} → {target_langs}")
+                if is_multi_speaker and speakers_dict and speaker is not None:
+                    # Multi-speaker mode with speaker ID
+                    try:
+                        # speaker can be string or int from STT event
+                        speaker_id = int(speaker) if isinstance(speaker, str) and speaker.isdigit() else None
+
+                        if speaker_id is not None and speaker_id in speakers_dict:
+                            # Get source language from speaker configuration
+                            speaker_src_lang = normalize_lang(speakers_dict[speaker_id]["language"])
+
+                            # Override detected language with speaker's configured language
+                            if speaker_src_lang != src_lang:
+                                print(f"[MT Router] 🎤 Multi-speaker: Overriding detected lang {src_lang} → {speaker_src_lang} (speaker {speaker_id} config)")
+                                src_lang = speaker_src_lang
+
+                            # Get other speakers as translation targets (N-1)
+                            other_speakers = get_multi_speaker_translation_targets(speakers_dict, speaker_id)
+
+                            for target_speaker in other_speakers:
+                                target_lang = normalize_lang(target_speaker["language"])
+                                translation_targets.append((target_lang, target_speaker["speaker_id"]))
+
+                            print(f"[MT Router] 🎤 Multi-speaker mode: speaker {speaker_id} ({speaker_src_lang}) → {len(translation_targets)} targets")
+                            print(f"[MT Router] 🎤 Translation matrix (N×N-1): {[(t[0], f'spk{t[1]}') for t in translation_targets]}")
+                        else:
+                            # Speaker ID not found in room speakers - fall back to single-speaker mode
+                            print(f"[MT Router] ⚠ Speaker {speaker} not found in room speakers, using single-speaker mode")
+                            is_multi_speaker = False
+                    except (ValueError, TypeError) as e:
+                        # Invalid speaker ID format - fall back to single-speaker mode
+                        print(f"[MT Router] ⚠ Invalid speaker ID format '{speaker}', using single-speaker mode: {e}")
+                        is_multi_speaker = False
+
+                if not is_multi_speaker or not translation_targets:
+                    # Single-speaker mode - translate to all room languages
+                    target_langs_key = f"room:{room}:target_languages"
+                    target_langs = await r.smembers(target_langs_key)
+
+                    if not target_langs:
+                        # Fallback to default if no languages registered
+                        target_langs = {DEFAULT_TGT}
+                        print(f"[MT Router] ⚠ No languages registered for room={room}, using default: {DEFAULT_TGT}")
+
+                    # Convert to same format as multi-speaker (lang, None) - None means no specific target speaker
+                    for tgt_lang in target_langs:
+                        translation_targets.append((tgt_lang, None))
+
+                    print(f"[MT Router] Processing {kind}: room={room} seg={segment} speaker={speaker} src={src_lang}")
+                    print(f"[MT Router] Single-speaker translation matrix: {src_lang} → {[t[0] for t in translation_targets]}")
 
                 # Clean up cache for final translations (no longer need partials for this segment)
                 if is_final:
@@ -343,12 +485,13 @@ async def router_loop():
                         print(f"[MT Router] 🧹 Cleaned {len(keys_to_remove)} cached partials and {len(throttle_keys_to_remove)} throttle entries for segment {segment}")
 
                 # Translate to each target language
-                for tgt_lang in target_langs:
+                for tgt_lang, target_speaker_id in translation_targets:
                     tgt_normalized = normalize_lang(tgt_lang)
 
                     # Skip translation if source language is unknown/auto
                     if src_lang == "auto":
-                        print(f"[MT Router] ⊘ Skipping auto→{tgt_normalized} (unknown source language)")
+                        target_info = f" (target speaker {target_speaker_id})" if target_speaker_id is not None else ""
+                        print(f"[MT Router] ⊘ Skipping auto→{tgt_normalized}{target_info} (unknown source language)")
                         await append_mt_skip_reason(
                             redis=r,
                             room_code=room,
@@ -361,7 +504,8 @@ async def router_loop():
 
                     # Skip translation if source and target are the same
                     if src_lang == tgt_normalized:
-                        print(f"[MT Router] ⊘ Skipping {src_lang}→{tgt_normalized} (same language)")
+                        target_info = f" (target speaker {target_speaker_id})" if target_speaker_id is not None else ""
+                        print(f"[MT Router] ⊘ Skipping {src_lang}→{tgt_normalized}{target_info} (same language)")
                         await append_mt_skip_reason(
                             redis=r,
                             room_code=room,
@@ -438,10 +582,15 @@ async def router_loop():
                             "src_text": text
                         }
 
+                        # Add target_speaker_id for multi-speaker mode
+                        if target_speaker_id is not None:
+                            mt_event["target_speaker_id"] = target_speaker_id
+
                         await r.publish(MT_OUTPUT, jdumps(mt_event))
 
                         cache_indicator = " (cached)" if from_cache else ""
-                        print(f"[MT Router] ✓ {kind} ({backend_name}) {src_lang}→{tgt_normalized}: {translated[:60]}...{cache_indicator}")
+                        target_info = f" → speaker {target_speaker_id}" if target_speaker_id is not None else ""
+                        print(f"[MT Router] ✓ {kind} ({backend_name}) {src_lang}→{tgt_normalized}{target_info}: {translated[:60]}...{cache_indicator}")
 
                         # Track cost only for non-cached translations
                         if not from_cache and "char_count" in translation_result:
@@ -456,8 +605,22 @@ async def router_loop():
                                 "provider": backend_name,
                                 "segment_id": segment
                             }
+
+                            # Add multi-speaker cost tracking fields
+                            if is_multi_speaker and speaker is not None:
+                                try:
+                                    speaker_id = int(speaker) if isinstance(speaker, str) and speaker.isdigit() else None
+                                    if speaker_id is not None:
+                                        cost_event["speaker_id"] = speaker_id
+                                        if target_speaker_id is not None:
+                                            cost_event["target_speaker_id"] = target_speaker_id
+                                except (ValueError, TypeError):
+                                    pass  # Skip if speaker_id can't be parsed
+
                             await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
-                            print(f"[MT Router] 💰 Cost tracked: {translation_result['char_count']} chars ({backend_name}) seg={segment}")
+
+                            speaker_info = f" spk{speaker}→spk{target_speaker_id}" if (is_multi_speaker and target_speaker_id is not None) else ""
+                            print(f"[MT Router] 💰 Cost tracked: {translation_result['char_count']} chars ({backend_name}) seg={segment}{speaker_info}")
                         elif not from_cache and "tokens" in translation_result:
                             # OpenAI uses token-based pricing
                             cost_event = {
@@ -470,8 +633,22 @@ async def router_loop():
                                 "provider": backend_name,
                                 "segment_id": segment
                             }
+
+                            # Add multi-speaker cost tracking fields
+                            if is_multi_speaker and speaker is not None:
+                                try:
+                                    speaker_id = int(speaker) if isinstance(speaker, str) and speaker.isdigit() else None
+                                    if speaker_id is not None:
+                                        cost_event["speaker_id"] = speaker_id
+                                        if target_speaker_id is not None:
+                                            cost_event["target_speaker_id"] = target_speaker_id
+                                except (ValueError, TypeError):
+                                    pass  # Skip if speaker_id can't be parsed
+
                             await r.publish(COST_TRACKING_CHANNEL, jdumps(cost_event))
-                            print(f"[MT Router] 💰 Cost tracked: {translation_result['tokens']} tokens ({backend_name}) seg={segment}")
+
+                            speaker_info = f" spk{speaker}→spk{target_speaker_id}" if (is_multi_speaker and target_speaker_id is not None) else ""
+                            print(f"[MT Router] 💰 Cost tracked: {translation_result['tokens']} tokens ({backend_name}) seg={segment}{speaker_info}")
 
                         # Track debug info (fire-and-forget) - always track, even for cached
                         await append_mt_debug_info(

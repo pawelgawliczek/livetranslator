@@ -160,6 +160,32 @@ def get_current_user(authorization: str = Header(None), db: Session = Depends(ge
 
     return user
 
+def get_optional_current_user(authorization: str = Header(None), db: Session = Depends(get_db)) -> dict | None:
+    """
+    Optional dependency to get the current authenticated user from JWT token.
+    Returns user dict if authenticated, None otherwise.
+    """
+    if not authorization:
+        return None
+
+    # Extract token from "Bearer <token>" format
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+
+    token = parts[1]
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGO])
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+
+        # Return payload dict instead of User object for optional auth
+        return payload
+    except JWTError:
+        return None
+
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """Dependency to require admin privileges"""
     if not current_user.is_admin:

@@ -446,6 +446,16 @@
     "enterName": "Enter speaker name",
     "language": "Language",
     "removeSpeaker": "Remove",
-    "completeHelp": "Complete discovery to lock speakers and start the session. You can re-run discovery later from settings."
+    "completeHelp": "Complete discovery to lock speakers and start the session. You can re-run discovery later from settings.",
+    "howItWorks": "How Multi-Speaker Discovery Works",
+    "step1": "Each person will speak into their device in their native language",
+    "step2": "The system will automatically detect who is speaking and what language",
+    "step3": "You can review and edit speaker names and languages",
+    "step4": "Once complete, the conversation will start with real-time translation",
+    "tipTitle": "Tip:",
+    "tipText": "Have each speaker say a few sentences. The more they speak, the better the detection.",
+    "enableDiscovery": "Enable Discovery & Start Detection",
+    "detectedLanguages": "Detected Languages",
+    "setupInProgress": "Setting up multi-speaker room..."
   }
 }

@@ -25,11 +25,15 @@ except ImportError:
 # Configuration
 POSTGRES_DSN = os.getenv("POSTGRES_DSN", "postgresql://lt_user:changeme@postgres:5432/livetranslator")
 CACHE_TTL_SECONDS = 300  # 5 minutes cache (will be invalidated instantly via Redis)
+MULTI_SPEAKER_CACHE_TTL_SECONDS = 60  # 60 seconds cache for multi-speaker mode checks
 CACHE_CLEAR_CHANNEL = "routing_cache_clear"
+MULTI_SPEAKER_STT_ENABLED = os.getenv("MULTI_SPEAKER_STT_ENABLED", "true").lower() == "true"
 
 # In-memory cache
 _routing_cache = {}  # (language, mode, quality_tier) -> {provider, fallback, config, cached_at}
+_multi_speaker_cache = {}  # room_code -> {is_multi_speaker, room_id, speakers, cached_at}
 _db_pool = None
+_multi_speaker_query_locks = {}  # room_code -> asyncio.Lock (prevent duplicate queries)
 
 
 async def init_db_pool():
@@ -228,10 +232,158 @@ async def update_provider_health(
             print(f"[LanguageRouter] Failed to update provider health: {e}")
 
 
+async def check_multi_speaker_mode(room_code: str) -> Tuple[bool, Optional[int], Optional[Dict]]:
+    """
+    Check if a room is in multi-speaker mode with diarization enabled.
+
+    Returns:
+        (is_multi_speaker, room_db_id, speakers_dict)
+        - is_multi_speaker: True if speakers_locked is enabled
+        - room_db_id: Database ID of the room (for logging/metrics)
+        - speakers_dict: {speaker_id: {display_name, language, color}, ...}
+
+    Uses 60-second caching to reduce database load.
+    """
+    # Feature flag kill switch
+    if not MULTI_SPEAKER_STT_ENABLED:
+        return (False, None, None)
+
+    # Check cache
+    if room_code in _multi_speaker_cache:
+        cache_entry = _multi_speaker_cache[room_code]
+        age_seconds = (datetime.now() - cache_entry["cached_at"]).total_seconds()
+        if age_seconds < MULTI_SPEAKER_CACHE_TTL_SECONDS:
+            return (cache_entry["is_multi_speaker"], cache_entry["room_id"], cache_entry["speakers"])
+
+    # Acquire lock to prevent duplicate queries for the same room
+    if room_code not in _multi_speaker_query_locks:
+        _multi_speaker_query_locks[room_code] = asyncio.Lock()
+
+    async with _multi_speaker_query_locks[room_code]:
+        # Double-check cache after acquiring lock (another coroutine may have fetched it)
+        if room_code in _multi_speaker_cache:
+            cache_entry = _multi_speaker_cache[room_code]
+            age_seconds = (datetime.now() - cache_entry["cached_at"]).total_seconds()
+            if age_seconds < MULTI_SPEAKER_CACHE_TTL_SECONDS:
+                return (cache_entry["is_multi_speaker"], cache_entry["room_id"], cache_entry["speakers"])
+
+        # Initialize pool if needed
+        if _db_pool is None:
+            await init_db_pool()
+
+        # Graceful fallback on database errors
+        if _db_pool is None:
+            return (False, None, None)
+
+        try:
+            async with _db_pool.acquire() as conn:
+                # Query room for multi-speaker mode (discovery or locked)
+                room_row = await conn.fetchrow(
+                    """
+                    SELECT id, speakers_locked, discovery_mode
+                    FROM rooms
+                    WHERE code = $1
+                    """,
+                    room_code
+                )
+
+                # Check if multi-speaker mode is active:
+                # - discovery_mode='enabled' → Need diarization to DETECT speakers
+                # - speakers_locked=true → Need diarization to MAP to enrolled speakers
+                if not room_row:
+                    # Room not found
+                    cache_result = {
+                        "is_multi_speaker": False,
+                        "room_id": None,
+                        "speakers": None,
+                        "cached_at": datetime.now()
+                    }
+                    _multi_speaker_cache[room_code] = cache_result
+                    return (False, None, None)
+
+                is_discovery = room_row['discovery_mode'] == 'enabled'
+                is_locked = room_row['speakers_locked']
+
+                if not is_discovery and not is_locked:
+                    # Not a multi-speaker room
+                    cache_result = {
+                        "is_multi_speaker": False,
+                        "room_id": room_row['id'],
+                        "speakers": None,
+                        "cached_at": datetime.now()
+                    }
+                    _multi_speaker_cache[room_code] = cache_result
+                    return (False, room_row['id'], None)
+
+                # Fetch enrolled speakers (may be empty during discovery)
+                speaker_rows = await conn.fetch(
+                    """
+                    SELECT speaker_id, display_name, language, color
+                    FROM room_speakers
+                    WHERE room_id = $1
+                    ORDER BY speaker_id ASC
+                    """,
+                    room_row['id']
+                )
+
+                if not speaker_rows:
+                    # No speakers enrolled yet
+                    if is_discovery:
+                        # Discovery mode: Enable diarization to DETECT speakers
+                        cache_result = {
+                            "is_multi_speaker": True,
+                            "room_id": room_row['id'],
+                            "speakers": {},  # Empty dict - speakers will be detected
+                            "cached_at": datetime.now()
+                        }
+                        _multi_speaker_cache[room_code] = cache_result
+                        print(f"[LanguageRouter] ✅ Multi-speaker DISCOVERY mode for room {room_code}")
+                        return (True, room_row['id'], {})
+                    else:
+                        # Locked but no speakers (error state)
+                        cache_result = {
+                            "is_multi_speaker": False,
+                            "room_id": room_row['id'],
+                            "speakers": None,
+                            "cached_at": datetime.now()
+                        }
+                        _multi_speaker_cache[room_code] = cache_result
+                        print(f"[LanguageRouter] ⚠️  Room {room_code} locked but no speakers enrolled")
+                        return (False, room_row['id'], None)
+
+                # Build speakers dictionary
+                speakers_dict = {
+                    row['speaker_id']: {
+                        'display_name': row['display_name'],
+                        'language': row['language'],
+                        'color': row['color']
+                    }
+                    for row in speaker_rows
+                }
+
+                # Cache result
+                cache_result = {
+                    "is_multi_speaker": True,
+                    "room_id": room_row['id'],
+                    "speakers": speakers_dict,
+                    "cached_at": datetime.now()
+                }
+                _multi_speaker_cache[room_code] = cache_result
+
+                print(f"[LanguageRouter] ✅ Multi-speaker room {room_code}: {len(speakers_dict)} speakers, using Speechmatics diarization")
+                return (True, room_row['id'], speakers_dict)
+
+        except Exception as e:
+            print(f"[LanguageRouter] Failed to check multi-speaker mode for room {room_code}: {e}")
+            # Graceful fallback: return False to use standard routing
+            return (False, None, None)
+
+
 async def get_stt_provider_for_language(
     language: str,
     mode: str,
-    quality_tier: str = 'standard'
+    quality_tier: str = 'standard',
+    room_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Get STT provider configuration for a specific language and mode.
@@ -240,6 +392,7 @@ async def get_stt_provider_for_language(
         language: Language code (pl-PL, ar-EG, en-US, auto, etc.)
         mode: 'partial' or 'final'
         quality_tier: 'standard' or 'budget'
+        room_id: Optional room code for multi-speaker mode detection
 
     Returns:
     {
@@ -250,8 +403,56 @@ async def get_stt_provider_for_language(
             'max_delay': 1.5,
             'operating_point': 'enhanced'
         },
-        'language': 'pl-PL'  # Normalized language code
+        'language': 'pl-PL',  # Normalized language code
+        'multi_speaker_optimized': True,  # Only for multi-speaker rooms
+        'room_id': 123,  # Database room ID (only for multi-speaker rooms)
+        'speakers': {...}  # Speaker configuration (only for multi-speaker rooms)
     }
+    """
+    # Guard clause: If room_id is None, use standard path (zero changes)
+    if room_id is None:
+        # Standard path - existing logic unchanged
+        return await _get_standard_provider(language, mode, quality_tier)
+
+    # Check multi-speaker mode
+    is_multi_speaker, room_db_id, speakers = await check_multi_speaker_mode(room_id)
+
+    if not is_multi_speaker:
+        # Room exists but not in multi-speaker mode - use standard path
+        return await _get_standard_provider(language, mode, quality_tier)
+
+    # Multi-speaker mode detected - route to Speechmatics with diarization
+    # IMPORTANT: Use language detection during discovery to identify each speaker's language
+    # During discovery (speakers not locked), use 'auto' for language detection
+    # After locked, can use specific language if all speakers speak the same language
+    is_discovery = len(speakers) == 0  # Empty speakers dict = discovery mode
+
+    return {
+        'provider': 'speechmatics',
+        'fallback': None,  # Future: 'google_v2' with diarization support
+        'config': {
+            'diarization': 'speaker',
+            'max_delay': 1.0,
+            'operating_point': 'enhanced',
+            'enable_language_detection': True  # Enable automatic language detection
+        },
+        # Use 'auto' for language detection during discovery
+        'language': 'auto' if is_discovery else _normalize_language(language),
+        'multi_speaker_optimized': True,
+        'room_id': room_db_id,
+        'speakers': speakers,
+        'is_discovery': is_discovery
+    }
+
+
+async def _get_standard_provider(
+    language: str,
+    mode: str,
+    quality_tier: str = 'standard'
+) -> Dict[str, Any]:
+    """
+    Standard provider selection logic (original implementation).
+    Separated for clean separation between standard and multi-speaker modes.
     """
     # Normalize language code
     normalized_lang = _normalize_language(language)
@@ -459,20 +660,29 @@ async def get_mt_provider_for_pair(
     return default_config
 
 
-def clear_cache(language: str = None, service_type: str = None):
+def clear_cache(language: str = None, service_type: str = None, room_code: str = None):
     """
     Clear routing cache for specific language or all languages.
 
     Args:
         language: Specific language to clear (None = clear all)
-        service_type: 'stt' or 'mt' (None = clear both)
+        service_type: 'stt' or 'mt' or 'multi_speaker' (None = clear all)
+        room_code: Specific room code for multi-speaker cache (None = clear all rooms)
     """
-    global _routing_cache
+    global _routing_cache, _multi_speaker_cache
+
+    # Handle multi-speaker cache clearing
+    if service_type == "multi_speaker" and room_code:
+        if room_code in _multi_speaker_cache:
+            del _multi_speaker_cache[room_code]
+            print(f"[LanguageRouter] 🔄 Cleared multi-speaker cache for room {room_code}")
+        return
 
     if language is None and service_type is None:
         # Clear all caches
         _routing_cache.clear()
-        print(f"[LanguageRouter] 🔄 All routing caches cleared")
+        _multi_speaker_cache.clear()
+        print(f"[LanguageRouter] 🔄 All routing caches cleared (including multi-speaker)")
     else:
         # Clear specific entries
         keys_to_remove = [
@@ -512,8 +722,14 @@ async def cache_invalidation_listener():
                 data = json.loads(msg["data"]) if isinstance(msg["data"], str) else msg["data"]
                 language = data.get("language") if isinstance(data, dict) else None
                 service_type = data.get("service_type") if isinstance(data, dict) else None
+                cache_type = data.get("type") if isinstance(data, dict) else None
+                room_code = data.get("room_code") if isinstance(data, dict) else None
 
-                clear_cache(language, service_type)
+                # Handle multi-speaker cache invalidation
+                if cache_type == "multi_speaker" and room_code:
+                    clear_cache(service_type="multi_speaker", room_code=room_code)
+                else:
+                    clear_cache(language, service_type)
             except Exception as e:
                 print(f"[LanguageRouter] Cache clear error: {e}")
     except Exception as e:

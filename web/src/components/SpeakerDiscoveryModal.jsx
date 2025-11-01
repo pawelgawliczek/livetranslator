@@ -28,16 +28,19 @@ const SPEAKER_COLORS = [
 export default function SpeakerDiscoveryModal({
   isOpen,
   onClose,
+  onCancel,     // Callback when user cancels during intro (goes back to rooms)
   roomCode,
   token,
   isGuest,
   ws,           // WebSocket connection to listen for STT events
-  onComplete    // Callback when discovery is complete
+  onComplete,   // Callback when discovery is complete
+  onStartAudio  // Callback to start microphone/audio capture
 }) {
   const { t } = useTranslation();
   const selectableLanguages = getSelectableLanguages();
 
   // Discovery state
+  const [showIntro, setShowIntro] = useState(true); // Show intro screen first
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [speakers, setSpeakers] = useState([]);
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
@@ -46,6 +49,15 @@ export default function SpeakerDiscoveryModal({
 
   // Track detected speaker IDs to avoid duplicates
   const [detectedSpeakerIds, setDetectedSpeakerIds] = useState(new Set());
+
+  // Compute unique languages from all speakers
+  const detectedLanguages = React.useMemo(() => {
+    const uniqueLangs = new Set(speakers.map(s => s.language));
+    return Array.from(uniqueLangs).map(langCode => {
+      const langInfo = selectableLanguages.find(l => l.code === langCode);
+      return langInfo || { code: langCode, flag: '🌐', name: langCode };
+    });
+  }, [speakers, selectableLanguages]);
 
   /**
    * Start discovery mode
@@ -75,11 +87,17 @@ export default function SpeakerDiscoveryModal({
         throw new Error(errorData.detail || 'Failed to start discovery');
       }
 
+      setShowIntro(false); // Hide intro screen
       setIsDiscovering(true);
       setSpeakers([]);
       setDetectedSpeakerIds(new Set());
+
+      // Start audio capture (triggers microphone permission)
+      if (onStartAudio) {
+        await onStartAudio();
+      }
     } catch (err) {
-      console.error('Failed to start discovery:', err);
+      console.error('[SpeakerDiscovery] Failed to start discovery:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -188,18 +206,21 @@ export default function SpeakerDiscoveryModal({
    * Listen for STT events and auto-detect speakers
    */
   useEffect(() => {
-    if (!ws || !isDiscovering) return;
+    if (!ws || !isDiscovering) {
+      return;
+    }
 
     const handleMessage = (event) => {
       try {
         const message = JSON.parse(event.data);
 
         // Only process STT events with speaker information
-        if ((message.type === 'stt_partial' || message.type === 'stt_final' || message.type === 'transcript_partial' || message.type === 'transcript_final') && message.speaker !== undefined) {
-          const speakerId = parseInt(message.speaker, 10);
+        // speaker_id comes from Speechmatics diarization (numeric: 0, 1, 2...)
+        if ((message.type === 'stt_partial' || message.type === 'stt_final' || message.type === 'transcript_partial' || message.type === 'transcript_final') && message.speaker_id !== undefined) {
+          const speakerId = message.speaker_id;
 
           // Skip invalid speaker IDs
-          if (isNaN(speakerId) || speakerId < 0) return;
+          if (typeof speakerId !== 'number' || speakerId < 0) return;
 
           // Show voice activity
           setActiveSpeakerId(speakerId);
@@ -209,8 +230,9 @@ export default function SpeakerDiscoveryModal({
           if (!detectedSpeakerIds.has(speakerId)) {
             setDetectedSpeakerIds(prev => new Set(prev).add(speakerId));
 
-            // Auto-detect language from STT or default to English
-            const detectedLanguage = message.language || message.src || 'en';
+            // Auto-detect language from STT event
+            // Priority: detected_language (per-speaker from auto-detection) > lang (session) > fallback to 'en'
+            const detectedLanguage = message.detected_language || message.lang || message.language || message.src || 'en';
 
             const newSpeaker = {
               speaker_id: speakerId,
@@ -223,7 +245,7 @@ export default function SpeakerDiscoveryModal({
           }
         }
       } catch (err) {
-        console.error('Error processing WebSocket message:', err);
+        console.error('[SpeakerDiscovery] Error processing WebSocket message:', err);
       }
     };
 
@@ -253,13 +275,32 @@ export default function SpeakerDiscoveryModal({
 
         if (response.ok) {
           const data = await response.json();
+
+          // If room has existing speakers (re-configuration), load them and skip intro
           if (data.speakers && data.speakers.length > 0) {
             setSpeakers(data.speakers);
             setDetectedSpeakerIds(new Set(data.speakers.map(s => s.speaker_id)));
-          }
-          // Check if already in discovery mode
-          if (data.discovery_mode === 'enabled') {
-            setIsDiscovering(true);
+            setShowIntro(false); // Skip intro for re-configuration
+
+            // If locked, unlock for editing (user clicked "Configure Speakers" from settings)
+            if (data.discovery_mode === 'locked') {
+              console.log('[SpeakerDiscovery] Room locked, unlocking for re-configuration');
+              await fetch(`/api/rooms/${roomCode}/discovery-mode`, {
+                method: 'PATCH',
+                headers: {
+                  ...headers,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ discovery_mode: 'enabled' })
+              });
+              setIsDiscovering(true);
+            } else if (data.discovery_mode === 'enabled') {
+              setIsDiscovering(true);
+            }
+          } else {
+            // New room with no speakers - show intro
+            setShowIntro(true);
+            setIsDiscovering(false);
           }
         }
       } catch (err) {
@@ -297,11 +338,66 @@ export default function SpeakerDiscoveryModal({
           </div>
         )}
 
-        {/* Discovery Status */}
-        {!isDiscovering ? (
+        {/* Intro Screen - First time room setup */}
+        {showIntro ? (
+          <div className="space-y-4">
+            {/* Explanation */}
+            <div className="p-4 bg-bg/50 border border-border rounded-lg space-y-3">
+              <h4 className="text-lg font-semibold text-fg m-0 flex items-center gap-2">
+                <span>🎯</span>
+                {t('discovery.howItWorks', 'How Multi-Speaker Discovery Works')}
+              </h4>
+              <ol className="text-sm text-muted space-y-2 m-0 pl-5">
+                <li className="flex gap-2">
+                  <span className="text-accent font-semibold">1.</span>
+                  <span>{t('discovery.step1', 'Each person will speak into their device in their native language')}</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-accent font-semibold">2.</span>
+                  <span>{t('discovery.step2', 'The system will automatically detect who is speaking and what language')}</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-accent font-semibold">3.</span>
+                  <span>{t('discovery.step3', 'You can review and edit speaker names and languages')}</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-accent font-semibold">4.</span>
+                  <span>{t('discovery.step4', 'Once complete, the conversation will start with real-time translation')}</span>
+                </li>
+              </ol>
+            </div>
+
+            {/* Important Note */}
+            <div className="p-3 bg-accent/10 border border-accent/30 rounded-lg">
+              <p className="text-sm text-fg m-0 flex items-start gap-2">
+                <span className="text-accent text-lg">💡</span>
+                <span>
+                  <strong>{t('discovery.tipTitle', 'Tip:')}</strong>{' '}
+                  {t('discovery.tipText', 'Have each speaker say a few sentences. The more they speak, the better the detection.')}
+                </span>
+              </p>
+            </div>
+
+            {/* Enable Discovery Button */}
+            <button
+              onClick={handleStartDiscovery}
+              disabled={loading}
+              className="w-full px-4 py-3 bg-accent text-white border-0 rounded-lg cursor-pointer font-semibold text-base hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="processing-spinner">⟳</span>
+                  {t('discovery.starting', 'Starting...')}
+                </span>
+              ) : (
+                <>✨ {t('discovery.enableDiscovery', 'Enable Discovery & Start Detection')}</>
+              )}
+            </button>
+          </div>
+        ) : !isDiscovering ? (
           <div className="space-y-3">
             <p className="text-sm text-muted">
-              {t('discovery.instructions', 'Click "Start Discovery" and have each speaker introduce themselves. The system will automatically detect speakers and their languages.')}
+              {t('discovery.instructions', 'Click "Start Discovery" to detect speakers again, or edit the configuration below.')}
             </p>
             <button
               onClick={handleStartDiscovery}
@@ -320,6 +416,29 @@ export default function SpeakerDiscoveryModal({
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Detected Languages */}
+            {detectedLanguages.length > 0 && (
+              <div className="p-4 bg-bg/50 border border-border rounded-lg">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold text-muted whitespace-nowrap">
+                    {t('discovery.detectedLanguages', 'Detected Languages')}:
+                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {detectedLanguages.map((lang) => (
+                      <div
+                        key={lang.code}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-card border border-accent/30 rounded-full transition-all hover:border-accent/60"
+                        title={lang.name}
+                      >
+                        <span className="text-2xl leading-none">{lang.flag}</span>
+                        <span className="text-sm font-medium text-fg">{lang.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Speaker List */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -441,7 +560,15 @@ export default function SpeakerDiscoveryModal({
         {/* Cancel Button */}
         {!isDiscovering && (
           <button
-            onClick={onClose}
+            onClick={() => {
+              // If in intro stage and onCancel provided, use that (navigates to rooms)
+              // Otherwise use onClose (just closes modal)
+              if (showIntro && onCancel) {
+                onCancel();
+              } else {
+                onClose();
+              }
+            }}
             disabled={loading}
             className="w-full px-4 py-3 bg-transparent text-muted border border-border rounded-lg cursor-pointer font-semibold text-base hover:bg-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -467,9 +594,11 @@ export default function SpeakerDiscoveryModal({
 SpeakerDiscoveryModal.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
+  onCancel: PropTypes.func,
   roomCode: PropTypes.string.isRequired,
   token: PropTypes.string,
   isGuest: PropTypes.bool,
   ws: PropTypes.object,
-  onComplete: PropTypes.func
+  onComplete: PropTypes.func,
+  onStartAudio: PropTypes.func
 };
