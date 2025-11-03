@@ -7,13 +7,13 @@ Handles:
 """
 
 import logging
+import json
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel, Field
-from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
-import redis.asyncio as redis
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from ..db import SessionLocal
 from ..auth import get_current_user
@@ -23,8 +23,20 @@ from ..settings import REDIS_URL
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/quota", tags=["quota"])
 
-# Redis client for caching
+# Redis client for caching (sync version)
+import redis
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
+# ========================================
+# Dependencies
+# ========================================
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # ========================================
 # Pydantic Models
@@ -60,9 +72,9 @@ class QuotaDeductResponse(BaseModel):
 # ========================================
 
 @router.get("/status", response_model=QuotaStatusResponse)
-async def get_quota_status(
-    current_user_id: int = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_async_db)
+def get_quota_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Get real-time quota status for authenticated user.
@@ -71,43 +83,45 @@ async def get_quota_status(
     Cache invalidated on quota deduction.
     """
     # Check cache first
-    cache_key = f"quota:status:{current_user_id}"
-    cached = await redis_client.get(cache_key)
+    cache_key = f"quota:status:{current_user.id}"
+    cached = redis_client.get(cache_key)
 
     if cached:
-        logger.debug(f"Quota status cache hit for user {current_user_id}")
-        import json
+        logger.debug(f"Quota status cache hit for user {current_user.id}")
         data = json.loads(cached)
         # Parse datetime from ISO string
         data['quota_reset_date'] = datetime.fromisoformat(data['quota_reset_date'])
         return QuotaStatusResponse(**data)
 
     # Query user subscription with tier
-    result = await db.execute(
-        select(UserSubscription, SubscriptionTier)
-        .join(SubscriptionTier, UserSubscription.tier_id == SubscriptionTier.id)
-        .where(UserSubscription.user_id == current_user_id)
-        .where(UserSubscription.status == 'active')
-    )
-    row = result.first()
+    result = db.execute(
+        text("""
+            SELECT
+                us.*,
+                st.tier_name,
+                st.monthly_quota_hours
+            FROM user_subscriptions us
+            JOIN subscription_tiers st ON us.tier_id = st.id
+            WHERE us.user_id = :user_id
+            AND us.status = 'active'
+        """),
+        {"user_id": current_user.id}
+    ).fetchone()
 
-    if not row:
+    if not result:
         raise HTTPException(status_code=404, detail="No active subscription found")
 
-    subscription, tier = row
-
     # Calculate quota
-    monthly_quota_seconds = int((tier.monthly_quota_hours or 0) * 3600)
-    bonus_seconds = subscription.bonus_credits_seconds
-    grace_seconds = subscription.grace_quota_seconds
+    monthly_quota_seconds = int((result.monthly_quota_hours or 0) * 3600)
+    bonus_seconds = result.bonus_credits_seconds or 0
+    grace_seconds = result.grace_quota_seconds or 0
     total_quota = monthly_quota_seconds + bonus_seconds + grace_seconds
 
     # Get used quota in current billing period using database function
-    result = await db.execute(
+    available_seconds = db.execute(
         text("SELECT get_user_quota_available(:user_id)"),
-        {"user_id": current_user_id}
-    )
-    available_seconds = result.scalar() or 0
+        {"user_id": current_user.id}
+    ).scalar() or 0
 
     # Calculate used from available
     used_seconds = total_quota - available_seconds
@@ -132,29 +146,28 @@ async def get_quota_status(
             })
 
     response_data = {
-        "tier": tier.tier_name,
+        "tier": result.tier_name,
         "quota_seconds_total": total_quota,
         "quota_seconds_used": used_seconds,
         "quota_seconds_remaining": remaining_seconds,
-        "quota_reset_date": subscription.billing_period_end,
+        "quota_reset_date": result.billing_period_end,
         "grace_quota_seconds": grace_seconds,
         "alerts": alerts
     }
 
     # Cache for 30 seconds
-    import json
     cache_data = response_data.copy()
     cache_data['quota_reset_date'] = cache_data['quota_reset_date'].isoformat()
-    await redis_client.setex(cache_key, 30, json.dumps(cache_data))
+    redis_client.setex(cache_key, 30, json.dumps(cache_data))
 
-    logger.info(f"Quota status for user {current_user_id}: {remaining_seconds}s remaining")
+    logger.info(f"Quota status for user {current_user.id}: {remaining_seconds}s remaining")
     return QuotaStatusResponse(**response_data)
 
 
 @router.post("/deduct", response_model=QuotaDeductResponse)
-async def deduct_quota(
+def deduct_quota(
     request: QuotaDeductRequest,
-    db: AsyncSession = Depends(get_async_db),
+    db: Session = Depends(get_db),
     x_internal_api_key: Optional[str] = Header(None)
 ):
     """
@@ -174,11 +187,10 @@ async def deduct_quota(
     #     raise HTTPException(status_code=403, detail="Invalid API key")
 
     # Get user's available quota
-    result = await db.execute(
+    available_seconds = db.execute(
         text("SELECT get_user_quota_available(:user_id)"),
         {"user_id": request.user_id}
-    )
-    available_seconds = result.scalar() or 0
+    ).scalar() or 0
 
     if available_seconds < request.amount_seconds:
         logger.warning(
@@ -192,11 +204,10 @@ async def deduct_quota(
         )
 
     # Get room_id from room_code
-    result = await db.execute(
+    room_id = db.execute(
         text("SELECT id FROM rooms WHERE code = :code"),
         {"code": request.room_code}
-    )
-    room_id = result.scalar()
+    ).scalar()
 
     # Create quota transaction
     transaction = QuotaTransaction(
@@ -211,12 +222,12 @@ async def deduct_quota(
         description=f"{request.service_type.upper()} usage via {request.provider_used}"
     )
     db.add(transaction)
-    await db.commit()
-    await db.refresh(transaction)
+    db.commit()
+    db.refresh(transaction)
 
     # Invalidate cache
     cache_key = f"quota:status:{request.user_id}"
-    await redis_client.delete(cache_key)
+    redis_client.delete(cache_key)
 
     new_remaining = available_seconds - request.amount_seconds
 

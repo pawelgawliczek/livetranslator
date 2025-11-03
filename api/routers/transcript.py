@@ -11,20 +11,31 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
-import redis.asyncio as redis
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 
-from ..db import get_async_db
-from ..auth import get_current_user_id
-from ..models import Room, RoomParticipant, User
+from ..db import SessionLocal
+from ..auth import get_current_user
+from ..models import Room, RoomParticipant, User, QuotaTransaction
 from ..settings import REDIS_URL
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["transcript"])
 
-# Redis client for pub/sub
+# Redis client for pub/sub (sync)
+import redis
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
+# ========================================
+# Dependencies
+# ========================================
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # ========================================
 # Pydantic Models
@@ -60,10 +71,10 @@ class TranscriptDirectResponse(BaseModel):
 # ========================================
 
 @router.post("/transcript-direct", response_model=TranscriptDirectResponse)
-async def submit_transcript_direct(
+def submit_transcript_direct(
     request: TranscriptDirectRequest,
-    current_user_id: int = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_async_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     iOS sends pre-transcribed text from Apple STT.
@@ -80,22 +91,25 @@ async def submit_transcript_direct(
     Authentication: Required (JWT)
     """
     # 1. Validate room exists
-    result = await db.execute(
-        select(Room).where(Room.code == request.room_code)
-    )
-    room = result.scalar_one_or_none()
+    room = db.execute(
+        text("SELECT id, code, owner_id FROM rooms WHERE code = :code"),
+        {"code": request.room_code}
+    ).fetchone()
 
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
     # 2. Check user is participant in room
-    result = await db.execute(
-        select(RoomParticipant)
-        .where(RoomParticipant.room_id == room.id)
-        .where(RoomParticipant.user_id == current_user_id)
-        .where(RoomParticipant.is_active == True)
-    )
-    participant = result.scalar_one_or_none()
+    participant = db.execute(
+        text("""
+            SELECT id, user_id, quota_source, is_using_admin_quota
+            FROM room_participants
+            WHERE room_id = :room_id
+            AND user_id = :user_id
+            AND is_active = TRUE
+        """),
+        {"room_id": room.id, "user_id": current_user.id}
+    ).fetchone()
 
     if not participant:
         raise HTTPException(
@@ -112,34 +126,42 @@ async def submit_transcript_direct(
         quota_seconds = sentence_count * 3
 
     # 4. Check quota availability
-    result = await db.execute(
+    available_quota = db.execute(
         text("SELECT get_user_quota_available(:user_id)"),
-        {"user_id": current_user_id}
-    )
-    available_quota = result.scalar() or 0
+        {"user_id": current_user.id}
+    ).scalar() or 0
+
+    quota_user_id = current_user.id
+    quota_source = "own"
 
     if available_quota < quota_seconds:
         # Check if room admin can provide fallback quota
-        if room.owner_id != current_user_id:
-            result = await db.execute(
+        if room.owner_id != current_user.id:
+            admin_quota = db.execute(
                 text("SELECT get_user_quota_available(:user_id)"),
                 {"user_id": room.owner_id}
-            )
-            admin_quota = result.scalar() or 0
+            ).scalar() or 0
 
             if admin_quota >= quota_seconds:
                 # Use admin quota
                 logger.info(
-                    f"User {current_user_id} exhausted quota, using admin "
+                    f"User {current_user.id} exhausted quota, using admin "
                     f"{room.owner_id} quota for {quota_seconds}s"
                 )
                 quota_user_id = room.owner_id
                 quota_source = "admin"
 
                 # Update participant record
-                participant.is_using_admin_quota = True
-                participant.quota_source = "admin"
-                await db.commit()
+                db.execute(
+                    text("""
+                        UPDATE room_participants
+                        SET is_using_admin_quota = TRUE,
+                            quota_source = 'admin'
+                        WHERE id = :id
+                    """),
+                    {"id": participant.id}
+                )
+                db.commit()
             else:
                 # Both exhausted - return 402 Payment Required
                 raise HTTPException(
@@ -162,42 +184,36 @@ async def submit_transcript_direct(
                     "upgrade_required": True
                 }
             )
-    else:
-        # Use participant's own quota
-        quota_user_id = current_user_id
-        quota_source = "own"
 
-    # 5. Deduct quota via internal API
-    from .quota import QuotaDeductRequest
-    quota_request = QuotaDeductRequest(
+    # 5. Deduct quota directly (no internal HTTP call)
+    transaction = QuotaTransaction(
         user_id=quota_user_id,
+        room_id=room.id,
         room_code=request.room_code,
-        amount_seconds=quota_seconds,
-        service_type="stt",  # Apple STT (free for us, but count toward quota)
+        transaction_type="deduct",
+        amount_seconds=-quota_seconds,  # Negative for deduction
+        quota_type=quota_source,
         provider_used="apple_stt",
-        quota_source=quota_source
+        service_type="stt",
+        description=f"STT usage via apple_stt"
+    )
+    db.add(transaction)
+    db.commit()
+    db.refresh(transaction)
+
+    # Invalidate cache
+    cache_key = f"quota:status:{quota_user_id}"
+    redis_client.delete(cache_key)
+
+    new_remaining = available_quota - quota_seconds if quota_source == "own" else available_quota
+
+    logger.info(
+        f"Quota deducted: user={quota_user_id}, amount={quota_seconds}s, "
+        f"remaining={new_remaining}s, provider=apple_stt"
     )
 
-    # Call quota deduction (internal)
-    import httpx
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "http://localhost:8000/api/quota/deduct",
-            json=quota_request.dict(),
-            headers={"X-Internal-API-Key": "internal"}  # TODO: Use actual key
-        )
-
-        if response.status_code != 200:
-            logger.error(f"Quota deduction failed: {response.text}")
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to deduct quota"
-            )
-
-        quota_response = response.json()
-
     # 6. Generate segment_id if not provided
-    segment_id = request.segment_id or f"ios_{current_user_id}_{int(datetime.utcnow().timestamp() * 1000)}"
+    segment_id = request.segment_id or f"ios_{current_user.id}_{int(datetime.utcnow().timestamp() * 1000)}"
 
     # 7. Publish to stt_events Redis channel (skip STT router)
     stt_event = {
@@ -212,15 +228,15 @@ async def submit_transcript_direct(
         "timestamp": (request.timestamp or datetime.utcnow()).isoformat(),
         "provider": "apple_stt",
         "platform": "ios",
-        "user_id": current_user_id
+        "user_id": current_user.id
     }
 
     # Publish to Redis channel (MT router will pick it up)
-    await redis_client.publish("stt_events", json.dumps(stt_event))
+    redis_client.publish("stt_events", json.dumps(stt_event))
 
     logger.info(
         f"iOS transcript submitted: room={request.room_code}, "
-        f"user={current_user_id}, segment={segment_id}, "
+        f"user={current_user.id}, segment={segment_id}, "
         f"quota_deducted={quota_seconds}s"
     )
 
@@ -232,6 +248,6 @@ async def submit_transcript_direct(
         success=True,
         segment_id=segment_id,
         translations=[],  # Sent via WebSocket
-        quota_remaining_seconds=quota_response["remaining_seconds"],
+        quota_remaining_seconds=new_remaining,
         quota_deducted_seconds=quota_seconds
     )
