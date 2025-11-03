@@ -124,8 +124,30 @@ class RoomParticipant(Base):
     left_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    # Tier system quota tracking (Migration 016)
+    quota_used_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_using_admin_quota: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    quota_source: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
     room = relationship("Room")
     user = relationship("User")
+
+class SubscriptionTier(Base):
+    __tablename__ = "subscription_tiers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tier_name: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    monthly_price_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    monthly_quota_hours: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 2), nullable=True)
+    monthly_quota_messages: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    features: Mapped[dict] = mapped_column(JSON, nullable=False, default=list)
+    provider_tier: Mapped[str] = mapped_column(String(20), default="standard", nullable=False)
+    stripe_price_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    apple_product_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 class UserSubscription(Base):
     __tablename__ = "user_subscriptions"
@@ -140,7 +162,19 @@ class UserSubscription(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
+    # Tier system extensions (Migration 016)
+    tier_id: Mapped[Optional[int]] = mapped_column(ForeignKey("subscription_tiers.id"), nullable=True)
+    bonus_credits_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    grace_quota_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
+    apple_customer_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    apple_transaction_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    apple_original_transaction_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
+    auto_renew: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
     user = relationship("User", backref="subscription")
+    tier = relationship("SubscriptionTier")
 
 class UserUsage(Base):
     __tablename__ = "user_usage"
@@ -194,3 +228,84 @@ class SystemSettings(Base):
     key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     value: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+class QuotaTransaction(Base):
+    __tablename__ = "quota_transactions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    room_id: Mapped[Optional[int]] = mapped_column(ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True)
+    room_code: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    transaction_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    amount_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    quota_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    provider_used: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    service_type: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User")
+    room = relationship("Room")
+
+class PaymentTransaction(Base):
+    __tablename__ = "payment_transactions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    platform: Mapped[str] = mapped_column(String(20), nullable=False)
+    transaction_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    amount_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+
+    # Stripe fields
+    stripe_payment_intent_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    stripe_invoice_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    # Apple fields
+    apple_transaction_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
+    apple_original_transaction_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    apple_product_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    apple_receipt_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Common fields
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    user = relationship("User")
+
+class CreditPackage(Base):
+    __tablename__ = "credit_packages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    package_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    hours: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    price_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    discount_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0, nullable=False)
+    stripe_price_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    apple_product_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+class AdminAuditLog(Base):
+    __tablename__ = "admin_audit_log"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    admin_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)
+    target_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    target_room_id: Mapped[Optional[int]] = mapped_column(ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True)
+    details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    admin = relationship("User", foreign_keys=[admin_id])
+    target_user = relationship("User", foreign_keys=[target_user_id])
+    target_room = relationship("Room")
