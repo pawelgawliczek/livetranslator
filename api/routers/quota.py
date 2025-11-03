@@ -15,8 +15,8 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 import redis.asyncio as redis
 
-from ..db import get_async_db
-from ..auth import get_current_user_id
+from ..db import SessionLocal
+from ..auth import get_current_user
 from ..models import User, UserSubscription, SubscriptionTier, QuotaTransaction
 from ..settings import REDIS_URL
 

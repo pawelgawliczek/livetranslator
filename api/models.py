@@ -242,7 +242,7 @@ class QuotaTransaction(Base):
     provider_used: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     service_type: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    transaction_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User")
@@ -272,7 +272,7 @@ class PaymentTransaction(Base):
     # Common fields
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    transaction_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
