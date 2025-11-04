@@ -844,7 +844,7 @@ def get_tier_analysis(
 
     return {"tiers": tiers}
 
-# Endpoint 3: User Acquisition
+# Endpoint 3: User Acquisition (US-004)
 @router.get("/users/acquisition")
 def get_user_acquisition(
     start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
@@ -854,8 +854,13 @@ def get_user_acquisition(
     db: Session = Depends(get_db)
 ):
     """
-    Get user acquisition metrics from admin_user_metrics view.
-    Shows new signups, activated users, and fast activation rates.
+    Get user acquisition metrics: signups, activation rates, fast activation.
+
+    US-004: User Acquisition Metrics Page
+    - New signups per day
+    - Activated users (created at least 1 room)
+    - Fast activation (created room within 1 hour of signup)
+    - Previous period comparison for trends
     """
     # Default to last 30 days
     if not start_date:
@@ -863,34 +868,149 @@ def get_user_acquisition(
     if not end_date:
         end_date = datetime.utcnow()
 
+    # Validate date range (max 1 year)
+    date_diff = end_date - start_date
+    if date_diff.days > 365:
+        raise HTTPException(status_code=400, detail="Date range cannot exceed 1 year")
+
+    # Calculate previous period for comparison
+    period_duration = end_date - start_date
+    prev_end_date = start_date - timedelta(seconds=1)
+    prev_start_date = prev_end_date - period_duration
+
+    # Query for current period
     query = text("""
+        WITH daily_signups AS (
+            SELECT
+                DATE(created_at) as signup_date,
+                id as user_id,
+                created_at
+            FROM users
+            WHERE created_at >= :start_date
+              AND created_at <= :end_date
+        ),
+        activations AS (
+            SELECT DISTINCT
+                r.owner_id as user_id,
+                MIN(r.created_at) as first_room_created
+            FROM rooms r
+            INNER JOIN daily_signups ds ON r.owner_id = ds.user_id
+            GROUP BY r.owner_id
+        )
         SELECT
-            signup_date,
-            new_signups,
-            activated_users,
-            fast_activation
-        FROM admin_user_metrics
-        WHERE signup_date >= :start_date AND signup_date <= :end_date
-        ORDER BY signup_date DESC
+            ds.signup_date as date,
+            COUNT(DISTINCT ds.user_id) as new_signups,
+            COUNT(DISTINCT a.user_id) as activated,
+            ROUND(
+                COALESCE(COUNT(DISTINCT a.user_id)::numeric / NULLIF(COUNT(DISTINCT ds.user_id), 0) * 100, 0),
+                1
+            ) as activation_pct,
+            COUNT(DISTINCT CASE
+                WHEN a.first_room_created <= ds.created_at + INTERVAL '1 hour'
+                THEN a.user_id
+            END) as fast_activated,
+            ROUND(
+                COALESCE(COUNT(DISTINCT CASE
+                    WHEN a.first_room_created <= ds.created_at + INTERVAL '1 hour'
+                    THEN a.user_id
+                END)::numeric / NULLIF(COUNT(DISTINCT ds.user_id), 0) * 100, 0),
+                1
+            ) as fast_activation_pct
+        FROM daily_signups ds
+        LEFT JOIN activations a ON ds.user_id = a.user_id
+        GROUP BY ds.signup_date
+        ORDER BY ds.signup_date DESC
     """)
 
     results = db.execute(query, {"start_date": start_date, "end_date": end_date}).fetchall()
 
-    metrics = []
+    # Query for previous period summary
+    prev_query = text("""
+        WITH prev_signups AS (
+            SELECT id as user_id, created_at
+            FROM users
+            WHERE created_at >= :prev_start AND created_at <= :prev_end
+        ),
+        prev_activations AS (
+            SELECT DISTINCT
+                r.owner_id as user_id,
+                MIN(r.created_at) as first_room_created
+            FROM rooms r
+            INNER JOIN prev_signups ps ON r.owner_id = ps.user_id
+            GROUP BY r.owner_id
+        )
+        SELECT
+            COUNT(DISTINCT ps.user_id) as total_signups,
+            COUNT(DISTINCT pa.user_id) as activated_users,
+            ROUND(
+                COALESCE(COUNT(DISTINCT pa.user_id)::numeric / NULLIF(COUNT(DISTINCT ps.user_id), 0) * 100, 0),
+                1
+            ) as activation_rate,
+            COUNT(DISTINCT CASE
+                WHEN pa.first_room_created <= ps.created_at + INTERVAL '1 hour'
+                THEN pa.user_id
+            END) as fast_activated_users,
+            ROUND(
+                COALESCE(COUNT(DISTINCT CASE
+                    WHEN pa.first_room_created <= ps.created_at + INTERVAL '1 hour'
+                    THEN pa.user_id
+                END)::numeric / NULLIF(COUNT(DISTINCT ps.user_id), 0) * 100, 0),
+                1
+            ) as fast_activation_rate
+        FROM prev_signups ps
+        LEFT JOIN prev_activations pa ON ps.user_id = pa.user_id
+    """)
+
+    prev_result = db.execute(prev_query, {
+        "prev_start": prev_start_date,
+        "prev_end": prev_end_date
+    }).fetchone()
+
+    # Build daily breakdown
+    daily = []
     for row in results:
-        metrics.append({
+        daily.append({
             "date": row[0].strftime('%Y-%m-%d'),
-            "new_users": row[1],
-            "activated_users": row[2],
-            "fast_activation": row[3]
+            "new_signups": row[1],
+            "activated": row[2],
+            "activation_pct": float(row[3]),
+            "fast_activated": row[4],
+            "fast_activation_pct": float(row[5])
         })
 
+    # Calculate summary metrics
+    total_signups = sum(d["new_signups"] for d in daily)
+    total_activated = sum(d["activated"] for d in daily)
+    total_fast_activated = sum(d["fast_activated"] for d in daily)
+
+    activation_rate = round(total_activated / total_signups * 100, 1) if total_signups > 0 else 0.0
+    fast_activation_rate = round(total_fast_activated / total_signups * 100, 1) if total_signups > 0 else 0.0
+
+    # Previous period data
+    prev_total_signups = prev_result[0] if prev_result else 0
+    prev_activation_rate = float(prev_result[2]) if prev_result else 0.0
+    prev_fast_activation_rate = float(prev_result[4]) if prev_result else 0.0
+
     return {
-        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
-        "granularity": granularity,
-        "metrics": metrics,
-        "total_new_users": sum(m["new_users"] for m in metrics),
-        "total_activated": sum(m["activated_users"] for m in metrics)
+        "summary": {
+            "total_signups": total_signups,
+            "activated_users": total_activated,
+            "activation_rate": activation_rate,
+            "fast_activated_users": total_fast_activated,
+            "fast_activation_rate": fast_activation_rate,
+            "previous_period": {
+                "total_signups": prev_total_signups,
+                "activation_rate": prev_activation_rate,
+                "fast_activation_rate": prev_fast_activation_rate
+            }
+        },
+        "daily": daily,
+        "metadata": {
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "granularity": granularity,
+            "total_days": len(daily)
+        }
     }
 
 # Endpoint 4: User Engagement (DAU/WAU/MAU)

@@ -589,6 +589,26 @@
     "metrics": {
       "title": "Success KPIs"
     },
+    "acquisition": {
+      "title": "User Acquisition Metrics",
+      "totalSignups": "Total Signups",
+      "activationRate": "Activation Rate",
+      "fastActivation": "Fast Activation (<1hr)",
+      "trend": "User Acquisition Trend",
+      "dailyBreakdown": "Daily Breakdown",
+      "exportCSV": "Export CSV",
+      "empty": "No signups in selected period",
+      "error": "Failed to load acquisition data",
+      "retry": "Retry",
+      "chartError": "Error loading chart",
+      "noData": "No data available",
+      "date": "Date",
+      "newSignups": "New Signups",
+      "activated": "Activated",
+      "activationPct": "Activation %",
+      "fastActivated": "Fast Activation",
+      "fastActivationPct": "Fast Activation %"
+    },
     "system": {
       "title": "System Monitoring"
     },
