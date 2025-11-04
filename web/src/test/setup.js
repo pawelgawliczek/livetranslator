@@ -36,6 +36,14 @@ global.IntersectionObserver = class IntersectionObserver {
   unobserve() {}
 };
 
+// Mock ResizeObserver (needed for Recharts)
+global.ResizeObserver = class ResizeObserver {
+  constructor() {}
+  disconnect() {}
+  observe() {}
+  unobserve() {}
+};
+
 // Mock localStorage
 const localStorageMock = {
   getItem: vi.fn(),

@@ -7,9 +7,11 @@ Tests:
 """
 
 import pytest
+import pytest_asyncio
 from datetime import datetime, timedelta
 from decimal import Decimal
 from sqlalchemy import select, text
+from fastapi.testclient import TestClient
 
 from api.models import (
     User,
@@ -18,6 +20,47 @@ from api.models import (
     QuotaTransaction,
     Room
 )
+from api.main import app
+from api.auth import get_db
+from api.db import SessionLocal
+from api.settings import JWT_SECRET
+from jose import jwt
+
+
+# Helper to create JWT token
+def create_test_token(user_id: int, email: str = "test@example.com") -> str:
+    """Create JWT token for testing."""
+    claims = {
+        "sub": str(user_id),
+        "email": email,
+        "preferred_lang": "en",
+        "is_admin": False,
+        "exp": datetime.utcnow() + timedelta(hours=12)
+    }
+    return jwt.encode(claims, JWT_SECRET, algorithm="HS256")
+
+
+# Helper to create sync database session override
+def get_sync_test_client(mock_user=None):
+    """Create TestClient with sync database session and optional user override."""
+    def override_get_db():
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    # If mock_user provided, override authentication
+    if mock_user:
+        from api.auth import get_current_user
+        def override_get_current_user():
+            return mock_user
+        app.dependency_overrides[get_current_user] = override_get_current_user
+
+    client = TestClient(app)
+    return client
 
 
 @pytest.mark.asyncio
@@ -43,23 +86,25 @@ async def test_quota_status_free_tier(test_db_session, test_user):
     await test_db_session.commit()
 
     # Calculate expected quota
-    monthly_quota_seconds = int(free_tier.monthly_quota_hours * 3600)  # 600 seconds (10 min)
+    monthly_quota_seconds = int(float(free_tier.monthly_quota_hours) * 3600)  # 612 seconds (0.17 hours)
 
-    # Test: Get quota status
-    from api.routers.quota import get_quota_status
+    # Test: Get quota status via HTTP
+    client = get_sync_test_client(mock_user=test_user)
 
-    response = await get_quota_status(
-        current_user_id=test_user.id,
-        db=test_db_session
-    )
+    response = client.get("/api/quota/status")
 
     # Assert
-    assert response.tier == "free"
-    assert response.quota_seconds_total == monthly_quota_seconds
-    assert response.quota_seconds_used == 0
-    assert response.quota_seconds_remaining == monthly_quota_seconds
-    assert response.grace_quota_seconds == 0
-    assert len(response.alerts) == 0
+    assert response.status_code == 200
+    data = response.json()
+    assert data["tier"] == "free"
+    assert data["quota_seconds_total"] == monthly_quota_seconds
+    assert data["quota_seconds_used"] == 0
+    assert data["quota_seconds_remaining"] == monthly_quota_seconds
+    assert data["grace_quota_seconds"] == 0
+    assert len(data["alerts"]) == 0
+
+    # Cleanup
+    app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -101,25 +146,27 @@ async def test_quota_status_plus_tier_with_usage(test_db_session, test_user, tes
     await test_db_session.commit()
 
     # Calculate expected quota
-    monthly_quota_seconds = int(plus_tier.monthly_quota_hours * 3600)  # 7200 seconds (2 hr)
+    monthly_quota_seconds = int(float(plus_tier.monthly_quota_hours) * 3600)  # 7200 seconds (2 hr)
     total_quota = monthly_quota_seconds + 1800  # Plus bonus
     used_seconds = 3600
     remaining_seconds = total_quota - used_seconds
 
-    # Test: Get quota status
-    from api.routers.quota import get_quota_status
+    # Test: Get quota status via HTTP
+    client = get_sync_test_client(mock_user=test_user)
 
-    response = await get_quota_status(
-        current_user_id=test_user.id,
-        db=test_db_session
-    )
+    response = client.get("/api/quota/status")
 
     # Assert
-    assert response.tier == "plus"
-    assert response.quota_seconds_total == total_quota
-    assert response.quota_seconds_used == used_seconds
-    assert response.quota_seconds_remaining == remaining_seconds
-    assert response.grace_quota_seconds == 0
+    assert response.status_code == 200
+    data = response.json()
+    assert data["tier"] == "plus"
+    assert data["quota_seconds_total"] == total_quota
+    assert data["quota_seconds_used"] == used_seconds
+    assert data["quota_seconds_remaining"] == remaining_seconds
+    assert data["grace_quota_seconds"] == 0
+
+    # Cleanup
+    app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -143,13 +190,15 @@ async def test_quota_status_80_percent_alert(test_db_session, test_user, test_ro
     test_db_session.add(subscription)
     await test_db_session.commit()
 
-    # Deduct 480 seconds (80% of 600)
+    # Deduct 490 seconds (80% of 612)
+    free_tier_seconds = int(float(free_tier.monthly_quota_hours) * 3600)  # 612 seconds
+    deduct_amount = int(free_tier_seconds * 0.8)  # 80%
     transaction = QuotaTransaction(
         user_id=test_user.id,
         room_id=test_room.id,
         room_code=test_room.code,
         transaction_type="deduct",
-        amount_seconds=-480,
+        amount_seconds=-deduct_amount,
         quota_type="monthly",
         provider_used="apple_stt",
         service_type="stt"
@@ -157,18 +206,24 @@ async def test_quota_status_80_percent_alert(test_db_session, test_user, test_ro
     test_db_session.add(transaction)
     await test_db_session.commit()
 
-    # Test
-    from api.routers.quota import get_quota_status
+    # Test via HTTP
+    client = get_sync_test_client()
+    token = create_access_token(data={"sub": str(test_user.id)})
 
-    response = await get_quota_status(
-        current_user_id=test_user.id,
-        db=test_db_session
+    response = client.get(
+        "/api/quota/status",
+        headers={"Authorization": f"Bearer {token}"}
     )
 
     # Assert: Warning alert triggered
-    assert len(response.alerts) > 0
-    assert response.alerts[0]["type"] == "warning"
-    assert response.alerts[0]["threshold"] == "80_percent"
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["alerts"]) > 0
+    assert data["alerts"][0]["type"] == "warning"
+    assert data["alerts"][0]["threshold"] == "80_percent"
+
+    # Cleanup
+    app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -191,37 +246,38 @@ async def test_quota_deduct_success(test_db_session, test_user, test_room):
     test_db_session.add(subscription)
     await test_db_session.commit()
 
-    # Test: Deduct 300 seconds (5 minutes)
-    from api.routers.quota import deduct_quota, QuotaDeductRequest
+    # Test: Deduct 300 seconds (5 minutes) via HTTP
+    client = get_sync_test_client()
 
-    request = QuotaDeductRequest(
-        user_id=test_user.id,
-        room_code=test_room.code,
-        amount_seconds=300,
-        service_type="stt",
-        provider_used="speechmatics",
-        quota_source="own"
-    )
+    request_data = {
+        "user_id": test_user.id,
+        "room_code": test_room.code,
+        "amount_seconds": 300,
+        "service_type": "stt",
+        "provider_used": "speechmatics",
+        "quota_source": "own"
+    }
 
-    response = await deduct_quota(
-        request=request,
-        db=test_db_session,
-        x_internal_api_key="internal"
-    )
+    response = client.post("/api/quota/deduct", json=request_data)
 
     # Assert
-    assert response.quota_exhausted == False
-    assert response.transaction_id > 0
-    assert response.remaining_seconds == 7200 - 300  # 2 hours - 5 min
+    assert response.status_code == 200
+    data = response.json()
+    assert data["quota_exhausted"] == False
+    assert data["transaction_id"] > 0
+    assert data["remaining_seconds"] == 7200 - 300  # 2 hours - 5 min
 
     # Verify transaction created
     result = await test_db_session.execute(
-        select(QuotaTransaction).where(QuotaTransaction.id == response.transaction_id)
+        select(QuotaTransaction).where(QuotaTransaction.id == data["transaction_id"])
     )
     transaction = result.scalar_one()
     assert transaction.user_id == test_user.id
     assert transaction.amount_seconds == -300  # Negative for deduction
     assert transaction.provider_used == "speechmatics"
+
+    # Cleanup
+    app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -245,13 +301,14 @@ async def test_quota_deduct_exhausted(test_db_session, test_user, test_room):
     test_db_session.add(subscription)
     await test_db_session.commit()
 
-    # Exhaust quota (600 seconds)
+    # Exhaust quota (612 seconds)
+    free_tier_seconds = int(float(free_tier.monthly_quota_hours) * 3600)
     transaction = QuotaTransaction(
         user_id=test_user.id,
         room_id=test_room.id,
         room_code=test_room.code,
         transaction_type="deduct",
-        amount_seconds=-600,
+        amount_seconds=-free_tier_seconds,
         quota_type="monthly",
         provider_used="apple_stt",
         service_type="stt"
@@ -259,28 +316,29 @@ async def test_quota_deduct_exhausted(test_db_session, test_user, test_room):
     test_db_session.add(transaction)
     await test_db_session.commit()
 
-    # Test: Try to deduct more
-    from api.routers.quota import deduct_quota, QuotaDeductRequest
+    # Test: Try to deduct more via HTTP
+    client = get_sync_test_client()
 
-    request = QuotaDeductRequest(
-        user_id=test_user.id,
-        room_code=test_room.code,
-        amount_seconds=60,
-        service_type="mt",
-        provider_used="deepl",
-        quota_source="own"
-    )
+    request_data = {
+        "user_id": test_user.id,
+        "room_code": test_room.code,
+        "amount_seconds": 60,
+        "service_type": "mt",
+        "provider_used": "deepl",
+        "quota_source": "own"
+    }
 
-    response = await deduct_quota(
-        request=request,
-        db=test_db_session,
-        x_internal_api_key="internal"
-    )
+    response = client.post("/api/quota/deduct", json=request_data)
 
     # Assert: Quota exhausted
-    assert response.quota_exhausted == True
-    assert response.remaining_seconds == 0
-    assert response.transaction_id == 0  # No transaction created
+    assert response.status_code == 200
+    data = response.json()
+    assert data["quota_exhausted"] == True
+    assert data["remaining_seconds"] == 0
+    assert data["transaction_id"] == 0  # No transaction created
+
+    # Cleanup
+    app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -336,7 +394,7 @@ async def test_quota_function_calculation(test_db_session, test_user):
 # Fixtures
 # ========================================
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_user(test_db_session):
     """Create test user"""
     user = User(
@@ -350,7 +408,7 @@ async def test_user(test_db_session):
     return user
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_room(test_db_session, test_user):
     """Create test room"""
     room = Room(

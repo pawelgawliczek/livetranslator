@@ -363,28 +363,36 @@ class TestPaymentHistory:
 
 # Fixtures
 @pytest.fixture
+def test_db():
+    """Create sync database session for payment tests"""
+    from api.db import SessionLocal
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        # Clean up test data
+        db.rollback()
+        db.close()
+
+
+@pytest.fixture
 def test_user_token(test_db):
     """Create test user and return JWT token"""
     from api.models import User, UserSubscription, SubscriptionTier
     from api.auth import _issue
     from datetime import datetime, timedelta
+    from sqlalchemy import select
+    import uuid
 
-    # Create free tier
-    free_tier = SubscriptionTier(
-        tier_name='free',
-        display_name='Free',
-        monthly_price_usd=Decimal('0.00'),
-        monthly_quota_hours=Decimal('0.167'),
-        features={},
-        provider_tier='free',
-        is_active=True
-    )
-    test_db.add(free_tier)
-    test_db.commit()
+    # Get existing free tier (seeded by conftest)
+    free_tier = test_db.execute(
+        select(SubscriptionTier).where(SubscriptionTier.tier_name == "free")
+    ).scalar_one()
 
-    # Create test user
+    # Create test user with unique email
+    unique_email = f'test-{uuid.uuid4().hex[:8]}@example.com'
     user = User(
-        email='test@example.com',
+        email=unique_email,
         password_hash='hashed',
         display_name='Test User',
         preferred_lang='en'

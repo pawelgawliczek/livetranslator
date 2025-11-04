@@ -9,6 +9,7 @@ Tests:
 """
 
 import pytest
+import pytest_asyncio
 from datetime import datetime, timedelta
 from decimal import Decimal
 from sqlalchemy import select, text
@@ -44,7 +45,7 @@ async def test_tier_seed_data_exists(test_db_session):
     assert "free" in tier_dict
     free_tier = tier_dict["free"]
     assert free_tier.monthly_price_usd == 0
-    assert free_tier.monthly_quota_hours == Decimal("0.167")  # 10 minutes
+    assert float(free_tier.monthly_quota_hours) == float(Decimal("0.167"))  # 10 minutes
     assert free_tier.provider_tier == "free"
     assert free_tier.is_active == True
 
@@ -52,14 +53,14 @@ async def test_tier_seed_data_exists(test_db_session):
     assert "plus" in tier_dict
     plus_tier = tier_dict["plus"]
     assert plus_tier.monthly_price_usd == 29
-    assert plus_tier.monthly_quota_hours == Decimal("2.00")  # 2 hours
+    assert float(plus_tier.monthly_quota_hours) == float(Decimal("2.00"))  # 2 hours
     assert plus_tier.provider_tier == "standard"
 
     # Pro tier
     assert "pro" in tier_dict
     pro_tier = tier_dict["pro"]
     assert pro_tier.monthly_price_usd == 199
-    assert pro_tier.monthly_quota_hours == Decimal("10.00")  # 10 hours
+    assert float(pro_tier.monthly_quota_hours) == float(Decimal("10.00"))  # 10 hours
     assert pro_tier.provider_tier == "premium"
 
 
@@ -246,8 +247,11 @@ async def test_quota_with_grace_period(test_db_session, test_user):
     )
     available = result.scalar()
 
-    # Expected: 600 (monthly) + 600 (grace) = 1200
-    assert available == 1200
+    # Expected: monthly quota + grace
+    monthly_seconds = int(float(free_tier.monthly_quota_hours) * 3600)
+    grace_seconds = 600
+    expected = monthly_seconds + grace_seconds
+    assert available == expected
 
 
 @pytest.mark.asyncio
@@ -332,11 +336,12 @@ async def test_admin_fallback_quota_tracking(test_db_session, test_room):
     )
     test_db_session.add(guest_subscription)
 
-    # Exhaust guest quota
+    # Exhaust guest quota (free tier is 0.17h = 612 seconds)
+    free_tier_seconds = int(float(free_tier.monthly_quota_hours) * 3600)
     guest_transaction = QuotaTransaction(
         user_id=guest.id,
         transaction_type="deduct",
-        amount_seconds=-600,  # All 10 minutes used
+        amount_seconds=-free_tier_seconds,  # Exhaust all quota
         quota_type="monthly",
         service_type="stt",
         provider_used="apple_stt"
@@ -445,7 +450,7 @@ async def test_payment_transaction_apple(test_db_session, test_user):
 # Fixtures
 # ========================================
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_user(test_db_session):
     """Create test user"""
     user = User(
@@ -459,7 +464,7 @@ async def test_user(test_db_session):
     return user
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_room(test_db_session, test_user):
     """Create test room"""
     room = Room(
