@@ -17,6 +17,7 @@ import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
 import AdminOverviewPage from "./pages/AdminOverviewPage";
 import AdminFinancialPage from "./pages/AdminFinancialPage";
 import AdminSubscriptionsPage from "./pages/AdminSubscriptionsPage";
+import AdminCreditsPage from "./pages/AdminCreditsPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import AdminMetricsPage from "./pages/AdminMetricsPage";
 import AdminSystemPage from "./pages/AdminSystemPage";
@@ -123,6 +124,18 @@ function App() {
             token ? (
               <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
                 <AdminSubscriptionsPage token={token} onLogout={logout} />
+              </ProtectedAdminRoute>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        />
+        <Route
+          path="/admin/credits"
+          element={
+            token ? (
+              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
+                <AdminCreditsPage token={token} onLogout={logout} />
               </ProtectedAdminRoute>
             ) : (
               <Navigate to="/login" />

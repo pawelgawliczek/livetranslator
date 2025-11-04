@@ -39,6 +39,12 @@ export default function AdminLayout({ children, onLogout }) {
       icon: '💳',
     },
     {
+      id: 'credits',
+      label: t('admin.menu.credits') || 'Credits',
+      path: '/admin/credits',
+      icon: '🎫',
+    },
+    {
       id: 'users',
       label: t('admin.menu.users') || 'Users',
       path: '/admin/users',

@@ -776,3 +776,72 @@ export async function getSubscriptionAnalytics(token, startDate = null, endDate 
 
   return response.json();
 }
+
+// ============================================================================
+// US-012: Credit Package Management APIs
+// ============================================================================
+
+/**
+ * Get all credit packages (admin view with purchase counts)
+ */
+export async function getCreditPackages(token, includeInactive = false) {
+  const params = new URLSearchParams();
+  if (includeInactive) params.append('include_inactive', 'true');
+
+  const response = await fetch(`${API_BASE}/api/admin/credits/packages?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch credit packages: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Update credit package details
+ */
+export async function updateCreditPackage(token, packageId, updates) {
+  const response = await fetch(`${API_BASE}/api/admin/credits/packages/${packageId}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(updates)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to update credit package');
+  }
+
+  return response.json();
+}
+
+/**
+ * Get credit purchase history with filters
+ */
+export async function getCreditPurchases(token, filters = {}) {
+  const params = new URLSearchParams();
+
+  if (filters.userEmail) params.append('user_email', filters.userEmail);
+  if (filters.package) params.append('package', filters.package);
+  if (filters.platform) params.append('platform', filters.platform);
+  if (filters.status) params.append('status', filters.status);
+  if (filters.startDate) params.append('start_date', filters.startDate.toISOString());
+  if (filters.endDate) params.append('end_date', filters.endDate.toISOString());
+  if (filters.limit) params.append('limit', filters.limit);
+  if (filters.offset) params.append('offset', filters.offset);
+
+  const response = await fetch(`${API_BASE}/api/admin/credits/purchases?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch credit purchases: ${response.statusText}`);
+  }
+
+  return response.json();
+}

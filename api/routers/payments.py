@@ -334,6 +334,42 @@ async def handle_subscription_deleted(subscription_data: dict, db: Session):
 
 
 # ============================================================================
+# Credit Packages (User Endpoint)
+# ============================================================================
+
+@router.get("/credit-packages")
+async def get_credit_packages(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get active credit packages (public user view).
+
+    Returns only is_active=true packages.
+    Does not expose Stripe/Apple IDs (security).
+    """
+    packages = db.scalars(
+        select(CreditPackage)
+        .where(CreditPackage.is_active == True)
+        .order_by(CreditPackage.sort_order, CreditPackage.id)
+    ).all()
+
+    return {
+        "packages": [
+            {
+                "id": pkg.id,
+                "display_name": pkg.display_name,
+                "hours": float(pkg.hours),
+                "price_usd": float(pkg.price_usd),
+                "discount_percent": float(pkg.discount_percent),
+                "sort_order": pkg.sort_order
+            }
+            for pkg in packages
+        ]
+    }
+
+
+# ============================================================================
 # Apple IAP Integration
 # ============================================================================
 
