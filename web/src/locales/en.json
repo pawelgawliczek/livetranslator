@@ -499,10 +499,41 @@
       "tools": "Tools"
     },
     "overview": {
-      "title": "Dashboard Overview"
+      "title": "Dashboard Overview",
+      "totalRevenue": "Total Revenue",
+      "totalCosts": "Total Costs",
+      "grossProfit": "Gross Profit",
+      "grossMargin": "Gross Margin",
+      "activeUsers": "Active Users (DAU)",
+      "roomsCreated": "Rooms Created",
+      "avgCostPerUser": "Avg Cost per User",
+      "providerHealth": "Provider Health",
+      "quickLinks": "Quick Links",
+      "viewFinancial": "View Financial Details →",
+      "viewUsers": "View User Analytics →",
+      "viewSystem": "View System Status →",
+      "loading": "Loading dashboard...",
+      "error": "Failed to load dashboard data",
+      "empty": "No data available for selected period",
+      "trendUp": "up from last period",
+      "trendDown": "down from last period"
     },
     "financial": {
-      "title": "Financial Analytics"
+      "title": "Financial Analytics",
+      "exportCSV": "Export CSV",
+      "totalRevenue": "Total Revenue",
+      "totalCosts": "Total Costs",
+      "grossProfit": "Gross Profit",
+      "grossMargin": "Gross Margin",
+      "revenueVsCost": "Revenue vs Cost Trend",
+      "platformBreakdown": "Revenue by Platform",
+      "stripeRevenue": "Stripe Revenue",
+      "appleRevenue": "Apple IAP Revenue",
+      "creditUsage": "Credit Usage",
+      "loading": "Loading financial data...",
+      "error": "Failed to load financial data",
+      "empty": "No financial transactions in selected period",
+      "exportSuccess": "Financial data exported successfully"
     },
     "users": {
       "title": "User Analytics"
