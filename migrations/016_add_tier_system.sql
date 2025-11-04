@@ -92,10 +92,10 @@ CREATE TABLE IF NOT EXISTS quota_transactions (
     created_at TIMESTAMP DEFAULT NOW() NOT NULL
 );
 
-CREATE INDEX idx_quota_transactions_user ON quota_transactions(user_id, created_at DESC);
-CREATE INDEX idx_quota_transactions_room ON quota_transactions(room_id);
-CREATE INDEX idx_quota_transactions_type ON quota_transactions(transaction_type);
-CREATE INDEX idx_quota_transactions_provider ON quota_transactions(provider_used);
+CREATE INDEX IF NOT EXISTS idx_quota_transactions_user ON quota_transactions(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_quota_transactions_room ON quota_transactions(room_id);
+CREATE INDEX IF NOT EXISTS idx_quota_transactions_type ON quota_transactions(transaction_type);
+CREATE INDEX IF NOT EXISTS idx_quota_transactions_provider ON quota_transactions(provider_used);
 
 COMMENT ON TABLE quota_transactions IS 'Real-time quota tracking with provider attribution';
 COMMENT ON COLUMN quota_transactions.transaction_type IS 'deduct (usage), grant (purchase), manual_grant (admin grant), refund (admin), reset (monthly)';
@@ -132,11 +132,11 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
     completed_at TIMESTAMP
 );
 
-CREATE INDEX idx_payment_transactions_user ON payment_transactions(user_id, created_at DESC);
-CREATE INDEX idx_payment_transactions_platform ON payment_transactions(platform);
-CREATE INDEX idx_payment_transactions_status ON payment_transactions(status, created_at);
-CREATE INDEX idx_payment_transactions_stripe_intent ON payment_transactions(stripe_payment_intent_id);
-CREATE INDEX idx_payment_transactions_apple_txn ON payment_transactions(apple_transaction_id);
+CREATE INDEX IF NOT EXISTS idx_payment_transactions_user ON payment_transactions(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_transactions_platform ON payment_transactions(platform);
+CREATE INDEX IF NOT EXISTS idx_payment_transactions_status ON payment_transactions(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_payment_transactions_stripe_intent ON payment_transactions(stripe_payment_intent_id);
+CREATE INDEX IF NOT EXISTS idx_payment_transactions_apple_txn ON payment_transactions(apple_transaction_id);
 
 COMMENT ON TABLE payment_transactions IS 'All payments from Stripe (Web) and Apple (iOS)';
 COMMENT ON COLUMN payment_transactions.apple_transaction_id IS 'UNIQUE to prevent duplicate IAP processing';
@@ -199,9 +199,9 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
     created_at TIMESTAMP DEFAULT NOW() NOT NULL
 );
 
-CREATE INDEX idx_admin_audit_log_admin ON admin_audit_log(admin_id, created_at DESC);
-CREATE INDEX idx_admin_audit_log_target_user ON admin_audit_log(target_user_id, created_at DESC);
-CREATE INDEX idx_admin_audit_log_action ON admin_audit_log(action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_log_admin ON admin_audit_log(admin_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_log_target_user ON admin_audit_log(target_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_log_action ON admin_audit_log(action, created_at DESC);
 
 COMMENT ON TABLE admin_audit_log IS 'Audit trail for all admin actions (security + compliance)';
 
