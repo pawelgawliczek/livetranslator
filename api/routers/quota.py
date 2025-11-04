@@ -18,13 +18,14 @@ from sqlalchemy import text
 from ..db import SessionLocal
 from ..auth import get_current_user
 from ..models import User, UserSubscription, SubscriptionTier, QuotaTransaction
-from ..settings import REDIS_URL
+import os
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/quota", tags=["quota"])
 
 # Redis client for caching (sync version)
 import redis
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/5")
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
 # ========================================

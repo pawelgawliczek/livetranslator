@@ -1,10 +1,11 @@
-"""Admin API endpoints - Phase 0.2 + Language Configuration Management"""
-from fastapi import APIRouter, Depends, HTTPException
+"""Admin API endpoints - Phase 0.2 + Language Configuration Management + Phase 3 Admin Panel APIs"""
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select, text
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
+from decimal import Decimal
 import redis.asyncio as redis
 import json
 import os
@@ -412,7 +413,7 @@ def get_system_stats(
 # ============================================================================
 
 @router.get("/message-debug/{room_code}/{segment_id}")
-async def get_message_debug_info(
+def get_message_debug_info(
     room_code: str,
     segment_id: int,
     admin: User = Depends(require_admin),
@@ -428,19 +429,23 @@ async def get_message_debug_info(
     """
 
     # Try Redis first (fast path for recent messages)
-    r = await redis.from_url(REDIS_URL, decode_responses=True)
+    import redis as redis_sync
+    r = redis_sync.from_url(REDIS_URL, decode_responses=True)
     try:
-        debug_info = await get_debug_info(r, room_code, segment_id)
+        # Use sync Redis for consistency with other endpoints
+        debug_key = f"debug:{room_code}:{segment_id}"
+        cached = r.get(debug_key)
 
-        if debug_info:
+        if cached:
+            import orjson
             return {
                 "source": "redis",
                 "room_code": room_code,
                 "segment_id": segment_id,
-                "data": debug_info
+                "data": orjson.loads(cached)
             }
     finally:
-        await r.aclose()
+        r.close()
 
     # Fallback to database reconstruction (for expired or old messages)
     # Query segment info - need to join with rooms to get room by code
@@ -599,4 +604,711 @@ async def get_message_debug_info(
         "segment_id": segment_id,
         "note": "Reconstructed from database. Some fields (latency, routing details) unavailable for old messages.",
         "data": debug_data
+    }
+
+# ============================================================================
+# Phase 3 Admin Panel APIs (Financial, User, System Analytics)
+# ============================================================================
+
+# Response Models
+class FinancialSummaryResponse(BaseModel):
+    period: str
+    total_revenue_usd: float
+    total_cost_usd: float
+    gross_profit_usd: float
+    gross_margin_pct: float
+    stripe_revenue: float
+    apple_revenue: float
+    credit_revenue: float
+
+class TierAnalysisResponse(BaseModel):
+    tier_name: str
+    user_count: int
+    total_revenue: float
+    avg_quota_used_hours: float
+    total_cost: float
+    profit_per_user: float
+
+class UserAcquisitionResponse(BaseModel):
+    date: str
+    new_users: int
+    activated_users: int
+    fast_activation: int
+
+class UserEngagementResponse(BaseModel):
+    metric_date: str
+    dau: int
+    wau: int
+    mau: int
+    paying_users: int
+    free_users: int
+
+class SystemPerformanceResponse(BaseModel):
+    service: str
+    p50_ms: float
+    p95_ms: float
+    p99_ms: float
+    avg_ms: float
+    total_requests: int
+
+class QuotaUtilizationResponse(BaseModel):
+    tier_name: str
+    total_users: int
+    avg_quota_used_pct: float
+    total_quota_used_hours: float
+    total_quota_allocated_hours: float
+
+class ActiveRoomResponse(BaseModel):
+    room_code: str
+    room_id: int
+    owner_email: str
+    participant_count: int
+    created_at: datetime
+    is_multi_speaker: bool
+
+class GrantCreditsRequest(BaseModel):
+    bonus_hours: float
+    reason: str
+
+# Endpoint 1: Financial Summary
+@router.get("/financial/summary")
+def get_financial_summary(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    granularity: Optional[str] = Query("day", description="hour|day|week|month"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get financial summary: revenue, costs, profit, margins from materialized view.
+    Query admin_financial_summary view with date range filtering.
+    """
+    # Default to last 30 days if not specified
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(days=30)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    # Query materialized view
+    query = text("""
+        SELECT
+            day,
+            platform,
+            revenue_usd,
+            transaction_count
+        FROM admin_financial_summary
+        WHERE day >= :start_date AND day <= :end_date
+        ORDER BY day DESC, platform
+    """)
+
+    results = db.execute(query, {"start_date": start_date, "end_date": end_date}).fetchall()
+
+    # Get costs for the same period
+    costs_query = text("""
+        SELECT COALESCE(SUM(amount_usd), 0) as total_cost
+        FROM room_costs
+        WHERE ts >= :start_date AND ts <= :end_date
+    """)
+
+    total_cost = float(db.execute(costs_query, {"start_date": start_date, "end_date": end_date}).scalar() or 0)
+
+    # Aggregate by day
+    daily_data = {}
+    for row in results:
+        day_str = row[0].strftime('%Y-%m-%d')
+        if day_str not in daily_data:
+            daily_data[day_str] = {
+                "stripe_revenue": 0.0,
+                "apple_revenue": 0.0,
+                "credit_revenue": 0.0
+            }
+
+        platform = row[1]
+        revenue = float(row[2])
+
+        if platform == "stripe":
+            daily_data[day_str]["stripe_revenue"] += revenue
+        elif platform == "apple":
+            daily_data[day_str]["apple_revenue"] += revenue
+        elif platform == "credit":
+            daily_data[day_str]["credit_revenue"] += revenue
+
+    # Calculate totals
+    total_revenue = sum(
+        day["stripe_revenue"] + day["apple_revenue"] + day["credit_revenue"]
+        for day in daily_data.values()
+    )
+
+    gross_profit = total_revenue - total_cost
+    gross_margin = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0.0
+
+    stripe_revenue = sum(day["stripe_revenue"] for day in daily_data.values())
+    apple_revenue = sum(day["apple_revenue"] for day in daily_data.values())
+    credit_revenue = sum(day["credit_revenue"] for day in daily_data.values())
+
+    return {
+        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+        "total_revenue_usd": round(total_revenue, 2),
+        "total_cost_usd": round(total_cost, 2),
+        "gross_profit_usd": round(gross_profit, 2),
+        "gross_margin_pct": round(gross_margin, 2),
+        "stripe_revenue": round(stripe_revenue, 2),
+        "apple_revenue": round(apple_revenue, 2),
+        "credit_revenue": round(credit_revenue, 2)
+    }
+
+# Endpoint 2: Tier Analysis
+@router.get("/financial/tier-analysis")
+def get_tier_analysis(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get tier profitability analysis from admin_tier_analysis materialized view.
+    Shows Free/Plus/Pro revenue, costs, and profit per user.
+    """
+    # Default to current month if not specified
+    if not start_date:
+        start_date = datetime.utcnow().replace(day=1)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    # Query materialized view
+    query = text("""
+        SELECT
+            tier_name,
+            display_name,
+            active_users,
+            monthly_recurring_revenue,
+            total_costs_usd,
+            gross_profit_usd
+        FROM admin_tier_analysis
+        ORDER BY tier_name
+    """)
+
+    results = db.execute(query).fetchall()
+
+    tiers = []
+    for row in results:
+        tier_name = row[0]
+        active_users = row[2]
+        mrr = float(row[3] or 0)
+        costs = float(row[4] or 0)
+        profit = float(row[5] or 0)
+
+        # Calculate average quota used
+        quota_query = text("""
+            SELECT AVG(quota_used_hours) as avg_quota
+            FROM (
+                SELECT
+                    qt.user_id,
+                    SUM(-qt.amount_seconds) / 3600.0 as quota_used_hours
+                FROM quota_transactions qt
+                JOIN user_subscriptions us ON qt.user_id = us.user_id
+                JOIN subscription_tiers st ON us.tier_id = st.id
+                WHERE st.tier_name = :tier_name
+                  AND qt.transaction_type = 'deduct'
+                  AND qt.created_at >= :start_date
+                  AND qt.created_at <= :end_date
+                GROUP BY qt.user_id
+            ) user_quotas
+        """)
+
+        avg_quota = db.execute(quota_query, {
+            "tier_name": tier_name,
+            "start_date": start_date,
+            "end_date": end_date
+        }).scalar() or 0.0
+
+        profit_per_user = profit / active_users if active_users > 0 else 0.0
+
+        tiers.append({
+            "tier_name": tier_name,
+            "user_count": active_users,
+            "total_revenue": round(mrr, 2),
+            "avg_quota_used_hours": round(float(avg_quota), 2),
+            "total_cost": round(costs, 2),
+            "profit_per_user": round(profit_per_user, 2)
+        })
+
+    return {"tiers": tiers}
+
+# Endpoint 3: User Acquisition
+@router.get("/users/acquisition")
+def get_user_acquisition(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    granularity: Optional[str] = Query("day", description="hour|day|week|month"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get user acquisition metrics from admin_user_metrics view.
+    Shows new signups, activated users, and fast activation rates.
+    """
+    # Default to last 30 days
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(days=30)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    query = text("""
+        SELECT
+            signup_date,
+            new_signups,
+            activated_users,
+            fast_activation
+        FROM admin_user_metrics
+        WHERE signup_date >= :start_date AND signup_date <= :end_date
+        ORDER BY signup_date DESC
+    """)
+
+    results = db.execute(query, {"start_date": start_date, "end_date": end_date}).fetchall()
+
+    metrics = []
+    for row in results:
+        metrics.append({
+            "date": row[0].strftime('%Y-%m-%d'),
+            "new_users": row[1],
+            "activated_users": row[2],
+            "fast_activation": row[3]
+        })
+
+    return {
+        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+        "granularity": granularity,
+        "metrics": metrics,
+        "total_new_users": sum(m["new_users"] for m in metrics),
+        "total_activated": sum(m["activated_users"] for m in metrics)
+    }
+
+# Endpoint 4: User Engagement (DAU/WAU/MAU)
+@router.get("/users/engagement")
+def get_user_engagement(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get user engagement metrics: DAU, WAU, MAU.
+    Calculates from room_participants table.
+    """
+    # Default to last 30 days
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(days=30)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    # Calculate DAU from room participants
+    query = text("""
+        SELECT
+            DATE(joined_at) as metric_date,
+            COUNT(DISTINCT user_id) as dau,
+            COUNT(DISTINCT user_id) FILTER (
+                WHERE user_id IN (
+                    SELECT user_id FROM user_subscriptions
+                    WHERE status = 'active'
+                    AND tier_id IN (SELECT id FROM subscription_tiers WHERE tier_name IN ('plus', 'pro'))
+                )
+            ) as paying_users,
+            COUNT(DISTINCT user_id) FILTER (
+                WHERE user_id IN (
+                    SELECT user_id FROM user_subscriptions
+                    WHERE tier_id IN (SELECT id FROM subscription_tiers WHERE tier_name = 'free')
+                )
+            ) as free_users
+        FROM room_participants
+        WHERE joined_at >= :start_date AND joined_at <= :end_date
+        GROUP BY DATE(joined_at)
+        ORDER BY metric_date DESC
+        LIMIT 30
+    """)
+
+    results = db.execute(query, {"start_date": start_date, "end_date": end_date}).fetchall()
+
+    metrics = []
+    for row in results:
+        metrics.append({
+            "metric_date": row[0].strftime('%Y-%m-%d'),
+            "dau": row[1] or 0,
+            "wau": None,  # Removed - requires separate calculation
+            "mau": None,  # Removed - requires separate calculation
+            "paying_users": row[2] or 0,
+            "free_users": row[3] or 0
+        })
+
+    return {
+        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+        "metrics": metrics
+    }
+
+# Endpoint 5: User Retention (Cohort Analysis)
+@router.get("/users/retention")
+def get_user_retention(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get cohort retention rates.
+    Shows what % of users return after 1 day, 7 days, 30 days.
+    """
+    # Default to last 90 days for cohorts
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(days=90)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    query = text("""
+        WITH user_cohorts AS (
+            SELECT
+                user_id,
+                DATE(created_at) as cohort_date,
+                created_at
+            FROM users
+            WHERE created_at >= :start_date AND created_at <= :end_date
+        ),
+        user_activity AS (
+            SELECT DISTINCT
+                rp.user_id,
+                DATE(rp.joined_at) as activity_date
+            FROM room_participants rp
+            WHERE rp.user_id IS NOT NULL
+              AND rp.joined_at >= :start_date
+        )
+        SELECT
+            uc.cohort_date,
+            COUNT(DISTINCT uc.user_id) as cohort_size,
+            COUNT(DISTINCT CASE
+                WHEN ua.activity_date BETWEEN uc.cohort_date + INTERVAL '1 day'
+                    AND uc.cohort_date + INTERVAL '2 days'
+                THEN uc.user_id
+            END) as day_1_retention,
+            COUNT(DISTINCT CASE
+                WHEN ua.activity_date BETWEEN uc.cohort_date + INTERVAL '7 days'
+                    AND uc.cohort_date + INTERVAL '8 days'
+                THEN uc.user_id
+            END) as day_7_retention,
+            COUNT(DISTINCT CASE
+                WHEN ua.activity_date BETWEEN uc.cohort_date + INTERVAL '30 days'
+                    AND uc.cohort_date + INTERVAL '31 days'
+                THEN uc.user_id
+            END) as day_30_retention
+        FROM user_cohorts uc
+        LEFT JOIN user_activity ua ON uc.user_id = ua.user_id
+        GROUP BY uc.cohort_date
+        ORDER BY uc.cohort_date DESC
+    """)
+
+    results = db.execute(query, {"start_date": start_date, "end_date": end_date}).fetchall()
+
+    cohorts = []
+    for row in results:
+        cohort_size = row[1]
+        day_1 = row[2]
+        day_7 = row[3]
+        day_30 = row[4]
+
+        cohorts.append({
+            "cohort_date": row[0].strftime('%Y-%m-%d'),
+            "cohort_size": cohort_size,
+            "day_1_retention": day_1,
+            "day_1_retention_pct": round(day_1 / cohort_size * 100, 1) if cohort_size > 0 else 0.0,
+            "day_7_retention": day_7,
+            "day_7_retention_pct": round(day_7 / cohort_size * 100, 1) if cohort_size > 0 else 0.0,
+            "day_30_retention": day_30,
+            "day_30_retention_pct": round(day_30 / cohort_size * 100, 1) if cohort_size > 0 else 0.0
+        })
+
+    return {
+        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+        "cohorts": cohorts
+    }
+
+# Endpoint 6: System Performance (Provider Costs Only)
+@router.get("/system/performance")
+def get_system_performance(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get system performance metrics: provider costs and request counts.
+    Note: Latency metrics not available (events table lacks timing data).
+    """
+    # Default to last 24 hours
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(hours=24)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    # Get provider-level performance from room_costs
+    provider_query = text("""
+        SELECT
+            pipeline as service,
+            provider,
+            COUNT(*) as request_count,
+            AVG(amount_usd) as avg_cost_per_request,
+            SUM(amount_usd) as total_cost
+        FROM room_costs
+        WHERE ts >= :start_date AND ts <= :end_date
+          AND provider IS NOT NULL
+        GROUP BY pipeline, provider
+        ORDER BY pipeline, request_count DESC
+    """)
+
+    provider_results = db.execute(provider_query, {"start_date": start_date, "end_date": end_date}).fetchall()
+
+    providers = []
+    for row in provider_results:
+        providers.append({
+            "service": row[0],
+            "provider": row[1],
+            "request_count": row[2],
+            "avg_cost_per_request": round(float(row[3]), 6),
+            "total_cost": round(float(row[4]), 4)
+        })
+
+    return {
+        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+        "message": "Latency metrics not available (events table lacks timing data)",
+        "providers": providers,
+        "recommendation": "Add latency tracking in future migration"
+    }
+
+# Endpoint 7: Quota Utilization
+@router.get("/system/quota-utilization")
+def get_quota_utilization(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get quota usage by tier from quota_transactions table.
+    Shows how much quota each tier is consuming.
+    """
+    # Default to current billing period
+    if not start_date:
+        start_date = datetime.utcnow().replace(day=1)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    query = text("""
+        SELECT
+            st.tier_name,
+            st.display_name,
+            st.monthly_quota_hours,
+            COUNT(DISTINCT qt.user_id) as total_users,
+            SUM(-qt.amount_seconds) / 3600.0 as total_quota_used_hours,
+            AVG(-qt.amount_seconds) / 3600.0 as avg_quota_per_user_hours
+        FROM subscription_tiers st
+        LEFT JOIN user_subscriptions us ON st.id = us.tier_id
+        LEFT JOIN quota_transactions qt ON us.user_id = qt.user_id
+            AND qt.transaction_type = 'deduct'
+            AND qt.created_at >= :start_date
+            AND qt.created_at <= :end_date
+        WHERE us.status = 'active'
+        GROUP BY st.id, st.tier_name, st.display_name, st.monthly_quota_hours
+        ORDER BY st.tier_name
+    """)
+
+    results = db.execute(query, {"start_date": start_date, "end_date": end_date}).fetchall()
+
+    utilization = []
+    for row in results:
+        tier_name = row[0]
+        monthly_quota = float(row[2]) if row[2] else 0.0
+        total_users = row[3] or 0
+        total_used = float(row[4] or 0)
+        avg_per_user = float(row[5] or 0)
+
+        total_allocated = monthly_quota * total_users if monthly_quota > 0 else 0.0
+        avg_utilization_pct = (total_used / total_allocated * 100) if total_allocated > 0 else 0.0
+
+        utilization.append({
+            "tier_name": tier_name,
+            "total_users": total_users,
+            "avg_quota_used_pct": round(avg_utilization_pct, 2),
+            "total_quota_used_hours": round(total_used, 2),
+            "total_quota_allocated_hours": round(total_allocated, 2),
+            "avg_quota_per_user_hours": round(avg_per_user, 2)
+        })
+
+    return {
+        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+        "utilization": utilization
+    }
+
+# Endpoint 8: Grant Credits to User
+@router.post("/users/{user_id}/grant-credits")
+def grant_credits_to_user(
+    user_id: int,
+    request: GrantCreditsRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Grant bonus quota to a user (admin action).
+    Creates quota_transaction and updates user_subscriptions.
+    """
+    # Verify user exists
+    user_query = text("""
+        SELECT id, email, display_name FROM users WHERE id = :user_id
+    """)
+    user = db.execute(user_query, {"user_id": user_id}).fetchone()
+
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+
+    # Convert hours to seconds
+    bonus_seconds = int(request.bonus_hours * 3600)
+
+    # Update user subscription
+    update_query = text("""
+        UPDATE user_subscriptions
+        SET bonus_credits_seconds = bonus_credits_seconds + :bonus_seconds
+        WHERE user_id = :user_id
+        RETURNING user_id, bonus_credits_seconds
+    """)
+
+    result = db.execute(update_query, {
+        "user_id": user_id,
+        "bonus_seconds": bonus_seconds
+    }).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"User {user_id} has no subscription")
+
+    # Create quota transaction
+    transaction_query = text("""
+        INSERT INTO quota_transactions (
+            user_id, transaction_type, amount_seconds, quota_type,
+            description, metadata, created_at
+        ) VALUES (
+            :user_id, 'manual_grant', :amount_seconds, 'bonus',
+            :description, :metadata, NOW()
+        )
+        RETURNING id
+    """)
+
+    metadata = {
+        "granted_by_admin_id": admin.id,
+        "granted_by_admin_email": admin.email,
+        "reason": request.reason
+    }
+
+    db.execute(transaction_query, {
+        "user_id": user_id,
+        "amount_seconds": bonus_seconds,
+        "description": f"Admin grant: {request.reason}",
+        "metadata": json.dumps(metadata)
+    })
+
+    # Create audit log entry
+    audit_query = text("""
+        INSERT INTO admin_audit_log (
+            admin_id, action, target_user_id, details, created_at
+        ) VALUES (
+            :admin_id, 'grant_credits', :target_user_id, :details, NOW()
+        )
+    """)
+
+    audit_details = {
+        "bonus_hours": request.bonus_hours,
+        "bonus_seconds": bonus_seconds,
+        "reason": request.reason,
+        "new_total_seconds": result[1]
+    }
+
+    db.execute(audit_query, {
+        "admin_id": admin.id,
+        "target_user_id": user_id,
+        "details": json.dumps(audit_details)
+    })
+
+    db.commit()
+
+    return {
+        "message": f"Granted {request.bonus_hours} hours to user {user[1]}",
+        "user_id": user_id,
+        "user_email": user[1],
+        "bonus_hours_granted": request.bonus_hours,
+        "new_total_bonus_hours": round(result[1] / 3600, 2),
+        "reason": request.reason
+    }
+
+# Endpoint 9: Active Rooms
+@router.get("/rooms/active")
+def get_active_rooms(
+    limit: int = Query(50, le=500, description="Max 500 results per page"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    start_date: Optional[datetime] = Query(None, description="Activity start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="Activity end date (ISO format)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get currently active rooms with participant counts (paginated).
+    Shows rooms with recent activity (default: last 24 hours).
+    """
+    # Default to last 24 hours if not specified
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(hours=24)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    query = text("""
+        SELECT
+            r.code as room_code,
+            r.id as room_id,
+            r.created_at,
+            r.is_public,
+            r.speakers_locked,
+            u.email as owner_email,
+            u.display_name as owner_name,
+            COUNT(DISTINCT rp.user_id) as participant_count,
+            MAX(rp.joined_at) as last_join_time
+        FROM rooms r
+        JOIN users u ON r.owner_id = u.id
+        LEFT JOIN room_participants rp ON r.id = rp.room_id AND rp.is_active = TRUE
+        WHERE rp.joined_at >= :start_date
+          AND rp.joined_at <= :end_date
+        GROUP BY r.id, r.code, r.created_at, r.is_public, r.speakers_locked, u.email, u.display_name
+        ORDER BY last_join_time DESC
+        LIMIT :limit OFFSET :offset
+    """)
+
+    results = db.execute(query, {
+        "start_date": start_date,
+        "end_date": end_date,
+        "limit": limit,
+        "offset": offset
+    }).fetchall()
+
+    rooms = []
+    for row in results:
+        rooms.append({
+            "room_code": row[0],
+            "room_id": row[1],
+            "created_at": row[2],
+            "is_public": row[3],
+            "is_multi_speaker": row[4],
+            "owner_email": row[5],
+            "owner_name": row[6],
+            "participant_count": row[7],
+            "last_activity": row[8]
+        })
+
+    return {
+        "active_rooms": rooms,
+        "total_returned": len(rooms),
+        "limit": limit,
+        "offset": offset,
+        "has_more": len(rooms) == limit
     }
