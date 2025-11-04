@@ -623,3 +623,156 @@ export async function getCacheStats(token) {
 
   return response.json();
 }
+
+// ============================================================================
+// US-011: Subscription Management APIs
+// ============================================================================
+
+/**
+ * Get all subscription tiers with active user counts
+ */
+export async function getSubscriptionTiers(token, includeInactive = false) {
+  const params = new URLSearchParams();
+  if (includeInactive) {
+    params.append('include_inactive', 'true');
+  }
+
+  const response = await fetch(`${API_BASE}/api/admin/subscriptions/tiers?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch subscription tiers: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Update subscription tier details
+ */
+export async function updateSubscriptionTier(token, tierId, updates) {
+  const response = await fetch(`${API_BASE}/api/admin/subscriptions/tiers/${tierId}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(updates)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to update tier');
+  }
+
+  return response.json();
+}
+
+/**
+ * Get user subscriptions with filters
+ */
+export async function getUserSubscriptions(token, filters = {}) {
+  const params = new URLSearchParams();
+
+  if (filters.tier) params.append('tier', filters.tier);
+  if (filters.status) params.append('status', filters.status);
+  if (filters.platform) params.append('platform', filters.platform);
+  if (filters.startDate) params.append('start_date', filters.startDate);
+  if (filters.endDate) params.append('end_date', filters.endDate);
+  if (filters.search) params.append('search', filters.search);
+  if (filters.limit) params.append('limit', filters.limit);
+  if (filters.offset) params.append('offset', filters.offset);
+
+  const response = await fetch(`${API_BASE}/api/admin/subscriptions/users?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch user subscriptions: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Change user's subscription tier
+ */
+export async function changeSubscriptionTier(token, subscriptionId, request) {
+  const response = await fetch(`${API_BASE}/api/admin/subscriptions/${subscriptionId}/change-tier`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to change tier');
+  }
+
+  return response.json();
+}
+
+/**
+ * Cancel user subscription
+ */
+export async function cancelSubscription(token, subscriptionId, request) {
+  const response = await fetch(`${API_BASE}/api/admin/subscriptions/${subscriptionId}/cancel`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to cancel subscription');
+  }
+
+  return response.json();
+}
+
+/**
+ * Reactivate cancelled/expired subscription
+ */
+export async function reactivateSubscription(token, subscriptionId, request) {
+  const response = await fetch(`${API_BASE}/api/admin/subscriptions/${subscriptionId}/reactivate`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to reactivate subscription');
+  }
+
+  return response.json();
+}
+
+/**
+ * Get subscription analytics (MRR, churn, tier distribution)
+ */
+export async function getSubscriptionAnalytics(token, startDate = null, endDate = null) {
+  const params = new URLSearchParams();
+  if (startDate) params.append('start_date', startDate);
+  if (endDate) params.append('end_date', endDate);
+
+  const response = await fetch(`${API_BASE}/api/admin/subscriptions/analytics?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch subscription analytics: ${response.statusText}`);
+  }
+
+  return response.json();
+}

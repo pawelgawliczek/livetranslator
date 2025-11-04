@@ -493,10 +493,22 @@
       "admin": "Admin",
       "overview": "Overview",
       "financial": "Financial",
+      "subscriptions": "Subscriptions",
       "users": "Users",
       "metrics": "Metrics",
       "system": "System",
       "tools": "Tools"
+    },
+    "subscriptions": {
+      "title": "Subscription Management",
+      "description": "Manage subscription tiers and user subscriptions",
+      "tiers_tab": "Subscription Tiers",
+      "users_tab": "User Subscriptions",
+      "analytics_tab": "Analytics",
+      "edit_tier": "Edit Tier",
+      "change_tier": "Change Tier",
+      "cancel_subscription": "Cancel Subscription",
+      "reactivate_subscription": "Reactivate Subscription"
     },
     "overview": {
       "title": "Dashboard Overview",

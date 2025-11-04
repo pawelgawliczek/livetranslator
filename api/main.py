@@ -25,6 +25,7 @@ from .billing_api import router as billing_router
 from .user_history_api import router as user_history_router
 from .routers.admin_api import router as admin_router
 from .routers.admin_costs import router as admin_costs_router
+from .routers.admin_subscriptions import router as admin_subscriptions_router
 from .routers.quota import router as quota_router
 from .routers.transcript import router as transcript_router
 from .routers.payments import router as payments_router
@@ -43,6 +44,7 @@ app.include_router(billing_router)
 app.include_router(user_history_router)
 app.include_router(admin_router)
 app.include_router(admin_costs_router)
+app.include_router(admin_subscriptions_router)
 app.include_router(quota_router)
 app.include_router(transcript_router)
 app.include_router(payments_router)
