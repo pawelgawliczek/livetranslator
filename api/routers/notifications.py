@@ -534,8 +534,9 @@ def get_user_notifications(
     if not user_dict:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    # Get user from database
-    user = db.get(User, user_dict["id"])
+    # Get user from database (user_dict is JWT payload with 'sub' key)
+    user_id = int(user_dict.get("sub"))
+    user = db.get(User, user_id)
 
     # Build query - get user's deliveries
     query = (
@@ -617,7 +618,7 @@ def dismiss_notification(
     if not user_dict:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    user_id = user_dict["id"]
+    user_id = int(user_dict.get("sub"))
 
     # Get delivery record
     delivery = db.scalar(
@@ -651,7 +652,7 @@ def mark_notification_read(
     if not user_dict:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    user_id = user_dict["id"]
+    user_id = int(user_dict.get("sub"))
 
     # Get delivery record
     delivery = db.scalar(
