@@ -1874,3 +1874,355 @@ def get_usage_stats(
         "mt_requests_last_minute": mt_requests,
         "mt_limit_per_minute": limits.get("api_requests_per_minute_global", 1000)
     }
+
+# ============================================================================
+# US-007: Support Tools Page APIs
+# ============================================================================
+
+@router.get("/rooms/lookup")
+def lookup_room(
+    q: str = Query(..., description="Room code or room ID"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Lookup room by code or ID with full details (US-007).
+    Returns room metadata, participant counts, message count, and cost summary.
+    """
+    # Try parsing as ID first
+    try:
+        room_id = int(q)
+        query_filter = "r.id = :query_id"
+        params = {"query_id": room_id}
+    except ValueError:
+        query_filter = "UPPER(r.code) = UPPER(:query)"
+        params = {"query": q}
+
+    query = text(f"""
+        SELECT
+            r.code as room_code,
+            r.id as room_id,
+            r.created_at,
+            r.is_public,
+            r.speakers_locked as is_multi_speaker,
+            u.email as owner_email,
+            u.id as owner_id,
+            COUNT(DISTINCT rp.id) as total_participants,
+            COUNT(DISTINCT CASE WHEN rp.left_at IS NULL THEN rp.id END) as participant_count,
+            COUNT(DISTINCT s.id) as message_count,
+            COALESCE(SUM(CASE WHEN rc.pipeline = 'stt' THEN rc.amount_usd ELSE 0 END), 0) as stt_cost,
+            COALESCE(SUM(CASE WHEN rc.pipeline = 'mt' THEN rc.amount_usd ELSE 0 END), 0) as mt_cost
+        FROM rooms r
+        JOIN users u ON r.owner_id = u.id
+        LEFT JOIN room_participants rp ON r.id = rp.room_id
+        LEFT JOIN segments s ON r.id = s.room_id
+        LEFT JOIN room_costs rc ON CAST(r.id AS TEXT) = rc.room_id
+        WHERE {query_filter}
+        GROUP BY r.id, r.code, r.created_at, r.is_public, r.speakers_locked, u.email, u.id
+    """)
+
+    result = db.execute(query, params).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    stt_cost = float(result[10] or 0)
+    mt_cost = float(result[11] or 0)
+
+    return {
+        "room_code": result[0],
+        "room_id": result[1],
+        "created_at": result[2].isoformat() if result[2] else None,
+        "is_public": result[3],
+        "is_multi_speaker": result[4],
+        "owner_email": result[5],
+        "owner_id": result[6],
+        "total_participants": result[7],
+        "participant_count": result[8],
+        "message_count": result[9],
+        "cost_summary": {
+            "stt_cost_usd": stt_cost,
+            "mt_cost_usd": mt_cost,
+            "total_cost_usd": stt_cost + mt_cost
+        },
+        "status": "active"
+    }
+
+@router.get("/rooms/{room_code}/messages")
+def get_room_messages(
+    room_code: str,
+    limit: int = Query(20, le=100),
+    offset: int = Query(0, ge=0),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get message history for a room (US-007).
+    Returns paginated list of segments with speaker information.
+    """
+    # Get messages
+    query = text("""
+        SELECT
+            s.segment_id,
+            s.ts_iso as timestamp,
+            s.text,
+            s.lang,
+            s.final as is_final,
+            s.speaker_id,
+            COALESCE(u.email, 'Unknown') as speaker_email
+        FROM segments s
+        LEFT JOIN room_participants rp ON s.room_id = rp.room_id AND s.speaker_id = rp.id
+        LEFT JOIN users u ON rp.user_id = u.id
+        WHERE s.room_id = (SELECT id FROM rooms WHERE code = :room_code)
+        ORDER BY s.segment_id DESC
+        LIMIT :limit OFFSET :offset
+    """)
+
+    results = db.execute(query, {"room_code": room_code.upper(), "limit": limit, "offset": offset}).fetchall()
+
+    # Count total messages
+    count_query = text("""
+        SELECT COUNT(*) FROM segments WHERE room_id = (SELECT id FROM rooms WHERE code = :room_code)
+    """)
+    total = db.execute(count_query, {"room_code": room_code.upper()}).scalar() or 0
+
+    messages = []
+    for row in results:
+        messages.append({
+            "segment_id": row[0],
+            "timestamp": row[1].isoformat() if row[1] else None,
+            "text": row[2],
+            "lang": row[3],
+            "is_final": row[4],
+            "speaker_id": row[5],
+            "speaker_email": row[6]
+        })
+
+    return {
+        "messages": messages,
+        "total": total,
+        "has_more": (offset + limit) < total
+    }
+
+@router.get("/debug/redis/keys")
+def list_redis_keys(
+    pattern: str = Query(..., description="Redis key pattern"),
+    limit: int = Query(50, le=100),
+    admin: User = Depends(require_admin)
+):
+    """
+    List Redis keys matching pattern (US-007).
+    Uses SCAN for non-blocking operation. Limited to safe prefixes.
+    """
+    import redis as redis_sync
+
+    # Validate pattern (security)
+    allowed_prefixes = ['room:', 'debug:', 'stt_cache:', 'mt_cache:']
+    if not any(pattern.startswith(prefix) for prefix in allowed_prefixes):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid pattern. Must start with: {', '.join(allowed_prefixes)}"
+        )
+
+    r = redis_sync.from_url(REDIS_URL, decode_responses=True)
+    try:
+        keys = []
+        cursor = 0
+
+        # SCAN for keys (safe, non-blocking)
+        while len(keys) < limit:
+            cursor, batch = r.scan(cursor, match=pattern, count=100)
+            keys.extend(batch)
+            if cursor == 0:
+                break
+
+        keys = keys[:limit]
+
+        # Get metadata for each key
+        key_data = []
+        for key in keys:
+            key_type = r.type(key)
+            ttl = r.ttl(key)
+            try:
+                size = r.memory_usage(key) or 0
+            except:
+                size = 0
+
+            key_data.append({
+                "key": key,
+                "type": key_type,
+                "ttl": ttl,
+                "size_bytes": size
+            })
+
+        return {
+            "keys": key_data,
+            "total": len(key_data),
+            "truncated": len(key_data) >= limit
+        }
+    finally:
+        r.close()
+
+@router.get("/debug/redis/get")
+def get_redis_value(
+    key: str = Query(..., description="Redis key"),
+    admin: User = Depends(require_admin)
+):
+    """
+    Get Redis key value (US-007).
+    Supports string, hash, list, set, and sorted set types.
+    """
+    import redis as redis_sync
+
+    r = redis_sync.from_url(REDIS_URL, decode_responses=True)
+    try:
+        key_type = r.type(key)
+        ttl = r.ttl(key)
+
+        if key_type == 'string':
+            raw = r.get(key)
+        elif key_type == 'hash':
+            raw = r.hgetall(key)
+        elif key_type == 'list':
+            raw = r.lrange(key, 0, 100)  # Limit to 100 items
+        elif key_type == 'set':
+            raw = list(r.smembers(key))[:100]
+        elif key_type == 'zset':
+            raw = r.zrange(key, 0, 100)
+        else:
+            raw = f"<{key_type} not displayable>"
+
+        # Try to parse as JSON
+        try:
+            if isinstance(raw, str):
+                value = json.loads(raw)
+            else:
+                value = raw
+        except:
+            value = raw
+
+        # Truncate large values
+        raw_str = str(raw)
+        if len(raw_str) > 10240:
+            raw_str = raw_str[:10240] + "... (truncated)"
+
+        return {
+            "key": key,
+            "type": key_type,
+            "value": value,
+            "ttl": ttl,
+            "raw": raw_str
+        }
+    finally:
+        r.close()
+
+@router.post("/cache/clear")
+def clear_cache(
+    request: dict,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Clear cache by type (US-007).
+    Supports room_translations, stt_cache, mt_cache, all_stt.
+    Logs action to admin_audit_log.
+    """
+    import redis as redis_sync
+
+    cache_type = request.get("cache_type")
+    room_code = request.get("room_code")
+
+    if cache_type == "room_translations" and not room_code:
+        raise HTTPException(status_code=400, detail="room_code required for room_translations")
+
+    r = redis_sync.from_url(REDIS_URL, decode_responses=True)
+    try:
+        keys_deleted = 0
+
+        if cache_type == "room_translations":
+            patterns = [f"stt_cache:{room_code.upper()}:*", f"mt_cache:{room_code.upper()}:*"]
+        elif cache_type == "stt_cache":
+            patterns = ["stt_cache:*"]
+        elif cache_type == "mt_cache":
+            patterns = ["mt_cache:*"]
+        elif cache_type == "all_stt":
+            patterns = ["stt_*"]
+        else:
+            raise HTTPException(status_code=400, detail="Invalid cache_type")
+
+        # SCAN + DEL for each pattern
+        for pattern in patterns:
+            cursor = 0
+            while True:
+                cursor, keys = r.scan(cursor, match=pattern, count=100)
+                if keys:
+                    keys_deleted += r.delete(*keys)
+                if cursor == 0:
+                    break
+
+        # Audit log
+        audit_query = text("""
+            INSERT INTO admin_audit_log (admin_id, action, details, created_at)
+            VALUES (:admin_id, 'cache_clear', :details, NOW())
+        """)
+
+        db.execute(audit_query, {
+            "admin_id": admin.id,
+            "details": json.dumps({
+                "cache_type": cache_type,
+                "room_code": room_code,
+                "keys_deleted": keys_deleted
+            })
+        })
+        db.commit()
+
+        return {
+            "message": "Cache cleared",
+            "keys_deleted": keys_deleted,
+            "cache_type": cache_type,
+            "room_code": room_code
+        }
+    finally:
+        r.close()
+
+@router.get("/cache/stats")
+def get_cache_stats(admin: User = Depends(require_admin)):
+    """
+    Get cache statistics (US-007).
+    Shows Redis memory usage and key counts by type.
+    """
+    import redis as redis_sync
+
+    r = redis_sync.from_url(REDIS_URL, decode_responses=True)
+    try:
+        info = r.info()
+
+        # Count keys by pattern
+        patterns = {
+            "stt_cache": "stt_cache:*",
+            "mt_cache": "mt_cache:*",
+            "room_presence": "room:*:presence",
+            "debug_keys": "debug:*"
+        }
+
+        breakdown = {}
+        for name, pattern in patterns.items():
+            cursor = 0
+            count = 0
+            while True:
+                cursor, keys = r.scan(cursor, match=pattern, count=100)
+                count += len(keys)
+                if cursor == 0:
+                    break
+            breakdown[name] = count
+
+        return {
+            "redis_info": {
+                "used_memory_human": info.get("used_memory_human", "Unknown"),
+                "total_keys": r.dbsize(),
+                "uptime_days": info.get("uptime_in_seconds", 0) // 86400
+            },
+            "cache_breakdown": breakdown
+        }
+    finally:
+        r.close()

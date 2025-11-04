@@ -515,3 +515,111 @@ export async function updateMTRouting(token, id, update) {
 
   return response.json();
 }
+
+// ============================================================================
+// US-007: Support Tools Page APIs
+// ============================================================================
+
+/**
+ * Lookup room by code or ID
+ */
+export async function searchRoomByCode(token, query) {
+  const params = new URLSearchParams({ q: query });
+  const response = await fetch(`${API_BASE}/api/admin/rooms/lookup?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error('Room not found');
+    }
+    throw new Error(`Failed to search room: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Get room messages (paginated)
+ */
+export async function getRoomMessages(token, roomCode, limit = 20, offset = 0) {
+  const params = new URLSearchParams({ limit, offset });
+  const response = await fetch(`${API_BASE}/api/admin/rooms/${roomCode}/messages?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch messages: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * List Redis keys by pattern
+ */
+export async function getRedisKeys(token, pattern, limit = 50) {
+  const params = new URLSearchParams({ pattern, limit });
+  const response = await fetch(`${API_BASE}/api/admin/debug/redis/keys?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to fetch Redis keys');
+  }
+
+  return response.json();
+}
+
+/**
+ * Get Redis key value
+ */
+export async function getRedisValue(token, key) {
+  const params = new URLSearchParams({ key });
+  const response = await fetch(`${API_BASE}/api/admin/debug/redis/get?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch key value: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Clear cache by type
+ */
+export async function clearCache(token, cacheType, roomCode = null) {
+  const response = await fetch(`${API_BASE}/api/admin/cache/clear`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ cache_type: cacheType, room_code: roomCode })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to clear cache');
+  }
+
+  return response.json();
+}
+
+/**
+ * Get cache statistics
+ */
+export async function getCacheStats(token) {
+  const response = await fetch(`${API_BASE}/api/admin/cache/stats`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch cache stats: ${response.statusText}`);
+  }
+
+  return response.json();
+}

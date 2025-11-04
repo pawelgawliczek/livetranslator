@@ -613,7 +613,25 @@
       "title": "System Monitoring"
     },
     "tools": {
-      "title": "Admin Tools"
+      "title": "Support Tools",
+      "roomLookup": "Room Lookup",
+      "userLookup": "User Lookup",
+      "debugTools": "Debug Tools",
+      "cache": "Cache Management",
+      "search": "Search",
+      "clear": "Clear",
+      "searching": "Searching...",
+      "loading": "Loading...",
+      "noResults": "No results found",
+      "clearCache": "Clear Cache",
+      "confirmClear": "Are you sure you want to clear this cache?",
+      "copyToClipboard": "Copy to clipboard",
+      "copied": "Copied!",
+      "roomDetails": "Room Details",
+      "messages": "Messages",
+      "debug": "Debug",
+      "cacheCleared": "Cache cleared successfully",
+      "error": "An error occurred"
     }
   }
 }
