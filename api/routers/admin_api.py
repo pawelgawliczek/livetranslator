@@ -1538,3 +1538,339 @@ def get_active_rooms(
         "offset": offset,
         "has_more": len(rooms) == limit
     }
+
+# ============================================================================
+# US-003: System Settings Page APIs
+# ============================================================================
+
+class FeatureFlagUpdate(BaseModel):
+    value: str  # String representation (parsed based on value_type)
+
+class ProviderRoutingUpdate(BaseModel):
+    provider_primary: Optional[str] = None
+    provider_fallback: Optional[str] = None
+    enabled: Optional[bool] = None
+    config: Optional[Dict[str, Any]] = None
+
+class RateLimitUpdate(BaseModel):
+    limits: Dict[str, int]  # key -> new_value mapping
+
+@router.get("/settings/feature-flags")
+def get_feature_flags(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Get all feature flags with metadata (US-003)"""
+    query = text("""
+        SELECT
+            ss.key,
+            ss.value,
+            ss.value_type,
+            ss.description,
+            ss.category,
+            ss.updated_at,
+            u.email as updated_by_email
+        FROM system_settings ss
+        LEFT JOIN users u ON ss.updated_by = u.id
+        WHERE ss.category IN ('stt', 'mt', 'ui')
+        ORDER BY ss.category, ss.key
+    """)
+
+    results = db.execute(query).fetchall()
+
+    flags = []
+    for row in results:
+        # Parse value based on type
+        value = row[1]
+        if row[2] == 'boolean':
+            value = value.lower() == 'true'
+        elif row[2] == 'integer':
+            value = int(value)
+
+        flags.append({
+            "key": row[0],
+            "value": value,
+            "value_type": row[2],
+            "description": row[3],
+            "category": row[4],
+            "updated_at": row[5].isoformat() if row[5] else None,
+            "updated_by": row[6]
+        })
+
+    return {"flags": flags}
+
+@router.put("/settings/feature-flags/{key}")
+def update_feature_flag(
+    key: str,
+    update: FeatureFlagUpdate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Update a single feature flag (US-003)"""
+    # Get current value
+    query = text("""
+        SELECT value, value_type
+        FROM system_settings
+        WHERE key = :key
+    """)
+
+    result = db.execute(query, {"key": key}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Feature flag '{key}' not found")
+
+    old_value = result[0]
+    value_type = result[1]
+
+    # Validate value based on type
+    new_value = update.value
+    if value_type == 'boolean':
+        if new_value.lower() not in ['true', 'false']:
+            raise HTTPException(status_code=400, detail="Boolean value must be 'true' or 'false'")
+    elif value_type == 'integer':
+        try:
+            int(new_value)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Integer value required")
+
+    # Update setting
+    update_query = text("""
+        UPDATE system_settings
+        SET value = :value,
+            updated_at = NOW(),
+            updated_by = :admin_id
+        WHERE key = :key
+        RETURNING updated_at
+    """)
+
+    updated_at = db.execute(update_query, {
+        "key": key,
+        "value": new_value,
+        "admin_id": admin.id
+    }).fetchone()[0]
+
+    db.commit()
+
+    # Create audit log entry
+    audit_query = text("""
+        INSERT INTO admin_audit_log (admin_id, action, target, details, created_at)
+        VALUES (:admin_id, 'update_setting', :key, :details, NOW())
+    """)
+
+    audit_details = json.dumps({
+        "old_value": old_value,
+        "new_value": new_value,
+        "value_type": value_type
+    })
+
+    db.execute(audit_query, {
+        "admin_id": admin.id,
+        "key": key,
+        "details": audit_details
+    })
+
+    db.commit()
+
+    return {
+        "message": f"Feature flag '{key}' updated",
+        "key": key,
+        "old_value": old_value == 'true' if value_type == 'boolean' else old_value,
+        "new_value": new_value == 'true' if value_type == 'boolean' else new_value,
+        "updated_at": updated_at.isoformat()
+    }
+
+@router.get("/settings/rate-limits")
+def get_rate_limits(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Get rate limit settings (US-003)"""
+    query = text("""
+        SELECT key, value, description, updated_at
+        FROM system_settings
+        WHERE category = 'performance'
+        ORDER BY key
+    """)
+
+    results = db.execute(query).fetchall()
+
+    limits = []
+    for row in results:
+        limits.append({
+            "key": row[0],
+            "value": int(row[1]),
+            "description": row[2],
+            "updated_at": row[3].isoformat() if row[3] else None
+        })
+
+    return {"limits": limits}
+
+@router.put("/settings/rate-limits")
+def update_rate_limits(
+    update: RateLimitUpdate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Update multiple rate limits at once (US-003)"""
+    updated_keys = []
+
+    for key, value in update.limits.items():
+        # Validate key exists and is performance category
+        query = text("""
+            SELECT value_type, category
+            FROM system_settings
+            WHERE key = :key
+        """)
+
+        result = db.execute(query, {"key": key}).fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
+
+        if result[1] != 'performance':
+            raise HTTPException(status_code=400, detail=f"Setting '{key}' is not a rate limit")
+
+        # Update setting
+        update_query = text("""
+            UPDATE system_settings
+            SET value = :value,
+                updated_at = NOW(),
+                updated_by = :admin_id
+            WHERE key = :key
+        """)
+
+        db.execute(update_query, {
+            "key": key,
+            "value": str(value),
+            "admin_id": admin.id
+        })
+
+        updated_keys.append(key)
+
+    db.commit()
+
+    return {
+        "message": f"Updated {len(updated_keys)} rate limits",
+        "updated": updated_keys
+    }
+
+@router.put("/routing/stt/{id}")
+def update_stt_routing(
+    id: int,
+    update: ProviderRoutingUpdate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Update STT routing configuration (US-003)"""
+    # Get current config
+    query = text("""
+        SELECT language, mode, quality_tier
+        FROM stt_routing_config
+        WHERE id = :id
+    """)
+
+    result = db.execute(query, {"id": id}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"STT routing config {id} not found")
+
+    language, mode, quality_tier = result
+
+    # Build update query dynamically
+    updates = []
+    params = {"id": id}
+
+    if update.provider_primary is not None:
+        updates.append("provider_primary = :provider_primary")
+        params["provider_primary"] = update.provider_primary
+
+    if update.provider_fallback is not None:
+        updates.append("provider_fallback = :provider_fallback")
+        params["provider_fallback"] = update.provider_fallback
+
+    if update.enabled is not None:
+        updates.append("enabled = :enabled")
+        params["enabled"] = update.enabled
+
+    if update.config is not None:
+        updates.append("config = :config")
+        params["config"] = json.dumps(update.config)
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    updates.append("updated_at = NOW()")
+
+    update_query = text(f"""
+        UPDATE stt_routing_config
+        SET {', '.join(updates)}
+        WHERE id = :id
+        RETURNING updated_at
+    """)
+
+    updated_at = db.execute(update_query, params).fetchone()[0]
+    db.commit()
+
+    # Clear language router cache
+    cache_cleared = False
+    try:
+        from .stt.language_router import clear_cache
+        clear_cache(language=language, service_type='stt')
+        cache_cleared = True
+    except Exception as e:
+        print(f"[Admin API] Failed to clear cache: {e}")
+
+    return {
+        "message": f"STT routing config updated for {language} {mode}/{quality_tier}",
+        "id": id,
+        "language": language,
+        "mode": mode,
+        "quality_tier": quality_tier,
+        "cache_cleared": cache_cleared,
+        "updated_at": updated_at.isoformat()
+    }
+
+@router.get("/system/usage-stats")
+def get_usage_stats(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Get current system usage vs configured limits (US-003)"""
+    # Get rate limits from system_settings
+    limits_query = text("""
+        SELECT key, value
+        FROM system_settings
+        WHERE category = 'performance'
+    """)
+
+    limits = {row[0]: int(row[1]) for row in db.execute(limits_query).fetchall()}
+
+    # Get active rooms count
+    active_rooms_query = text("""
+        SELECT COUNT(DISTINCT r.id)
+        FROM rooms r
+        JOIN room_participants rp ON r.id = rp.room_id
+        WHERE rp.joined_at > NOW() - INTERVAL '1 hour'
+          AND rp.is_active = true
+    """)
+
+    active_rooms = db.execute(active_rooms_query).scalar() or 0
+
+    # Get MT requests last minute (approximate from room_costs)
+    mt_requests_query = text("""
+        SELECT COUNT(*)
+        FROM room_costs
+        WHERE pipeline = 'mt'
+          AND ts > NOW() - INTERVAL '1 minute'
+    """)
+
+    mt_requests = db.execute(mt_requests_query).scalar() or 0
+
+    return {
+        "stt_active_connections": 0,  # Placeholder - requires Redis tracking
+        "stt_max_connections": limits.get("stt_max_concurrent_connections", 100),
+        "active_rooms": active_rooms,
+        "max_room_participants": limits.get("max_room_participants", 50),
+        "mt_requests_last_minute": mt_requests,
+        "mt_limit_per_minute": limits.get("api_requests_per_minute_global", 1000)
+    }

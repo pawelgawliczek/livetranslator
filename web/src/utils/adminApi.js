@@ -333,3 +333,185 @@ export async function searchUsers(token, query) {
 
   return response.json();
 }
+
+// ============================================================================
+// US-003: System Settings Page APIs
+// ============================================================================
+
+/**
+ * Get all language routing configurations (STT/MT)
+ */
+export async function getLanguageConfigurations(token) {
+  const response = await fetch(`${API_BASE}/api/admin/languages`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch language configs: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Get provider health status
+ */
+export async function getProviderHealth(token) {
+  const response = await fetch(`${API_BASE}/api/admin/providers/health`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch provider health: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Reset provider health (mark as healthy)
+ */
+export async function resetProviderHealth(token, provider, serviceType) {
+  const response = await fetch(
+    `${API_BASE}/api/admin/providers/${provider}/health/reset?service_type=${serviceType}`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to reset provider health: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Get all feature flags with metadata
+ */
+export async function getFeatureFlags(token) {
+  const response = await fetch(`${API_BASE}/api/admin/settings/feature-flags`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch feature flags: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Update a single feature flag
+ */
+export async function updateFeatureFlag(token, key, value) {
+  const response = await fetch(`${API_BASE}/api/admin/settings/feature-flags/${key}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ value: String(value) })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to update feature flag');
+  }
+
+  return response.json();
+}
+
+/**
+ * Get rate limit settings
+ */
+export async function getRateLimits(token) {
+  const response = await fetch(`${API_BASE}/api/admin/settings/rate-limits`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch rate limits: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Update multiple rate limits at once
+ */
+export async function updateRateLimits(token, limits) {
+  const response = await fetch(`${API_BASE}/api/admin/settings/rate-limits`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ limits })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to update rate limits');
+  }
+
+  return response.json();
+}
+
+/**
+ * Get current system usage statistics
+ */
+export async function getUsageStats(token) {
+  const response = await fetch(`${API_BASE}/api/admin/system/usage-stats`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch usage stats: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Update STT routing configuration
+ */
+export async function updateSTTRouting(token, id, update) {
+  const response = await fetch(`${API_BASE}/api/admin/routing/stt/${id}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(update)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to update STT routing');
+  }
+
+  return response.json();
+}
+
+/**
+ * Update MT routing configuration
+ */
+export async function updateMTRouting(token, id, update) {
+  const response = await fetch(`${API_BASE}/api/admin/routing/mt/${id}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(update)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to update MT routing');
+  }
+
+  return response.json();
+}
