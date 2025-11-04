@@ -845,3 +845,86 @@ export async function getCreditPurchases(token, filters = {}) {
 
   return response.json();
 }
+
+// ============================================================================
+// US-008: Notification Management APIs
+// ============================================================================
+
+/**
+ * Create a new notification
+ */
+export async function createNotification(token, notification) {
+  const response = await fetch(`${API_BASE}/api/admin/notifications`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(notification)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to create notification');
+  }
+
+  return response.json();
+}
+
+/**
+ * Get all notifications with filters
+ */
+export async function getNotifications(token, filters = {}) {
+  const params = new URLSearchParams();
+
+  if (filters.type) params.append('type', filters.type);
+  if (filters.target) params.append('target', filters.target);
+  if (filters.status) params.append('status', filters.status);
+  if (filters.limit) params.append('limit', filters.limit);
+  if (filters.offset) params.append('offset', filters.offset);
+
+  const response = await fetch(`${API_BASE}/api/admin/notifications?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch notifications: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Get user's notifications (user endpoint)
+ */
+export async function getUserNotifications(token, unreadOnly = false, limit = 10) {
+  const params = new URLSearchParams();
+  if (unreadOnly) params.append('unread_only', 'true');
+  if (limit) params.append('limit', limit.toString());
+
+  const response = await fetch(`${API_BASE}/api/notifications?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch notifications: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Dismiss a notification (user endpoint)
+ */
+export async function dismissNotification(token, notificationId) {
+  const response = await fetch(`${API_BASE}/api/notifications/${notificationId}/dismiss`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to dismiss notification: ${response.statusText}`);
+  }
+
+  return response.json();
+}

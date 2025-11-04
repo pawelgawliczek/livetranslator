@@ -68,6 +68,12 @@ export default function AdminLayout({ children, onLogout }) {
       path: '/admin/tools',
       icon: '🔧',
     },
+    {
+      id: 'notifications',
+      label: t('admin.menu.notifications') || 'Notifications',
+      path: '/admin/notifications',
+      icon: '🔔',
+    },
   ];
 
   // Get current breadcrumb

@@ -22,6 +22,8 @@ import AdminUsersPage from "./pages/AdminUsersPage";
 import AdminMetricsPage from "./pages/AdminMetricsPage";
 import AdminSystemPage from "./pages/AdminSystemPage";
 import AdminToolsPage from "./pages/AdminToolsPage";
+import AdminNotificationsPage from "./pages/AdminNotificationsPage";
+import NotificationsPage from "./pages/NotificationsPage";
 import NotificationToast from "./components/NotificationToast";
 
 function App() {
@@ -189,6 +191,24 @@ function App() {
               <Navigate to="/login" />
             )
           }
+        />
+        <Route
+          path="/admin/notifications"
+          element={
+            token ? (
+              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
+                <AdminNotificationsPage token={token} onLogout={logout} />
+              </ProtectedAdminRoute>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        />
+
+        {/* User notifications page */}
+        <Route
+          path="/notifications"
+          element={token ? <NotificationsPage token={token} onLogout={logout} /> : <Navigate to="/login" />}
         />
       </Routes>
     </BrowserRouter>

@@ -706,6 +706,189 @@
       "completed": "Completed",
       "pending": "Pending",
       "failed": "Failed"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "subtitle": "Create and manage in-app notifications",
+      "createButton": "Create Notification",
+      "refreshButton": "Refresh",
+      "loading": "Loading...",
+      "loadError": "Failed to load notifications",
+      "empty": "No notifications found",
+      "filter": {
+        "type": "Type",
+        "target": "Target",
+        "status": "Status",
+        "allTypes": "All Types",
+        "allTargets": "All Targets",
+        "allStatuses": "All Statuses"
+      },
+      "type": {
+        "info": "Info",
+        "warning": "Warning",
+        "success": "Success",
+        "error": "Error"
+      },
+      "target": {
+        "all": "All Users",
+        "free": "Free Tier",
+        "plus": "Plus Tier",
+        "pro": "Pro Tier"
+      },
+      "status": {
+        "sent": "Sent",
+        "scheduled": "Scheduled",
+        "draft": "Draft",
+        "expired": "Expired",
+        "cancelled": "Cancelled"
+      },
+      "table": {
+        "title": "Title",
+        "type": "Type",
+        "target": "Target",
+        "status": "Status",
+        "delivered": "Delivered",
+        "created": "Created"
+      },
+      "pagination": {
+        "showing": "Showing",
+        "of": "of",
+        "page": "Page",
+        "previous": "Previous",
+        "next": "Next"
+      },
+      "create": {
+        "title": "Create Notification",
+        "field": {
+          "title": "Title",
+          "message": "Message",
+          "type": "Type",
+          "target": "Target",
+          "expires": "Expires After",
+          "dismissible": "Allow users to dismiss this notification"
+        },
+        "placeholder": {
+          "title": "e.g., System Maintenance",
+          "message": "e.g., The system will be down for maintenance..."
+        },
+        "characters": "characters",
+        "hour": "hour",
+        "hours": "hours",
+        "days": "days",
+        "cancel": "Cancel",
+        "send": "Send Notification",
+        "sending": "Sending...",
+        "error": {
+          "titleRequired": "Title is required",
+          "messageRequired": "Message is required",
+          "titleTooLong": "Title must be 100 characters or less",
+          "messageTooLong": "Message must be 500 characters or less",
+          "failed": "Failed to create notification"
+        }
+      },
+      "refresh": "Refresh",
+      "dismiss": "Dismiss",
+      "dismissError": "Failed to dismiss notification",
+      "time": {
+        "justNow": "Just now",
+        "minutesAgo": "minutes ago",
+        "hoursAgo": "hours ago",
+        "daysAgo": "days ago"
+      }
+    }
+  },
+  "admin": {
+    "menu": {
+      "admin": "Admin",
+      "overview": "Overview",
+      "financial": "Financial",
+      "subscriptions": "Subscriptions",
+      "credits": "Credits",
+      "users": "Users",
+      "metrics": "Metrics",
+      "system": "System",
+      "tools": "Tools",
+      "notifications": "Notifications"
+    },
+    "notifications": {
+      "title": "Notification Management",
+      "subtitle": "Create and manage in-app notifications",
+      "createButton": "Create Notification",
+      "refreshButton": "Refresh",
+      "loading": "Loading...",
+      "loadError": "Failed to load notifications",
+      "empty": "No notifications found",
+      "filter": {
+        "type": "Type",
+        "target": "Target",
+        "status": "Status",
+        "allTypes": "All Types",
+        "allTargets": "All Targets",
+        "allStatuses": "All Statuses"
+      },
+      "type": {
+        "info": "Info",
+        "warning": "Warning",
+        "success": "Success",
+        "error": "Error"
+      },
+      "target": {
+        "all": "All Users",
+        "free": "Free Tier",
+        "plus": "Plus Tier",
+        "pro": "Pro Tier"
+      },
+      "status": {
+        "sent": "Sent",
+        "scheduled": "Scheduled",
+        "draft": "Draft",
+        "expired": "Expired",
+        "cancelled": "Cancelled"
+      },
+      "table": {
+        "title": "Title",
+        "type": "Type",
+        "target": "Target",
+        "status": "Status",
+        "delivered": "Delivered",
+        "created": "Created"
+      },
+      "pagination": {
+        "showing": "Showing",
+        "of": "of",
+        "page": "Page",
+        "previous": "Previous",
+        "next": "Next"
+      },
+      "create": {
+        "title": "Create Notification",
+        "field": {
+          "title": "Title",
+          "message": "Message",
+          "type": "Type",
+          "target": "Target",
+          "expires": "Expires After",
+          "dismissible": "Allow users to dismiss this notification"
+        },
+        "placeholder": {
+          "title": "e.g., System Maintenance",
+          "message": "e.g., The system will be down for maintenance..."
+        },
+        "characters": "characters",
+        "hour": "hour",
+        "hours": "hours",
+        "days": "days",
+        "cancel": "Cancel",
+        "send": "Send Notification",
+        "sending": "Sending...",
+        "error": {
+          "titleRequired": "Title is required",
+          "messageRequired": "Message is required",
+          "titleTooLong": "Title must be 100 characters or less",
+          "messageTooLong": "Message must be 500 characters or less",
+          "failed": "Failed to create notification"
+        }
+      }
     }
   }
 }

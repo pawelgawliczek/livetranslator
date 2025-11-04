@@ -309,3 +309,38 @@ class AdminAuditLog(Base):
     admin = relationship("User", foreign_keys=[admin_id])
     target_user = relationship("User", foreign_keys=[target_user_id])
     target_room = relationship("Room")
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(100), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    type: Mapped[str] = mapped_column(String(20), nullable=False)
+    target: Mapped[str] = mapped_column(String(20), nullable=False)
+    target_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    schedule_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    scheduled_for: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    expires_in_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    is_dismissible: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="draft", nullable=False)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    creator = relationship("User", foreign_keys=[created_by])
+    target_user = relationship("User", foreign_keys=[target_user_id])
+
+class NotificationDelivery(Base):
+    __tablename__ = "notification_deliveries"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    notification_id: Mapped[int] = mapped_column(ForeignKey("notifications.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    delivered_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    dismissed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    notification = relationship("Notification")
+    user = relationship("User")
