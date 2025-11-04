@@ -13,9 +13,18 @@ import JoinPage from "./pages/JoinPage";
 import ProfilePage from "./pages/ProfilePage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AdminCostAnalyticsPage from "./pages/AdminCostAnalyticsPage";
+import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
+import AdminOverviewPage from "./pages/AdminOverviewPage";
+import AdminFinancialPage from "./pages/AdminFinancialPage";
+import AdminUsersPage from "./pages/AdminUsersPage";
+import AdminMetricsPage from "./pages/AdminMetricsPage";
+import AdminSystemPage from "./pages/AdminSystemPage";
+import AdminToolsPage from "./pages/AdminToolsPage";
+import NotificationToast from "./components/NotificationToast";
 
 function App() {
   const [token, setToken] = React.useState(localStorage.getItem("token") || "");
+  const [toast, setToast] = React.useState(null);
 
   const login = async (newToken) => {
     setToken(newToken);
@@ -29,9 +38,15 @@ function App() {
     setToken("");
     localStorage.removeItem("token");
   };
+
+  const showToast = (message, type = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 5000);
+  };
   
   return (
     <BrowserRouter>
+      {toast && <NotificationToast message={toast.message} type={toast.type} />}
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage onLogin={login} />} />
@@ -49,13 +64,105 @@ function App() {
           path="/profile"
           element={token ? <ProfilePage token={token} onLogout={logout} /> : <Navigate to="/login" />}
         />
+
+        {/* Legacy admin routes - keep for backward compatibility */}
         <Route
           path="/admin"
-          element={token ? <AdminSettingsPage token={token} onLogout={logout} /> : <Navigate to="/login" />}
+          element={
+            token ? (
+              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
+                <AdminSettingsPage token={token} onLogout={logout} />
+              </ProtectedAdminRoute>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
         />
         <Route
           path="/admin/costs"
-          element={token ? <AdminCostAnalyticsPage token={token} onLogout={logout} /> : <Navigate to="/login" />}
+          element={
+            token ? (
+              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
+                <AdminCostAnalyticsPage token={token} onLogout={logout} />
+              </ProtectedAdminRoute>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        />
+
+        {/* Phase 3A: New Admin Panel Routes */}
+        <Route
+          path="/admin/overview"
+          element={
+            token ? (
+              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
+                <AdminOverviewPage token={token} onLogout={logout} />
+              </ProtectedAdminRoute>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        />
+        <Route
+          path="/admin/financial"
+          element={
+            token ? (
+              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
+                <AdminFinancialPage token={token} onLogout={logout} />
+              </ProtectedAdminRoute>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            token ? (
+              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
+                <AdminUsersPage token={token} onLogout={logout} />
+              </ProtectedAdminRoute>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        />
+        <Route
+          path="/admin/metrics"
+          element={
+            token ? (
+              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
+                <AdminMetricsPage token={token} onLogout={logout} />
+              </ProtectedAdminRoute>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        />
+        <Route
+          path="/admin/system"
+          element={
+            token ? (
+              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
+                <AdminSystemPage token={token} onLogout={logout} />
+              </ProtectedAdminRoute>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        />
+        <Route
+          path="/admin/tools"
+          element={
+            token ? (
+              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
+                <AdminToolsPage token={token} onLogout={logout} />
+              </ProtectedAdminRoute>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
         />
       </Routes>
     </BrowserRouter>

@@ -130,6 +130,7 @@ def _issue(u: User) -> TokenOut:
         "sub": str(u.id),
         "email": u.email,
         "preferred_lang": u.preferred_lang,
+        "is_admin": u.is_admin,  # Add is_admin flag to JWT token for Phase 3A
         "exp": datetime.utcnow() + timedelta(hours=12)
     }
     return TokenOut(access_token=jwt.encode(claims, JWT_SECRET, algorithm=ALGO))

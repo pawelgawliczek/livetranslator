@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import PropTypes from 'prop-types';
 import { format } from 'date-fns';
 import { getDatePresets } from '../../utils/costAnalytics';
 
 export default function DateRangePicker({ startDate, endDate, onChange }) {
   const [showCustom, setShowCustom] = useState(false);
+  const [error, setError] = useState(null);
   const [customStart, setCustomStart] = useState(
     startDate ? format(startDate, 'yyyy-MM-dd') : ''
   );
@@ -28,6 +30,22 @@ export default function DateRangePicker({ startDate, endDate, onChange }) {
       const end = new Date(customEnd);
       end.setHours(23, 59, 59, 999);
 
+      // Validation: Start <= End
+      if (start > end) {
+        setError('Start date must be before or equal to end date');
+        return;
+      }
+
+      // Validation: Max range 1 year (365 days)
+      const diffMs = end - start;
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      if (diffDays > 365) {
+        setError('Date range cannot exceed 1 year (365 days)');
+        return;
+      }
+
+      // Clear error on success
+      setError(null);
       if (onChange) {
         onChange(start, end);
       }
@@ -82,40 +100,55 @@ export default function DateRangePicker({ startDate, endDate, onChange }) {
 
       {/* Custom date range */}
       {showCustom && (
-        <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-end gap-2">
-          <div className="flex-1 min-w-[120px]">
-            <label className="block text-muted text-xs mb-1">Start</label>
-            <input
-              type="date"
-              value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
-              className="w-full px-2 py-1.5 bg-bg-secondary border border-border rounded text-fg text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+        <div className="mt-3 pt-3 border-t border-border">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex-1 min-w-[120px]">
+              <label htmlFor="date-start" className="block text-muted text-xs mb-1">Start</label>
+              <input
+                id="date-start"
+                type="date"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="w-full px-2 py-1.5 bg-bg-secondary border border-border rounded text-fg text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div className="flex-1 min-w-[120px]">
+              <label htmlFor="date-end" className="block text-muted text-xs mb-1">End</label>
+              <input
+                id="date-end"
+                type="date"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="w-full px-2 py-1.5 bg-bg-secondary border border-border rounded text-fg text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <button
+              onClick={handleCustomApply}
+              disabled={!customStart || !customEnd}
+              className="px-3 py-1.5 bg-accent text-accent-fg rounded text-xs font-medium hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Apply
+            </button>
+            <button
+              onClick={handleReset}
+              className="px-3 py-1.5 bg-bg-secondary text-muted rounded text-xs font-medium hover:bg-accent hover:text-accent-fg transition-colors"
+            >
+              Reset
+            </button>
           </div>
-          <div className="flex-1 min-w-[120px]">
-            <label className="block text-muted text-xs mb-1">End</label>
-            <input
-              type="date"
-              value={customEnd}
-              onChange={(e) => setCustomEnd(e.target.value)}
-              className="w-full px-2 py-1.5 bg-bg-secondary border border-border rounded text-fg text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <button
-            onClick={handleCustomApply}
-            disabled={!customStart || !customEnd}
-            className="px-3 py-1.5 bg-accent text-accent-fg rounded text-xs font-medium hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Apply
-          </button>
-          <button
-            onClick={handleReset}
-            className="px-3 py-1.5 bg-bg-secondary text-muted rounded text-xs font-medium hover:bg-accent hover:text-accent-fg transition-colors"
-          >
-            Reset
-          </button>
+          {error && (
+            <div className="mt-2 p-2 bg-red-100 border border-red-400 text-red-700 rounded text-sm">
+              {error}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
+
+DateRangePicker.propTypes = {
+  startDate: PropTypes.instanceOf(Date).isRequired,
+  endDate: PropTypes.instanceOf(Date).isRequired,
+  onChange: PropTypes.func.isRequired,
+};

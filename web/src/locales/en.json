@@ -487,5 +487,34 @@
       "ruRUWavenetA": "Russian - Wavenet A (Female)",
       "ruRUWavenetB": "Russian - Wavenet B (Male)"
     }
+  },
+  "admin": {
+    "menu": {
+      "admin": "Admin",
+      "overview": "Overview",
+      "financial": "Financial",
+      "users": "Users",
+      "metrics": "Metrics",
+      "system": "System",
+      "tools": "Tools"
+    },
+    "overview": {
+      "title": "Dashboard Overview"
+    },
+    "financial": {
+      "title": "Financial Analytics"
+    },
+    "users": {
+      "title": "User Analytics"
+    },
+    "metrics": {
+      "title": "Success KPIs"
+    },
+    "system": {
+      "title": "System Monitoring"
+    },
+    "tools": {
+      "title": "Admin Tools"
+    }
   }
 }
