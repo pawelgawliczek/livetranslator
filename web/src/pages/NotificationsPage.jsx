@@ -23,7 +23,7 @@ export default function NotificationsPage({ token, onLogout }) {
     setError(null);
 
     try {
-      const data = await getUserNotifications(token, false, 50);
+      const data = await getUserNotifications(token, true, 50); // Changed to true: only show unread/undismissed
       setNotifications(data.notifications || []);
       setUnreadCount(data.unread_count || 0);
     } catch (err) {
