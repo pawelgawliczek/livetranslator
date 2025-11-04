@@ -31,6 +31,7 @@ from .routers.quota import router as quota_router
 from .routers.transcript import router as transcript_router
 from .routers.payments import router as payments_router
 from .routers.notifications import router as notifications_router
+from .routers.admin_audit import router as admin_audit_router
 
 app = FastAPI(title="LiveTranslator API")
 app.include_router(events_router)
@@ -52,6 +53,7 @@ app.include_router(quota_router)
 app.include_router(transcript_router)
 app.include_router(payments_router)
 app.include_router(notifications_router)
+app.include_router(admin_audit_router)
 
 structlog.configure(
     processors=[

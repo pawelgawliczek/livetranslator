@@ -23,6 +23,7 @@ import AdminMetricsPage from "./pages/AdminMetricsPage";
 import AdminSystemPage from "./pages/AdminSystemPage";
 import AdminToolsPage from "./pages/AdminToolsPage";
 import AdminNotificationsPage from "./pages/AdminNotificationsPage";
+import AdminAuditLogsPage from "./pages/AdminAuditLogsPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import NotificationToast from "./components/NotificationToast";
 
@@ -198,6 +199,18 @@ function App() {
             token ? (
               <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
                 <AdminNotificationsPage token={token} onLogout={logout} />
+              </ProtectedAdminRoute>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        />
+        <Route
+          path="/admin/audit-logs"
+          element={
+            token ? (
+              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
+                <AdminAuditLogsPage token={token} onLogout={logout} />
               </ProtectedAdminRoute>
             ) : (
               <Navigate to="/login" />

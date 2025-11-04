@@ -928,3 +928,78 @@ export async function dismissNotification(token, notificationId) {
 
   return response.json();
 }
+
+// ============================================================================
+// US-006: Audit Log Viewer APIs
+// ============================================================================
+
+/**
+ * Get audit logs with filters
+ */
+export async function getAuditLogs(token, filters = {}) {
+  const params = new URLSearchParams();
+
+  if (filters.start_date) params.append('start_date', filters.start_date);
+  if (filters.end_date) params.append('end_date', filters.end_date);
+  if (filters.admin_id) params.append('admin_id', filters.admin_id);
+  if (filters.action) params.append('action', filters.action);
+  if (filters.target_user_id) params.append('target_user_id', filters.target_user_id);
+  if (filters.limit) params.append('limit', filters.limit);
+  if (filters.offset) params.append('offset', filters.offset);
+
+  const response = await fetch(`${API_BASE}/api/admin/audit-logs?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch audit logs: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Export audit logs as CSV
+ */
+export async function exportAuditLogs(token, filters = {}) {
+  const params = new URLSearchParams();
+
+  if (filters.start_date) params.append('start_date', filters.start_date);
+  if (filters.end_date) params.append('end_date', filters.end_date);
+  if (filters.admin_id) params.append('admin_id', filters.admin_id);
+  if (filters.action) params.append('action', filters.action);
+
+  const response = await fetch(`${API_BASE}/api/admin/audit-logs/export?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to export audit logs: ${response.statusText}`);
+  }
+
+  // Trigger download
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `audit_log_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}
+
+/**
+ * Get list of admin users for filter dropdown
+ */
+export async function getAdminUsers(token) {
+  const response = await fetch(`${API_BASE}/api/admin/audit-logs/admins`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch admin users: ${response.statusText}`);
+  }
+
+  return response.json();
+}

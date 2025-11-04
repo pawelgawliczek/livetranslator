@@ -69,6 +69,12 @@ export default function AdminLayout({ children, onLogout }) {
       icon: '🔧',
     },
     {
+      id: 'audit-logs',
+      label: t('admin.menu.auditLogs') || 'Audit Logs',
+      path: '/admin/audit-logs',
+      icon: '📋',
+    },
+    {
       id: 'notifications',
       label: t('admin.menu.notifications') || 'Notifications',
       path: '/admin/notifications',
