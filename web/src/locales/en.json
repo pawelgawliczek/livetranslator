@@ -536,7 +536,55 @@
       "exportSuccess": "Financial data exported successfully"
     },
     "users": {
-      "title": "User Analytics"
+      "title": "User Management",
+      "searchPlaceholder": "Search by email or user ID",
+      "search": "Search",
+      "clear": "Clear",
+      "noResults": "No users found. Try a different search term.",
+      "userId": "User ID",
+      "email": "Email",
+      "displayName": "Display Name",
+      "tier": "Tier",
+      "quotaUsed": "Quota Used",
+      "signupDate": "Signup Date",
+      "actions": "Actions",
+      "viewDetails": "View Details",
+      "loading": "Searching...",
+      "error": "Search failed. Please try again.",
+      "modal": {
+        "title": "User Details",
+        "profile": "Profile",
+        "subscription": "Subscription",
+        "activity": "Recent Activity",
+        "monthlyQuota": "Monthly Quota",
+        "bonusCredits": "Bonus Credits",
+        "grantCredits": "Grant Credits",
+        "lastLogin": "Last Login",
+        "recentRooms": "Recent Rooms",
+        "close": "Close"
+      },
+      "grantCredits": {
+        "title": "Grant Bonus Credits",
+        "hoursLabel": "Hours to Grant",
+        "hoursPlaceholder": "Enter hours (0.1 - 100)",
+        "reasonLabel": "Reason (required)",
+        "reasonPlaceholder": "Explain why credits are being granted (min 10 characters)",
+        "submit": "Grant Credits",
+        "cancel": "Cancel",
+        "confirmTitle": "Confirm Grant Credits",
+        "confirmMessage": "Grant {{hours}} hours to {{email}}?",
+        "successTitle": "Credits Granted",
+        "successMessage": "Granted {{hours}} hours to {{email}}",
+        "errorTitle": "Grant Failed",
+        "errorMessage": "Failed to grant credits: {{error}}",
+        "validation": {
+          "hoursRequired": "Hours is required",
+          "hoursMin": "Hours must be at least 0.1",
+          "hoursMax": "Hours cannot exceed 100",
+          "reasonRequired": "Reason is required",
+          "reasonMinLength": "Reason must be at least 10 characters"
+        }
+      }
     },
     "metrics": {
       "title": "Success KPIs"

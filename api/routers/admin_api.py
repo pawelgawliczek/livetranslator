@@ -670,6 +670,15 @@ class GrantCreditsRequest(BaseModel):
     bonus_hours: float
     reason: str
 
+class UserSearchResult(BaseModel):
+    user_id: int
+    email: str
+    display_name: str
+    tier_name: Optional[str]
+    quota_used_hours: float
+    quota_limit_hours: Optional[float]
+    signup_date: datetime
+
 # Endpoint 1: Financial Summary
 @router.get("/financial/summary")
 def get_financial_summary(
@@ -1145,7 +1154,104 @@ def get_quota_utilization(
         "utilization": utilization
     }
 
-# Endpoint 8: Grant Credits to User
+# Endpoint 8: Search Users (US-009)
+@router.get("/users/search")
+def search_users(
+    q: str = Query("", description="Search query (email or user ID)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Search for users by email or user ID.
+    Returns user details including tier, quota, and signup date.
+    Limited to 50 results.
+    """
+    if not q or q.strip() == "":
+        return {"results": []}
+
+    query = q.strip()
+
+    # Try to parse as user ID (integer)
+    try:
+        user_id = int(query)
+        search_by_id = True
+    except ValueError:
+        search_by_id = False
+
+    if search_by_id:
+        # Search by user ID (exact match)
+        sql_query = text("""
+            SELECT
+                u.id as user_id,
+                u.email,
+                u.display_name,
+                st.tier_name,
+                COALESCE(SUM(-qt.amount_seconds) / 3600.0, 0) as quota_used_hours,
+                st.monthly_quota_hours as quota_limit_hours,
+                u.created_at as signup_date
+            FROM users u
+            LEFT JOIN user_subscriptions us ON u.id = us.user_id
+            LEFT JOIN subscription_tiers st ON us.tier_id = st.id
+            LEFT JOIN quota_transactions qt ON u.id = qt.user_id
+                AND qt.transaction_type = 'deduct'
+                AND qt.created_at >= us.billing_period_start
+            WHERE u.id = :query
+            GROUP BY u.id, u.email, u.display_name, st.tier_name, st.monthly_quota_hours, u.created_at
+            LIMIT 1
+        """)
+        results = db.execute(sql_query, {"query": user_id}).fetchall()
+    else:
+        # Search by email (case-insensitive partial match)
+        sql_query = text("""
+            SELECT
+                u.id as user_id,
+                u.email,
+                u.display_name,
+                st.tier_name,
+                COALESCE(SUM(-qt.amount_seconds) / 3600.0, 0) as quota_used_hours,
+                st.monthly_quota_hours as quota_limit_hours,
+                u.created_at as signup_date
+            FROM users u
+            LEFT JOIN user_subscriptions us ON u.id = us.user_id
+            LEFT JOIN subscription_tiers st ON us.tier_id = st.id
+            LEFT JOIN quota_transactions qt ON u.id = qt.user_id
+                AND qt.transaction_type = 'deduct'
+                AND qt.created_at >= us.billing_period_start
+            WHERE LOWER(u.email) LIKE LOWER(:query)
+            GROUP BY u.id, u.email, u.display_name, st.tier_name, st.monthly_quota_hours, u.created_at
+            ORDER BY u.created_at DESC
+            LIMIT 50
+        """)
+        search_pattern = f"%{query}%"
+        results = db.execute(sql_query, {"query": search_pattern}).fetchall()
+
+    # Format results
+    user_results = []
+    for row in results:
+        # Handle signup_date - can be datetime or string (SQLite)
+        signup_date = row[6]
+        if signup_date:
+            if isinstance(signup_date, str):
+                signup_date_str = signup_date
+            else:
+                signup_date_str = signup_date.isoformat()
+        else:
+            signup_date_str = None
+
+        user_results.append({
+            "user_id": row[0],
+            "email": row[1],
+            "display_name": row[2] or "",
+            "tier_name": row[3] or "free",
+            "quota_used_hours": round(float(row[4]), 2),
+            "quota_limit_hours": float(row[5]) if row[5] else None,
+            "signup_date": signup_date_str
+        })
+
+    return {"results": user_results}
+
+
+# Endpoint 9: Grant Credits to User
 @router.post("/users/{user_id}/grant-credits")
 def grant_credits_to_user(
     user_id: int,

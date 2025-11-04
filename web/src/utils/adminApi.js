@@ -315,3 +315,21 @@ export async function getMessageDebug(token, roomCode, segmentId) {
 
   return response.json();
 }
+
+/**
+ * Search users by email or user ID (US-009)
+ */
+export async function searchUsers(token, query) {
+  const params = new URLSearchParams({ q: query });
+  const response = await fetch(`${API_BASE}/api/admin/users/search?${params}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to search users: ${response.statusText}`);
+  }
+
+  return response.json();
+}
