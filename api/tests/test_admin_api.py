@@ -389,3 +389,174 @@ class TestAdminWorkflow:
             headers={"Authorization": f"Bearer {token}"}
         )
         assert settings_response.status_code == 403
+
+
+class TestUserSearch:
+    """Test user search endpoint for US-009."""
+
+    def test_search_by_email_exact_match(self, client, admin_token, setup_database):
+        """Should find users by exact email match"""
+        # Create test users
+        db = TestingSessionLocal()
+        user1 = User(
+            email="john@example.com",
+            display_name="John Doe",
+            preferred_lang="en",
+            created_at=datetime.utcnow()
+        )
+        user2 = User(
+            email="jane@example.com",
+            display_name="Jane Smith",
+            preferred_lang="en",
+            created_at=datetime.utcnow()
+        )
+        db.add(user1)
+        db.add(user2)
+        db.commit()
+        db.close()
+
+        response = client.get(
+            "/api/admin/users/search?q=john@example.com",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "results" in data
+        assert len(data["results"]) >= 1
+        assert any("john@example.com" in r["email"].lower() for r in data["results"])
+
+    def test_search_by_email_partial_match(self, client, admin_token, setup_database):
+        """Should find users by partial email match (case-insensitive)"""
+        db = TestingSessionLocal()
+        user = User(
+            email="test.user@example.com",
+            display_name="Test User",
+            preferred_lang="en",
+            created_at=datetime.utcnow()
+        )
+        db.add(user)
+        db.commit()
+        db.close()
+
+        response = client.get(
+            "/api/admin/users/search?q=test.user",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["results"]) >= 1
+
+    def test_search_by_user_id(self, client, admin_token, admin_user):
+        """Should find user by exact user ID"""
+        response = client.get(
+            f"/api/admin/users/search?q={admin_user.id}",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["results"]) >= 1
+        assert any(r["user_id"] == admin_user.id for r in data["results"])
+
+    def test_search_requires_admin(self, client, regular_token):
+        """Should return 403 for non-admin users"""
+        response = client.get(
+            "/api/admin/users/search?q=test",
+            headers={"Authorization": f"Bearer {regular_token}"}
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Admin access required"
+
+    def test_search_without_auth(self, client):
+        """Should return 401 without authentication"""
+        response = client.get("/api/admin/users/search?q=test")
+        assert response.status_code == 401
+
+    def test_search_limits_results(self, client, admin_token, setup_database):
+        """Should limit results to 50 users max"""
+        # Create 60 test users
+        db = TestingSessionLocal()
+        for i in range(60):
+            user = User(
+                email=f"user{i}@example.com",
+                display_name=f"User {i}",
+                preferred_lang="en",
+                created_at=datetime.utcnow()
+            )
+            db.add(user)
+        db.commit()
+        db.close()
+
+        response = client.get(
+            "/api/admin/users/search?q=user",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["results"]) <= 50
+
+    def test_search_empty_query(self, client, admin_token):
+        """Should return empty results for empty query"""
+        response = client.get(
+            "/api/admin/users/search?q=",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["results"] == []
+
+    def test_search_no_results(self, client, admin_token):
+        """Should return empty results when no users match"""
+        response = client.get(
+            "/api/admin/users/search?q=nonexistent@example.com",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["results"] == []
+
+    def test_search_includes_tier_info(self, client, admin_token, setup_database):
+        """Should include tier and quota information in results"""
+        # This test will verify the response schema includes tier_name, quota_used_hours, etc.
+        db = TestingSessionLocal()
+        user = User(
+            email="tieruser@example.com",
+            display_name="Tier User",
+            preferred_lang="en",
+            created_at=datetime.utcnow()
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        # Create subscription (if tables exist)
+        from sqlalchemy import text
+        result = db.execute(text("""
+            SELECT id FROM subscription_tiers WHERE tier_name = 'free' LIMIT 1
+        """)).fetchone()
+
+        if result:
+            tier_id = result[0]
+            db.execute(text("""
+                INSERT INTO user_subscriptions (user_id, tier_id, status, billing_period_end)
+                VALUES (:user_id, :tier_id, 'active', NOW() + INTERVAL '30 days')
+                ON CONFLICT (user_id) DO NOTHING
+            """), {"user_id": user.id, "tier_id": tier_id})
+            db.commit()
+
+        db.close()
+
+        response = client.get(
+            "/api/admin/users/search?q=tieruser",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        if len(data["results"]) > 0:
+            result = data["results"][0]
+            assert "user_id" in result
+            assert "email" in result
+            assert "display_name" in result
+            assert "tier_name" in result
+            assert "quota_used_hours" in result
+            assert "signup_date" in result

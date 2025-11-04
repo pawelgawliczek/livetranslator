@@ -453,5 +453,34 @@
     "enableDiscovery": "Włącz wykrywanie i rozpocznij detekcję",
     "detectedLanguages": "Wykryte języki",
     "setupInProgress": "Konfigurowanie pokoju wieloosobowego..."
+  },
+  "tts": {
+    "enableTTS": "Enable Text-to-Speech",
+    "settings": "TTS Settings",
+    "voiceSettings": "Voice Settings",
+    "volume": "Volume",
+    "speakingRate": "Speaking Rate",
+    "pitch": "Pitch",
+    "voices": {
+      "enUSNeuralD": "English (US) - Neural D (Male)",
+      "enUSNeuralF": "English (US) - Neural F (Female)",
+      "enGBNeuralB": "English (UK) - Neural B (Male)",
+      "plPLWavenetA": "Polish - Wavenet A (Female)",
+      "plPLWavenetB": "Polish - Wavenet B (Male)",
+      "arXAWavenetA": "Arabic - Wavenet A (Female)",
+      "arXAWavenetB": "Arabic - Wavenet B (Male)",
+      "esESNeuralA": "Spanish - Neural A (Female)",
+      "esESNeuralB": "Spanish - Neural B (Male)",
+      "frFRNeuralA": "French - Neural A (Female)",
+      "frFRNeuralB": "French - Neural B (Male)",
+      "deDENeuralA": "German - Neural A (Female)",
+      "deDENeuralB": "German - Neural B (Male)",
+      "itITNeuralA": "Italian - Neural A (Female)",
+      "itITNeuralB": "Italian - Neural B (Male)",
+      "ptPTWavenetA": "Portuguese - Wavenet A (Female)",
+      "ptPTWavenetB": "Portuguese - Wavenet B (Male)",
+      "ruRUWavenetA": "Russian - Wavenet A (Female)",
+      "ruRUWavenetB": "Russian - Wavenet B (Male)"
+    }
   }
 }

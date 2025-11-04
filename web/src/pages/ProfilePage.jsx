@@ -6,6 +6,7 @@ import LanguageSelector from "../components/LanguageSelector";
 import ThemeToggle from "../components/ThemeToggle";
 import Footer from "../components/Footer";
 import { useAudioDevices } from "../hooks/useAudioDevices";
+import { TTSSettingsPanel } from "../components/TTSSettingsPanel";
 
 const LANGUAGES = [
   { code: "en", name: "English" },
@@ -46,6 +47,15 @@ export default function ProfilePage({ token, onLogout }) {
   const [selectedMicDeviceId, setSelectedMicDeviceId] = useState(null);
   const { devices } = useAudioDevices();
 
+  // TTS settings
+  const [ttsSettings, setTtsSettings] = useState({
+    tts_enabled: false,
+    tts_voice_preferences: {},
+    tts_volume: 0.8,
+    tts_rate: 1.0,
+    tts_pitch: 0
+  });
+
   useEffect(() => {
     if (!token) {
       navigate("/login");
@@ -54,7 +64,24 @@ export default function ProfilePage({ token, onLogout }) {
     fetchProfileData();
     // Load language from profile on mount
     loadLanguageFromProfile(token);
+    // Load TTS settings
+    loadTTSSettings();
   }, [token]);
+
+  async function loadTTSSettings() {
+    try {
+      const response = await fetch('/api/profile/tts', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setTtsSettings(data);
+        console.log('[TTS] User settings loaded:', data);
+      }
+    } catch (error) {
+      console.error('[TTS] Failed to load settings:', error);
+    }
+  }
 
   async function fetchProfileData() {
     setLoading(true);
@@ -243,6 +270,32 @@ export default function ProfilePage({ token, onLogout }) {
     }
   }
 
+  async function handleTTSSettingsChange(newSettings) {
+    try {
+      setTtsSettings(newSettings);
+
+      const response = await fetch('/api/profile/tts', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newSettings)
+      });
+
+      if (response.ok) {
+        console.log('[TTS] Settings saved successfully');
+        setMessage(t('tts.settings') + ' saved successfully!');
+        setTimeout(() => setMessage(""), 3000);
+      } else {
+        setError('Failed to save TTS settings');
+      }
+    } catch (error) {
+      console.error('[TTS] Failed to save settings:', error);
+      setError('Failed to save TTS settings');
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-bg p-4 flex flex-col">
@@ -293,7 +346,7 @@ export default function ProfilePage({ token, onLogout }) {
         )}
 
         <div className="flex gap-2 mb-4 flex-wrap overflow-x-auto">
-          {['settings', 'account', 'subscription', 'billing', 'history'].map((tab) => (
+          {['settings', 'tts', 'account', 'subscription', 'billing', 'history'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -302,7 +355,7 @@ export default function ProfilePage({ token, onLogout }) {
                            ? 'bg-card text-accent font-semibold'
                            : 'bg-white/20 text-fg hover:bg-white/30'}`}
             >
-              {t(tab === 'settings' ? 'profileTabs.settings' : `common.${tab}`)}
+              {t(tab === 'settings' ? 'profileTabs.settings' : tab === 'tts' ? 'tts.settings' : `common.${tab}`)}
             </button>
           ))}
         </div>
@@ -419,6 +472,19 @@ export default function ProfilePage({ token, onLogout }) {
                   </button>
                 </form>
               </div>
+            </div>
+          )}
+
+          {activeTab === "tts" && (
+            <div className="max-w-4xl mx-auto">
+              <h2 className="text-2xl font-bold mb-5 text-fg">{t('tts.settings')}</h2>
+              <p className="text-muted mb-6">
+                Configure your global Text-to-Speech preferences. These settings will be used as defaults for all rooms.
+              </p>
+              <TTSSettingsPanel
+                settings={ttsSettings}
+                onChange={handleTTSSettingsChange}
+              />
             </div>
           )}
 

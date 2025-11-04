@@ -12,7 +12,7 @@ export default function SettingsMenu({
   onShowInvite,
   onShowCosts,
   onShowSound,
-  onShowSpeakerDiscovery,
+  onShowTTS,
   onLogout,
   canChangeLanguage = true,
   persistenceEnabled = false,
@@ -39,15 +39,6 @@ export default function SettingsMenu({
   };
 
   if (!isOpen) return null;
-
-  // Debug logging
-  console.log('[SettingsMenu] Props:', {
-    isGuest,
-    isRoomAdmin,
-    isPublic,
-    persistenceEnabled,
-    hasOnShowSpeakerDiscovery: !!onShowSpeakerDiscovery
-  });
 
   // Don't allow closing if no language is selected
   const canClose = !!myLanguage;
@@ -89,12 +80,11 @@ export default function SettingsMenu({
       label: t('settings.soundSettings'),
       onClick: onShowSound
     },
-    // Show speaker discovery for multi-speaker rooms (always available on single device)
-    ...(onShowSpeakerDiscovery ? [{
-      icon: "🎤",
-      label: t('settings.speakerDiscovery', 'Configure Speakers'),
-      onClick: onShowSpeakerDiscovery
-    }] : []),
+    {
+      icon: "🔊",
+      label: t('tts.settings'),
+      onClick: onShowTTS
+    },
     {
       icon: isDarkMode ? "🌙" : "☀️",
       label: isDarkMode ? "Dark Mode" : "Light Mode",

@@ -229,70 +229,6 @@ describe('RoomPage Language Persistence', () => {
   });
 
   // ============================================================================
-  // Multi-Speaker Room Page Tests
-  // ============================================================================
-
-  describe('MultiSpeakerRoomPage Language Sync', () => {
-    /**
-     * Simulates the useEffect hook in MultiSpeakerRoomPage.jsx (lines 64-74)
-     * Same logic as RoomPage, just testing it works there too
-     */
-    function useMultiSpeakerLanguageSync({ roomId, isGuest, initialLanguage }) {
-      const [myLanguage, setMyLanguage] = useState(initialLanguage);
-
-      useEffect(() => {
-        if (isGuest) {
-          return;
-        }
-
-        const currentStoredLanguage = getUserLanguage();
-        if (currentStoredLanguage && currentStoredLanguage !== myLanguage) {
-          setMyLanguage(currentStoredLanguage);
-        }
-      }, [roomId, isGuest, myLanguage]);
-
-      return { myLanguage };
-    }
-
-    it('should sync language in multi-speaker rooms', () => {
-      // Arrange
-      getUserLanguage.mockReturnValue('ja');
-
-      // Act
-      const { result } = renderHook(() =>
-        useMultiSpeakerLanguageSync({
-          roomId: 'multi-speaker-room',
-          isGuest: false,
-          initialLanguage: 'en'
-        })
-      );
-
-      // Assert
-      waitFor(() => {
-        expect(result.current.myLanguage).toBe('ja');
-      });
-    });
-
-    it('should NOT sync for guests in multi-speaker rooms', () => {
-      // Arrange
-      getUserLanguage.mockReturnValue('ko');
-      sessionStorage.setItem('is_guest', 'true');
-
-      // Act
-      const { result } = renderHook(() =>
-        useMultiSpeakerLanguageSync({
-          roomId: 'multi-speaker-room',
-          isGuest: true,
-          initialLanguage: 'en'
-        })
-      );
-
-      // Assert
-      expect(result.current.myLanguage).toBe('en');
-    });
-  });
-
-  // ============================================================================
   // Cross-Room Language Persistence Tests
   // ============================================================================
 
@@ -311,11 +247,11 @@ describe('RoomPage Language Persistence', () => {
       return { myLanguage, setMyLanguage };
     }
 
-    it('should persist language when switching from regular to multi-speaker room', () => {
-      // Arrange - User in regular room with Spanish
+    it('should persist language when switching between rooms', () => {
+      // Arrange - User in room with Spanish
       getUserLanguage.mockReturnValue('es');
 
-      // Act - User switches to multi-speaker room
+      // Act - User switches to another room
       const { result, rerender } = renderHook(
         ({ roomId }) =>
           useLanguageSync({
@@ -323,11 +259,11 @@ describe('RoomPage Language Persistence', () => {
             isGuest: false,
             initialLanguage: 'en'
           }),
-        { initialProps: { roomId: 'regular-room' } }
+        { initialProps: { roomId: 'room-1' } }
       );
 
-      // Switch to multi-speaker room
-      rerender({ roomId: 'multi-speaker-room' });
+      // Switch to another room
+      rerender({ roomId: 'room-2' });
 
       // Assert - Language persists
       waitFor(() => {

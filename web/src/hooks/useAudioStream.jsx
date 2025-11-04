@@ -485,6 +485,21 @@ export default function useAudioStream({
     console.log('[VAD] Stopped');
   }
 
+  // Restart audio stream when language changes during recording
+  useEffect(() => {
+    if (isRecording && myLanguage) {
+      console.log(`[VAD] Language changed to ${myLanguage} during recording - restarting stream`);
+      stop();
+      // Wait a bit for cleanup, then restart
+      const timeout = setTimeout(() => {
+        if (pushToTalk ? isPressing : true) {
+          start();
+        }
+      }, 100);
+      return () => clearTimeout(timeout);
+    }
+  }, [myLanguage]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {

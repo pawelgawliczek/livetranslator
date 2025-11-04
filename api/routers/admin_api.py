@@ -1,10 +1,11 @@
-"""Admin API endpoints - Phase 0.2 + Language Configuration Management"""
-from fastapi import APIRouter, Depends, HTTPException
+"""Admin API endpoints - Phase 0.2 + Language Configuration Management + Phase 3 Admin Panel APIs"""
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select, text
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
+from decimal import Decimal
 import redis.asyncio as redis
 import json
 import os
@@ -412,7 +413,7 @@ def get_system_stats(
 # ============================================================================
 
 @router.get("/message-debug/{room_code}/{segment_id}")
-async def get_message_debug_info(
+def get_message_debug_info(
     room_code: str,
     segment_id: int,
     admin: User = Depends(require_admin),
@@ -428,19 +429,23 @@ async def get_message_debug_info(
     """
 
     # Try Redis first (fast path for recent messages)
-    r = await redis.from_url(REDIS_URL, decode_responses=True)
+    import redis as redis_sync
+    r = redis_sync.from_url(REDIS_URL, decode_responses=True)
     try:
-        debug_info = await get_debug_info(r, room_code, segment_id)
+        # Use sync Redis for consistency with other endpoints
+        debug_key = f"debug:{room_code}:{segment_id}"
+        cached = r.get(debug_key)
 
-        if debug_info:
+        if cached:
+            import orjson
             return {
                 "source": "redis",
                 "room_code": room_code,
                 "segment_id": segment_id,
-                "data": debug_info
+                "data": orjson.loads(cached)
             }
     finally:
-        await r.aclose()
+        r.close()
 
     # Fallback to database reconstruction (for expired or old messages)
     # Query segment info - need to join with rooms to get room by code
@@ -600,3 +605,1624 @@ async def get_message_debug_info(
         "note": "Reconstructed from database. Some fields (latency, routing details) unavailable for old messages.",
         "data": debug_data
     }
+
+# ============================================================================
+# Phase 3 Admin Panel APIs (Financial, User, System Analytics)
+# ============================================================================
+
+# Response Models
+class FinancialSummaryResponse(BaseModel):
+    period: str
+    total_revenue_usd: float
+    total_cost_usd: float
+    gross_profit_usd: float
+    gross_margin_pct: float
+    stripe_revenue: float
+    apple_revenue: float
+    credit_revenue: float
+
+class TierAnalysisResponse(BaseModel):
+    tier_name: str
+    user_count: int
+    total_revenue: float
+    avg_quota_used_hours: float
+    total_cost: float
+    profit_per_user: float
+
+class UserAcquisitionResponse(BaseModel):
+    date: str
+    new_users: int
+    activated_users: int
+    fast_activation: int
+
+class UserEngagementResponse(BaseModel):
+    metric_date: str
+    dau: int
+    wau: int
+    mau: int
+    paying_users: int
+    free_users: int
+
+class SystemPerformanceResponse(BaseModel):
+    service: str
+    p50_ms: float
+    p95_ms: float
+    p99_ms: float
+    avg_ms: float
+    total_requests: int
+
+class QuotaUtilizationResponse(BaseModel):
+    tier_name: str
+    total_users: int
+    avg_quota_used_pct: float
+    total_quota_used_hours: float
+    total_quota_allocated_hours: float
+
+class ActiveRoomResponse(BaseModel):
+    room_code: str
+    room_id: int
+    owner_email: str
+    participant_count: int
+    created_at: datetime
+    is_multi_speaker: bool
+
+class GrantCreditsRequest(BaseModel):
+    bonus_hours: float
+    reason: str
+
+class UserSearchResult(BaseModel):
+    user_id: int
+    email: str
+    display_name: str
+    tier_name: Optional[str]
+    quota_used_hours: float
+    quota_limit_hours: Optional[float]
+    signup_date: datetime
+
+# Endpoint 1: Financial Summary
+@router.get("/financial/summary")
+def get_financial_summary(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    granularity: Optional[str] = Query("day", description="hour|day|week|month"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get financial summary: revenue, costs, profit, margins from materialized view.
+    Query admin_financial_summary view with date range filtering.
+    """
+    # Default to last 30 days if not specified
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(days=30)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    # Query materialized view
+    query = text("""
+        SELECT
+            day,
+            platform,
+            revenue_usd,
+            transaction_count
+        FROM admin_financial_summary
+        WHERE day >= :start_date AND day <= :end_date
+        ORDER BY day DESC, platform
+    """)
+
+    results = db.execute(query, {"start_date": start_date, "end_date": end_date}).fetchall()
+
+    # Get costs for the same period
+    costs_query = text("""
+        SELECT COALESCE(SUM(amount_usd), 0) as total_cost
+        FROM room_costs
+        WHERE ts >= :start_date AND ts <= :end_date
+    """)
+
+    total_cost = float(db.execute(costs_query, {"start_date": start_date, "end_date": end_date}).scalar() or 0)
+
+    # Aggregate by day
+    daily_data = {}
+    for row in results:
+        day_str = row[0].strftime('%Y-%m-%d')
+        if day_str not in daily_data:
+            daily_data[day_str] = {
+                "stripe_revenue": 0.0,
+                "apple_revenue": 0.0,
+                "credit_revenue": 0.0
+            }
+
+        platform = row[1]
+        revenue = float(row[2])
+
+        if platform == "stripe":
+            daily_data[day_str]["stripe_revenue"] += revenue
+        elif platform == "apple":
+            daily_data[day_str]["apple_revenue"] += revenue
+        elif platform == "credit":
+            daily_data[day_str]["credit_revenue"] += revenue
+
+    # Calculate totals
+    total_revenue = sum(
+        day["stripe_revenue"] + day["apple_revenue"] + day["credit_revenue"]
+        for day in daily_data.values()
+    )
+
+    gross_profit = total_revenue - total_cost
+    gross_margin = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0.0
+
+    stripe_revenue = sum(day["stripe_revenue"] for day in daily_data.values())
+    apple_revenue = sum(day["apple_revenue"] for day in daily_data.values())
+    credit_revenue = sum(day["credit_revenue"] for day in daily_data.values())
+
+    return {
+        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+        "total_revenue_usd": round(total_revenue, 2),
+        "total_cost_usd": round(total_cost, 2),
+        "gross_profit_usd": round(gross_profit, 2),
+        "gross_margin_pct": round(gross_margin, 2),
+        "stripe_revenue": round(stripe_revenue, 2),
+        "apple_revenue": round(apple_revenue, 2),
+        "credit_revenue": round(credit_revenue, 2)
+    }
+
+# Endpoint 2: Tier Analysis
+@router.get("/financial/tier-analysis")
+def get_tier_analysis(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get tier profitability analysis from admin_tier_analysis materialized view.
+    Shows Free/Plus/Pro revenue, costs, and profit per user.
+    """
+    # Default to current month if not specified
+    if not start_date:
+        start_date = datetime.utcnow().replace(day=1)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    # Query materialized view
+    query = text("""
+        SELECT
+            tier_name,
+            display_name,
+            active_users,
+            monthly_recurring_revenue,
+            total_costs_usd,
+            gross_profit_usd
+        FROM admin_tier_analysis
+        ORDER BY tier_name
+    """)
+
+    results = db.execute(query).fetchall()
+
+    tiers = []
+    for row in results:
+        tier_name = row[0]
+        active_users = row[2]
+        mrr = float(row[3] or 0)
+        costs = float(row[4] or 0)
+        profit = float(row[5] or 0)
+
+        # Calculate average quota used
+        quota_query = text("""
+            SELECT AVG(quota_used_hours) as avg_quota
+            FROM (
+                SELECT
+                    qt.user_id,
+                    SUM(-qt.amount_seconds) / 3600.0 as quota_used_hours
+                FROM quota_transactions qt
+                JOIN user_subscriptions us ON qt.user_id = us.user_id
+                JOIN subscription_tiers st ON us.tier_id = st.id
+                WHERE st.tier_name = :tier_name
+                  AND qt.transaction_type = 'deduct'
+                  AND qt.created_at >= :start_date
+                  AND qt.created_at <= :end_date
+                GROUP BY qt.user_id
+            ) user_quotas
+        """)
+
+        avg_quota = db.execute(quota_query, {
+            "tier_name": tier_name,
+            "start_date": start_date,
+            "end_date": end_date
+        }).scalar() or 0.0
+
+        profit_per_user = profit / active_users if active_users > 0 else 0.0
+
+        tiers.append({
+            "tier_name": tier_name,
+            "user_count": active_users,
+            "total_revenue": round(mrr, 2),
+            "avg_quota_used_hours": round(float(avg_quota), 2),
+            "total_cost": round(costs, 2),
+            "profit_per_user": round(profit_per_user, 2)
+        })
+
+    return {"tiers": tiers}
+
+# Endpoint 3: User Acquisition (US-004)
+@router.get("/users/acquisition")
+def get_user_acquisition(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    granularity: Optional[str] = Query("day", description="hour|day|week|month"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get user acquisition metrics: signups, activation rates, fast activation.
+
+    US-004: User Acquisition Metrics Page
+    - New signups per day
+    - Activated users (created at least 1 room)
+    - Fast activation (created room within 1 hour of signup)
+    - Previous period comparison for trends
+    """
+    # Default to last 30 days
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(days=30)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    # Validate date range (max 1 year)
+    date_diff = end_date - start_date
+    if date_diff.days > 365:
+        raise HTTPException(status_code=400, detail="Date range cannot exceed 1 year")
+
+    # Calculate previous period for comparison
+    period_duration = end_date - start_date
+    prev_end_date = start_date - timedelta(seconds=1)
+    prev_start_date = prev_end_date - period_duration
+
+    # Query for current period
+    query = text("""
+        WITH daily_signups AS (
+            SELECT
+                DATE(created_at) as signup_date,
+                id as user_id,
+                created_at
+            FROM users
+            WHERE created_at >= :start_date
+              AND created_at <= :end_date
+        ),
+        activations AS (
+            SELECT DISTINCT
+                r.owner_id as user_id,
+                MIN(r.created_at) as first_room_created
+            FROM rooms r
+            INNER JOIN daily_signups ds ON r.owner_id = ds.user_id
+            GROUP BY r.owner_id
+        )
+        SELECT
+            ds.signup_date as date,
+            COUNT(DISTINCT ds.user_id) as new_signups,
+            COUNT(DISTINCT a.user_id) as activated,
+            ROUND(
+                COALESCE(COUNT(DISTINCT a.user_id)::numeric / NULLIF(COUNT(DISTINCT ds.user_id), 0) * 100, 0),
+                1
+            ) as activation_pct,
+            COUNT(DISTINCT CASE
+                WHEN a.first_room_created <= ds.created_at + INTERVAL '1 hour'
+                THEN a.user_id
+            END) as fast_activated,
+            ROUND(
+                COALESCE(COUNT(DISTINCT CASE
+                    WHEN a.first_room_created <= ds.created_at + INTERVAL '1 hour'
+                    THEN a.user_id
+                END)::numeric / NULLIF(COUNT(DISTINCT ds.user_id), 0) * 100, 0),
+                1
+            ) as fast_activation_pct
+        FROM daily_signups ds
+        LEFT JOIN activations a ON ds.user_id = a.user_id
+        GROUP BY ds.signup_date
+        ORDER BY ds.signup_date DESC
+    """)
+
+    results = db.execute(query, {"start_date": start_date, "end_date": end_date}).fetchall()
+
+    # Query for previous period summary
+    prev_query = text("""
+        WITH prev_signups AS (
+            SELECT id as user_id, created_at
+            FROM users
+            WHERE created_at >= :prev_start AND created_at <= :prev_end
+        ),
+        prev_activations AS (
+            SELECT DISTINCT
+                r.owner_id as user_id,
+                MIN(r.created_at) as first_room_created
+            FROM rooms r
+            INNER JOIN prev_signups ps ON r.owner_id = ps.user_id
+            GROUP BY r.owner_id
+        )
+        SELECT
+            COUNT(DISTINCT ps.user_id) as total_signups,
+            COUNT(DISTINCT pa.user_id) as activated_users,
+            ROUND(
+                COALESCE(COUNT(DISTINCT pa.user_id)::numeric / NULLIF(COUNT(DISTINCT ps.user_id), 0) * 100, 0),
+                1
+            ) as activation_rate,
+            COUNT(DISTINCT CASE
+                WHEN pa.first_room_created <= ps.created_at + INTERVAL '1 hour'
+                THEN pa.user_id
+            END) as fast_activated_users,
+            ROUND(
+                COALESCE(COUNT(DISTINCT CASE
+                    WHEN pa.first_room_created <= ps.created_at + INTERVAL '1 hour'
+                    THEN pa.user_id
+                END)::numeric / NULLIF(COUNT(DISTINCT ps.user_id), 0) * 100, 0),
+                1
+            ) as fast_activation_rate
+        FROM prev_signups ps
+        LEFT JOIN prev_activations pa ON ps.user_id = pa.user_id
+    """)
+
+    prev_result = db.execute(prev_query, {
+        "prev_start": prev_start_date,
+        "prev_end": prev_end_date
+    }).fetchone()
+
+    # Build daily breakdown
+    daily = []
+    for row in results:
+        daily.append({
+            "date": row[0].strftime('%Y-%m-%d'),
+            "new_signups": row[1],
+            "activated": row[2],
+            "activation_pct": float(row[3]),
+            "fast_activated": row[4],
+            "fast_activation_pct": float(row[5])
+        })
+
+    # Calculate summary metrics
+    total_signups = sum(d["new_signups"] for d in daily)
+    total_activated = sum(d["activated"] for d in daily)
+    total_fast_activated = sum(d["fast_activated"] for d in daily)
+
+    activation_rate = round(total_activated / total_signups * 100, 1) if total_signups > 0 else 0.0
+    fast_activation_rate = round(total_fast_activated / total_signups * 100, 1) if total_signups > 0 else 0.0
+
+    # Previous period data
+    prev_total_signups = prev_result[0] if prev_result else 0
+    prev_activation_rate = float(prev_result[2]) if prev_result else 0.0
+    prev_fast_activation_rate = float(prev_result[4]) if prev_result else 0.0
+
+    return {
+        "summary": {
+            "total_signups": total_signups,
+            "activated_users": total_activated,
+            "activation_rate": activation_rate,
+            "fast_activated_users": total_fast_activated,
+            "fast_activation_rate": fast_activation_rate,
+            "previous_period": {
+                "total_signups": prev_total_signups,
+                "activation_rate": prev_activation_rate,
+                "fast_activation_rate": prev_fast_activation_rate
+            }
+        },
+        "daily": daily,
+        "metadata": {
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "granularity": granularity,
+            "total_days": len(daily)
+        }
+    }
+
+# Endpoint 4: User Engagement (DAU/WAU/MAU)
+@router.get("/users/engagement")
+def get_user_engagement(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get user engagement metrics: DAU, WAU, MAU.
+    Calculates from room_participants table.
+    """
+    # Default to last 30 days
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(days=30)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    # Calculate DAU from room participants
+    query = text("""
+        SELECT
+            DATE(joined_at) as metric_date,
+            COUNT(DISTINCT user_id) as dau,
+            COUNT(DISTINCT user_id) FILTER (
+                WHERE user_id IN (
+                    SELECT user_id FROM user_subscriptions
+                    WHERE status = 'active'
+                    AND tier_id IN (SELECT id FROM subscription_tiers WHERE tier_name IN ('plus', 'pro'))
+                )
+            ) as paying_users,
+            COUNT(DISTINCT user_id) FILTER (
+                WHERE user_id IN (
+                    SELECT user_id FROM user_subscriptions
+                    WHERE tier_id IN (SELECT id FROM subscription_tiers WHERE tier_name = 'free')
+                )
+            ) as free_users
+        FROM room_participants
+        WHERE joined_at >= :start_date AND joined_at <= :end_date
+        GROUP BY DATE(joined_at)
+        ORDER BY metric_date DESC
+        LIMIT 30
+    """)
+
+    results = db.execute(query, {"start_date": start_date, "end_date": end_date}).fetchall()
+
+    metrics = []
+    for row in results:
+        metrics.append({
+            "metric_date": row[0].strftime('%Y-%m-%d'),
+            "dau": row[1] or 0,
+            "wau": None,  # Removed - requires separate calculation
+            "mau": None,  # Removed - requires separate calculation
+            "paying_users": row[2] or 0,
+            "free_users": row[3] or 0
+        })
+
+    return {
+        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+        "metrics": metrics
+    }
+
+# Endpoint 5: User Retention (Cohort Analysis)
+@router.get("/users/retention")
+def get_user_retention(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get cohort retention rates.
+    Shows what % of users return after 1 day, 7 days, 30 days.
+    """
+    # Default to last 90 days for cohorts
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(days=90)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    query = text("""
+        WITH user_cohorts AS (
+            SELECT
+                user_id,
+                DATE(created_at) as cohort_date,
+                created_at
+            FROM users
+            WHERE created_at >= :start_date AND created_at <= :end_date
+        ),
+        user_activity AS (
+            SELECT DISTINCT
+                rp.user_id,
+                DATE(rp.joined_at) as activity_date
+            FROM room_participants rp
+            WHERE rp.user_id IS NOT NULL
+              AND rp.joined_at >= :start_date
+        )
+        SELECT
+            uc.cohort_date,
+            COUNT(DISTINCT uc.user_id) as cohort_size,
+            COUNT(DISTINCT CASE
+                WHEN ua.activity_date BETWEEN uc.cohort_date + INTERVAL '1 day'
+                    AND uc.cohort_date + INTERVAL '2 days'
+                THEN uc.user_id
+            END) as day_1_retention,
+            COUNT(DISTINCT CASE
+                WHEN ua.activity_date BETWEEN uc.cohort_date + INTERVAL '7 days'
+                    AND uc.cohort_date + INTERVAL '8 days'
+                THEN uc.user_id
+            END) as day_7_retention,
+            COUNT(DISTINCT CASE
+                WHEN ua.activity_date BETWEEN uc.cohort_date + INTERVAL '30 days'
+                    AND uc.cohort_date + INTERVAL '31 days'
+                THEN uc.user_id
+            END) as day_30_retention
+        FROM user_cohorts uc
+        LEFT JOIN user_activity ua ON uc.user_id = ua.user_id
+        GROUP BY uc.cohort_date
+        ORDER BY uc.cohort_date DESC
+    """)
+
+    results = db.execute(query, {"start_date": start_date, "end_date": end_date}).fetchall()
+
+    cohorts = []
+    for row in results:
+        cohort_size = row[1]
+        day_1 = row[2]
+        day_7 = row[3]
+        day_30 = row[4]
+
+        cohorts.append({
+            "cohort_date": row[0].strftime('%Y-%m-%d'),
+            "cohort_size": cohort_size,
+            "day_1_retention": day_1,
+            "day_1_retention_pct": round(day_1 / cohort_size * 100, 1) if cohort_size > 0 else 0.0,
+            "day_7_retention": day_7,
+            "day_7_retention_pct": round(day_7 / cohort_size * 100, 1) if cohort_size > 0 else 0.0,
+            "day_30_retention": day_30,
+            "day_30_retention_pct": round(day_30 / cohort_size * 100, 1) if cohort_size > 0 else 0.0
+        })
+
+    return {
+        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+        "cohorts": cohorts
+    }
+
+# Endpoint 6: System Performance (Provider Costs Only)
+@router.get("/system/performance")
+def get_system_performance(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get system performance metrics: provider costs and request counts.
+    Note: Latency metrics not available (events table lacks timing data).
+    """
+    # Default to last 24 hours
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(hours=24)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    # Get provider-level performance from room_costs
+    provider_query = text("""
+        SELECT
+            pipeline as service,
+            provider,
+            COUNT(*) as request_count,
+            AVG(amount_usd) as avg_cost_per_request,
+            SUM(amount_usd) as total_cost
+        FROM room_costs
+        WHERE ts >= :start_date AND ts <= :end_date
+          AND provider IS NOT NULL
+        GROUP BY pipeline, provider
+        ORDER BY pipeline, request_count DESC
+    """)
+
+    provider_results = db.execute(provider_query, {"start_date": start_date, "end_date": end_date}).fetchall()
+
+    providers = []
+    for row in provider_results:
+        providers.append({
+            "service": row[0],
+            "provider": row[1],
+            "request_count": row[2],
+            "avg_cost_per_request": round(float(row[3]), 6),
+            "total_cost": round(float(row[4]), 4)
+        })
+
+    return {
+        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+        "message": "Latency metrics not available (events table lacks timing data)",
+        "providers": providers,
+        "recommendation": "Add latency tracking in future migration"
+    }
+
+# Endpoint 7: Quota Utilization
+@router.get("/system/quota-utilization")
+def get_quota_utilization(
+    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get quota usage by tier from quota_transactions table.
+    Shows how much quota each tier is consuming.
+    """
+    # Default to current billing period
+    if not start_date:
+        start_date = datetime.utcnow().replace(day=1)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    query = text("""
+        SELECT
+            st.tier_name,
+            st.display_name,
+            st.monthly_quota_hours,
+            COUNT(DISTINCT qt.user_id) as total_users,
+            SUM(-qt.amount_seconds) / 3600.0 as total_quota_used_hours,
+            AVG(-qt.amount_seconds) / 3600.0 as avg_quota_per_user_hours
+        FROM subscription_tiers st
+        LEFT JOIN user_subscriptions us ON st.id = us.tier_id
+        LEFT JOIN quota_transactions qt ON us.user_id = qt.user_id
+            AND qt.transaction_type = 'deduct'
+            AND qt.created_at >= :start_date
+            AND qt.created_at <= :end_date
+        WHERE us.status = 'active'
+        GROUP BY st.id, st.tier_name, st.display_name, st.monthly_quota_hours
+        ORDER BY st.tier_name
+    """)
+
+    results = db.execute(query, {"start_date": start_date, "end_date": end_date}).fetchall()
+
+    utilization = []
+    for row in results:
+        tier_name = row[0]
+        monthly_quota = float(row[2]) if row[2] else 0.0
+        total_users = row[3] or 0
+        total_used = float(row[4] or 0)
+        avg_per_user = float(row[5] or 0)
+
+        total_allocated = monthly_quota * total_users if monthly_quota > 0 else 0.0
+        avg_utilization_pct = (total_used / total_allocated * 100) if total_allocated > 0 else 0.0
+
+        utilization.append({
+            "tier_name": tier_name,
+            "total_users": total_users,
+            "avg_quota_used_pct": round(avg_utilization_pct, 2),
+            "total_quota_used_hours": round(total_used, 2),
+            "total_quota_allocated_hours": round(total_allocated, 2),
+            "avg_quota_per_user_hours": round(avg_per_user, 2)
+        })
+
+    return {
+        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+        "utilization": utilization
+    }
+
+# Endpoint 8: Search Users (US-009)
+@router.get("/users/search")
+def search_users(
+    q: str = Query("", description="Search query (email or user ID)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Search for users by email or user ID.
+    Returns user details including tier, quota, and signup date.
+    Limited to 50 results.
+    """
+    if not q or q.strip() == "":
+        return {"results": []}
+
+    query = q.strip()
+
+    # Try to parse as user ID (integer)
+    try:
+        user_id = int(query)
+        search_by_id = True
+    except ValueError:
+        search_by_id = False
+
+    if search_by_id:
+        # Search by user ID (exact match)
+        sql_query = text("""
+            SELECT
+                u.id as user_id,
+                u.email,
+                u.display_name,
+                st.tier_name,
+                COALESCE(SUM(-qt.amount_seconds) / 3600.0, 0) as quota_used_hours,
+                st.monthly_quota_hours as quota_limit_hours,
+                u.created_at as signup_date
+            FROM users u
+            LEFT JOIN user_subscriptions us ON u.id = us.user_id
+            LEFT JOIN subscription_tiers st ON us.tier_id = st.id
+            LEFT JOIN quota_transactions qt ON u.id = qt.user_id
+                AND qt.transaction_type = 'deduct'
+                AND qt.created_at >= us.billing_period_start
+            WHERE u.id = :query
+            GROUP BY u.id, u.email, u.display_name, st.tier_name, st.monthly_quota_hours, u.created_at
+            LIMIT 1
+        """)
+        results = db.execute(sql_query, {"query": user_id}).fetchall()
+    else:
+        # Search by email (case-insensitive partial match)
+        sql_query = text("""
+            SELECT
+                u.id as user_id,
+                u.email,
+                u.display_name,
+                st.tier_name,
+                COALESCE(SUM(-qt.amount_seconds) / 3600.0, 0) as quota_used_hours,
+                st.monthly_quota_hours as quota_limit_hours,
+                u.created_at as signup_date
+            FROM users u
+            LEFT JOIN user_subscriptions us ON u.id = us.user_id
+            LEFT JOIN subscription_tiers st ON us.tier_id = st.id
+            LEFT JOIN quota_transactions qt ON u.id = qt.user_id
+                AND qt.transaction_type = 'deduct'
+                AND qt.created_at >= us.billing_period_start
+            WHERE LOWER(u.email) LIKE LOWER(:query)
+            GROUP BY u.id, u.email, u.display_name, st.tier_name, st.monthly_quota_hours, u.created_at
+            ORDER BY u.created_at DESC
+            LIMIT 50
+        """)
+        search_pattern = f"%{query}%"
+        results = db.execute(sql_query, {"query": search_pattern}).fetchall()
+
+    # Format results
+    user_results = []
+    for row in results:
+        # Handle signup_date - can be datetime or string (SQLite)
+        signup_date = row[6]
+        if signup_date:
+            if isinstance(signup_date, str):
+                signup_date_str = signup_date
+            else:
+                signup_date_str = signup_date.isoformat()
+        else:
+            signup_date_str = None
+
+        user_results.append({
+            "user_id": row[0],
+            "email": row[1],
+            "display_name": row[2] or "",
+            "tier_name": row[3] or "free",
+            "quota_used_hours": round(float(row[4]), 2),
+            "quota_limit_hours": float(row[5]) if row[5] else None,
+            "signup_date": signup_date_str
+        })
+
+    return {"results": user_results}
+
+
+# Endpoint 9: Grant Credits to User
+@router.post("/users/{user_id}/grant-credits")
+def grant_credits_to_user(
+    user_id: int,
+    request: GrantCreditsRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Grant bonus quota to a user (admin action).
+    Creates quota_transaction and updates user_subscriptions.
+    """
+    # Verify user exists
+    user_query = text("""
+        SELECT id, email, display_name FROM users WHERE id = :user_id
+    """)
+    user = db.execute(user_query, {"user_id": user_id}).fetchone()
+
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+
+    # Convert hours to seconds
+    bonus_seconds = int(request.bonus_hours * 3600)
+
+    # Update user subscription
+    update_query = text("""
+        UPDATE user_subscriptions
+        SET bonus_credits_seconds = bonus_credits_seconds + :bonus_seconds
+        WHERE user_id = :user_id
+        RETURNING user_id, bonus_credits_seconds
+    """)
+
+    result = db.execute(update_query, {
+        "user_id": user_id,
+        "bonus_seconds": bonus_seconds
+    }).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"User {user_id} has no subscription")
+
+    # Create quota transaction
+    transaction_query = text("""
+        INSERT INTO quota_transactions (
+            user_id, transaction_type, amount_seconds, quota_type,
+            description, metadata, created_at
+        ) VALUES (
+            :user_id, 'manual_grant', :amount_seconds, 'bonus',
+            :description, :metadata, NOW()
+        )
+        RETURNING id
+    """)
+
+    metadata = {
+        "granted_by_admin_id": admin.id,
+        "granted_by_admin_email": admin.email,
+        "reason": request.reason
+    }
+
+    db.execute(transaction_query, {
+        "user_id": user_id,
+        "amount_seconds": bonus_seconds,
+        "description": f"Admin grant: {request.reason}",
+        "metadata": json.dumps(metadata)
+    })
+
+    # Create audit log entry
+    audit_query = text("""
+        INSERT INTO admin_audit_log (
+            admin_id, action, target_user_id, details, created_at
+        ) VALUES (
+            :admin_id, 'grant_credits', :target_user_id, :details, NOW()
+        )
+    """)
+
+    audit_details = {
+        "bonus_hours": request.bonus_hours,
+        "bonus_seconds": bonus_seconds,
+        "reason": request.reason,
+        "new_total_seconds": result[1]
+    }
+
+    db.execute(audit_query, {
+        "admin_id": admin.id,
+        "target_user_id": user_id,
+        "details": json.dumps(audit_details)
+    })
+
+    db.commit()
+
+    return {
+        "message": f"Granted {request.bonus_hours} hours to user {user[1]}",
+        "user_id": user_id,
+        "user_email": user[1],
+        "bonus_hours_granted": request.bonus_hours,
+        "new_total_bonus_hours": round(result[1] / 3600, 2),
+        "reason": request.reason
+    }
+
+# Endpoint 9: Active Rooms
+@router.get("/rooms/active")
+def get_active_rooms(
+    limit: int = Query(50, le=500, description="Max 500 results per page"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    start_date: Optional[datetime] = Query(None, description="Activity start date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="Activity end date (ISO format)"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get currently active rooms with participant counts (paginated).
+    Shows rooms with recent activity (default: last 24 hours).
+    """
+    # Default to last 24 hours if not specified
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(hours=24)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    query = text("""
+        SELECT
+            r.code as room_code,
+            r.id as room_id,
+            r.created_at,
+            r.is_public,
+            r.speakers_locked,
+            u.email as owner_email,
+            u.display_name as owner_name,
+            COUNT(DISTINCT rp.user_id) as participant_count,
+            MAX(rp.joined_at) as last_join_time
+        FROM rooms r
+        JOIN users u ON r.owner_id = u.id
+        LEFT JOIN room_participants rp ON r.id = rp.room_id AND rp.is_active = TRUE
+        WHERE rp.joined_at >= :start_date
+          AND rp.joined_at <= :end_date
+        GROUP BY r.id, r.code, r.created_at, r.is_public, r.speakers_locked, u.email, u.display_name
+        ORDER BY last_join_time DESC
+        LIMIT :limit OFFSET :offset
+    """)
+
+    results = db.execute(query, {
+        "start_date": start_date,
+        "end_date": end_date,
+        "limit": limit,
+        "offset": offset
+    }).fetchall()
+
+    rooms = []
+    for row in results:
+        rooms.append({
+            "room_code": row[0],
+            "room_id": row[1],
+            "created_at": row[2],
+            "is_public": row[3],
+            "is_multi_speaker": row[4],
+            "owner_email": row[5],
+            "owner_name": row[6],
+            "participant_count": row[7],
+            "last_activity": row[8]
+        })
+
+    return {
+        "active_rooms": rooms,
+        "total_returned": len(rooms),
+        "limit": limit,
+        "offset": offset,
+        "has_more": len(rooms) == limit
+    }
+
+# ============================================================================
+# US-003: System Settings Page APIs
+# ============================================================================
+
+class FeatureFlagUpdate(BaseModel):
+    value: str  # String representation (parsed based on value_type)
+
+class ProviderRoutingUpdate(BaseModel):
+    provider_primary: Optional[str] = None
+    provider_fallback: Optional[str] = None
+    enabled: Optional[bool] = None
+    config: Optional[Dict[str, Any]] = None
+
+class RateLimitUpdate(BaseModel):
+    limits: Dict[str, int]  # key -> new_value mapping
+
+@router.get("/settings/feature-flags")
+def get_feature_flags(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Get all feature flags with metadata (US-003)"""
+    query = text("""
+        SELECT
+            ss.key,
+            ss.value,
+            ss.value_type,
+            ss.description,
+            ss.category,
+            ss.updated_at,
+            u.email as updated_by_email
+        FROM system_settings ss
+        LEFT JOIN users u ON ss.updated_by = u.id
+        WHERE ss.category IN ('stt', 'mt', 'ui')
+        ORDER BY ss.category, ss.key
+    """)
+
+    results = db.execute(query).fetchall()
+
+    flags = []
+    for row in results:
+        # Parse value based on type
+        value = row[1]
+        if row[2] == 'boolean':
+            value = value.lower() == 'true'
+        elif row[2] == 'integer':
+            value = int(value)
+
+        flags.append({
+            "key": row[0],
+            "value": value,
+            "value_type": row[2],
+            "description": row[3],
+            "category": row[4],
+            "updated_at": row[5].isoformat() if row[5] else None,
+            "updated_by": row[6]
+        })
+
+    return {"flags": flags}
+
+@router.put("/settings/feature-flags/{key}")
+def update_feature_flag(
+    key: str,
+    update: FeatureFlagUpdate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Update a single feature flag (US-003)"""
+    # Get current value
+    query = text("""
+        SELECT value, value_type
+        FROM system_settings
+        WHERE key = :key
+    """)
+
+    result = db.execute(query, {"key": key}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Feature flag '{key}' not found")
+
+    old_value = result[0]
+    value_type = result[1]
+
+    # Validate value based on type
+    new_value = update.value
+    if value_type == 'boolean':
+        if new_value.lower() not in ['true', 'false']:
+            raise HTTPException(status_code=400, detail="Boolean value must be 'true' or 'false'")
+    elif value_type == 'integer':
+        try:
+            int(new_value)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Integer value required")
+
+    # Update setting
+    update_query = text("""
+        UPDATE system_settings
+        SET value = :value,
+            updated_at = NOW(),
+            updated_by = :admin_id
+        WHERE key = :key
+        RETURNING updated_at
+    """)
+
+    updated_at = db.execute(update_query, {
+        "key": key,
+        "value": new_value,
+        "admin_id": admin.id
+    }).fetchone()[0]
+
+    db.commit()
+
+    # Create audit log entry
+    audit_query = text("""
+        INSERT INTO admin_audit_log (admin_id, action, target, details, created_at)
+        VALUES (:admin_id, 'update_setting', :key, :details, NOW())
+    """)
+
+    audit_details = json.dumps({
+        "old_value": old_value,
+        "new_value": new_value,
+        "value_type": value_type
+    })
+
+    db.execute(audit_query, {
+        "admin_id": admin.id,
+        "key": key,
+        "details": audit_details
+    })
+
+    db.commit()
+
+    return {
+        "message": f"Feature flag '{key}' updated",
+        "key": key,
+        "old_value": old_value == 'true' if value_type == 'boolean' else old_value,
+        "new_value": new_value == 'true' if value_type == 'boolean' else new_value,
+        "updated_at": updated_at.isoformat()
+    }
+
+@router.get("/settings/rate-limits")
+def get_rate_limits(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Get rate limit settings (US-003)"""
+    query = text("""
+        SELECT key, value, description, updated_at
+        FROM system_settings
+        WHERE category = 'performance'
+        ORDER BY key
+    """)
+
+    results = db.execute(query).fetchall()
+
+    limits = []
+    for row in results:
+        limits.append({
+            "key": row[0],
+            "value": int(row[1]),
+            "description": row[2],
+            "updated_at": row[3].isoformat() if row[3] else None
+        })
+
+    return {"limits": limits}
+
+@router.put("/settings/rate-limits")
+def update_rate_limits(
+    update: RateLimitUpdate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Update multiple rate limits at once (US-003)"""
+    updated_keys = []
+
+    for key, value in update.limits.items():
+        # Validate key exists and is performance category
+        query = text("""
+            SELECT value_type, category
+            FROM system_settings
+            WHERE key = :key
+        """)
+
+        result = db.execute(query, {"key": key}).fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
+
+        if result[1] != 'performance':
+            raise HTTPException(status_code=400, detail=f"Setting '{key}' is not a rate limit")
+
+        # Update setting
+        update_query = text("""
+            UPDATE system_settings
+            SET value = :value,
+                updated_at = NOW(),
+                updated_by = :admin_id
+            WHERE key = :key
+        """)
+
+        db.execute(update_query, {
+            "key": key,
+            "value": str(value),
+            "admin_id": admin.id
+        })
+
+        updated_keys.append(key)
+
+    db.commit()
+
+    return {
+        "message": f"Updated {len(updated_keys)} rate limits",
+        "updated": updated_keys
+    }
+
+@router.put("/routing/stt/{id}")
+def update_stt_routing(
+    id: int,
+    update: ProviderRoutingUpdate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Update STT routing configuration (US-003)"""
+    # Get current config
+    query = text("""
+        SELECT language, mode, quality_tier
+        FROM stt_routing_config
+        WHERE id = :id
+    """)
+
+    result = db.execute(query, {"id": id}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"STT routing config {id} not found")
+
+    language, mode, quality_tier = result
+
+    # Build update query dynamically
+    updates = []
+    params = {"id": id}
+
+    if update.provider_primary is not None:
+        updates.append("provider_primary = :provider_primary")
+        params["provider_primary"] = update.provider_primary
+
+    if update.provider_fallback is not None:
+        updates.append("provider_fallback = :provider_fallback")
+        params["provider_fallback"] = update.provider_fallback
+
+    if update.enabled is not None:
+        updates.append("enabled = :enabled")
+        params["enabled"] = update.enabled
+
+    if update.config is not None:
+        updates.append("config = :config")
+        params["config"] = json.dumps(update.config)
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    updates.append("updated_at = NOW()")
+
+    update_query = text(f"""
+        UPDATE stt_routing_config
+        SET {', '.join(updates)}
+        WHERE id = :id
+        RETURNING updated_at
+    """)
+
+    updated_at = db.execute(update_query, params).fetchone()[0]
+    db.commit()
+
+    # Clear language router cache
+    cache_cleared = False
+    try:
+        from .stt.language_router import clear_cache
+        clear_cache(language=language, service_type='stt')
+        cache_cleared = True
+    except Exception as e:
+        print(f"[Admin API] Failed to clear cache: {e}")
+
+    return {
+        "message": f"STT routing config updated for {language} {mode}/{quality_tier}",
+        "id": id,
+        "language": language,
+        "mode": mode,
+        "quality_tier": quality_tier,
+        "cache_cleared": cache_cleared,
+        "updated_at": updated_at.isoformat()
+    }
+
+@router.get("/system/usage-stats")
+def get_usage_stats(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Get current system usage vs configured limits (US-003)"""
+    # Get rate limits from system_settings
+    limits_query = text("""
+        SELECT key, value
+        FROM system_settings
+        WHERE category = 'performance'
+    """)
+
+    limits = {row[0]: int(row[1]) for row in db.execute(limits_query).fetchall()}
+
+    # Get active rooms count
+    active_rooms_query = text("""
+        SELECT COUNT(DISTINCT r.id)
+        FROM rooms r
+        JOIN room_participants rp ON r.id = rp.room_id
+        WHERE rp.joined_at > NOW() - INTERVAL '1 hour'
+          AND rp.is_active = true
+    """)
+
+    active_rooms = db.execute(active_rooms_query).scalar() or 0
+
+    # Get MT requests last minute (approximate from room_costs)
+    mt_requests_query = text("""
+        SELECT COUNT(*)
+        FROM room_costs
+        WHERE pipeline = 'mt'
+          AND ts > NOW() - INTERVAL '1 minute'
+    """)
+
+    mt_requests = db.execute(mt_requests_query).scalar() or 0
+
+    return {
+        "stt_active_connections": 0,  # Placeholder - requires Redis tracking
+        "stt_max_connections": limits.get("stt_max_concurrent_connections", 100),
+        "active_rooms": active_rooms,
+        "max_room_participants": limits.get("max_room_participants", 50),
+        "mt_requests_last_minute": mt_requests,
+        "mt_limit_per_minute": limits.get("api_requests_per_minute_global", 1000)
+    }
+
+# ============================================================================
+# US-007: Support Tools Page APIs
+# ============================================================================
+
+@router.get("/rooms/lookup")
+def lookup_room(
+    q: str = Query(..., description="Room code or room ID"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Lookup room by code or ID with full details (US-007).
+    Returns room metadata, participant counts, message count, and cost summary.
+    """
+    # Try parsing as ID first
+    try:
+        room_id = int(q)
+        query_filter = "r.id = :query_id"
+        params = {"query_id": room_id}
+    except ValueError:
+        query_filter = "UPPER(r.code) = UPPER(:query)"
+        params = {"query": q}
+
+    query = text(f"""
+        SELECT
+            r.code as room_code,
+            r.id as room_id,
+            r.created_at,
+            r.is_public,
+            r.speakers_locked as is_multi_speaker,
+            u.email as owner_email,
+            u.id as owner_id,
+            COUNT(DISTINCT rp.id) as total_participants,
+            COUNT(DISTINCT CASE WHEN rp.left_at IS NULL THEN rp.id END) as participant_count,
+            COUNT(DISTINCT s.id) as message_count,
+            COALESCE(SUM(CASE WHEN rc.pipeline = 'stt' THEN rc.amount_usd ELSE 0 END), 0) as stt_cost,
+            COALESCE(SUM(CASE WHEN rc.pipeline = 'mt' THEN rc.amount_usd ELSE 0 END), 0) as mt_cost
+        FROM rooms r
+        JOIN users u ON r.owner_id = u.id
+        LEFT JOIN room_participants rp ON r.id = rp.room_id
+        LEFT JOIN segments s ON r.id = s.room_id
+        LEFT JOIN room_costs rc ON CAST(r.id AS TEXT) = rc.room_id
+        WHERE {query_filter}
+        GROUP BY r.id, r.code, r.created_at, r.is_public, r.speakers_locked, u.email, u.id
+    """)
+
+    result = db.execute(query, params).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    stt_cost = float(result[10] or 0)
+    mt_cost = float(result[11] or 0)
+
+    return {
+        "room_code": result[0],
+        "room_id": result[1],
+        "created_at": result[2].isoformat() if result[2] else None,
+        "is_public": result[3],
+        "is_multi_speaker": result[4],
+        "owner_email": result[5],
+        "owner_id": result[6],
+        "total_participants": result[7],
+        "participant_count": result[8],
+        "message_count": result[9],
+        "cost_summary": {
+            "stt_cost_usd": stt_cost,
+            "mt_cost_usd": mt_cost,
+            "total_cost_usd": stt_cost + mt_cost
+        },
+        "status": "active"
+    }
+
+@router.get("/rooms/{room_code}/messages")
+def get_room_messages(
+    room_code: str,
+    limit: int = Query(20, le=100),
+    offset: int = Query(0, ge=0),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get message history for a room (US-007).
+    Returns paginated list of segments with speaker information.
+    """
+    # Get messages
+    query = text("""
+        SELECT
+            s.segment_id,
+            s.ts_iso as timestamp,
+            s.text,
+            s.lang,
+            s.final as is_final,
+            s.speaker_id,
+            COALESCE(u.email, 'Unknown') as speaker_email
+        FROM segments s
+        LEFT JOIN room_participants rp ON s.room_id = rp.room_id AND s.speaker_id = rp.id
+        LEFT JOIN users u ON rp.user_id = u.id
+        WHERE s.room_id = (SELECT id FROM rooms WHERE code = :room_code)
+        ORDER BY s.segment_id DESC
+        LIMIT :limit OFFSET :offset
+    """)
+
+    results = db.execute(query, {"room_code": room_code.upper(), "limit": limit, "offset": offset}).fetchall()
+
+    # Count total messages
+    count_query = text("""
+        SELECT COUNT(*) FROM segments WHERE room_id = (SELECT id FROM rooms WHERE code = :room_code)
+    """)
+    total = db.execute(count_query, {"room_code": room_code.upper()}).scalar() or 0
+
+    messages = []
+    for row in results:
+        messages.append({
+            "segment_id": row[0],
+            "timestamp": row[1].isoformat() if row[1] else None,
+            "text": row[2],
+            "lang": row[3],
+            "is_final": row[4],
+            "speaker_id": row[5],
+            "speaker_email": row[6]
+        })
+
+    return {
+        "messages": messages,
+        "total": total,
+        "has_more": (offset + limit) < total
+    }
+
+@router.get("/debug/redis/keys")
+def list_redis_keys(
+    pattern: str = Query(..., description="Redis key pattern"),
+    limit: int = Query(50, le=100),
+    admin: User = Depends(require_admin)
+):
+    """
+    List Redis keys matching pattern (US-007).
+    Uses SCAN for non-blocking operation. Limited to safe prefixes.
+    """
+    import redis as redis_sync
+
+    # Validate pattern (security)
+    allowed_prefixes = ['room:', 'debug:', 'stt_cache:', 'mt_cache:']
+    if not any(pattern.startswith(prefix) for prefix in allowed_prefixes):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid pattern. Must start with: {', '.join(allowed_prefixes)}"
+        )
+
+    r = redis_sync.from_url(REDIS_URL, decode_responses=True)
+    try:
+        keys = []
+        cursor = 0
+
+        # SCAN for keys (safe, non-blocking)
+        while len(keys) < limit:
+            cursor, batch = r.scan(cursor, match=pattern, count=100)
+            keys.extend(batch)
+            if cursor == 0:
+                break
+
+        keys = keys[:limit]
+
+        # Get metadata for each key
+        key_data = []
+        for key in keys:
+            key_type = r.type(key)
+            ttl = r.ttl(key)
+            try:
+                size = r.memory_usage(key) or 0
+            except:
+                size = 0
+
+            key_data.append({
+                "key": key,
+                "type": key_type,
+                "ttl": ttl,
+                "size_bytes": size
+            })
+
+        return {
+            "keys": key_data,
+            "total": len(key_data),
+            "truncated": len(key_data) >= limit
+        }
+    finally:
+        r.close()
+
+@router.get("/debug/redis/get")
+def get_redis_value(
+    key: str = Query(..., description="Redis key"),
+    admin: User = Depends(require_admin)
+):
+    """
+    Get Redis key value (US-007).
+    Supports string, hash, list, set, and sorted set types.
+    """
+    import redis as redis_sync
+
+    r = redis_sync.from_url(REDIS_URL, decode_responses=True)
+    try:
+        key_type = r.type(key)
+        ttl = r.ttl(key)
+
+        if key_type == 'string':
+            raw = r.get(key)
+        elif key_type == 'hash':
+            raw = r.hgetall(key)
+        elif key_type == 'list':
+            raw = r.lrange(key, 0, 100)  # Limit to 100 items
+        elif key_type == 'set':
+            raw = list(r.smembers(key))[:100]
+        elif key_type == 'zset':
+            raw = r.zrange(key, 0, 100)
+        else:
+            raw = f"<{key_type} not displayable>"
+
+        # Try to parse as JSON
+        try:
+            if isinstance(raw, str):
+                value = json.loads(raw)
+            else:
+                value = raw
+        except:
+            value = raw
+
+        # Truncate large values
+        raw_str = str(raw)
+        if len(raw_str) > 10240:
+            raw_str = raw_str[:10240] + "... (truncated)"
+
+        return {
+            "key": key,
+            "type": key_type,
+            "value": value,
+            "ttl": ttl,
+            "raw": raw_str
+        }
+    finally:
+        r.close()
+
+@router.post("/cache/clear")
+def clear_cache(
+    request: dict,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Clear cache by type (US-007).
+    Supports room_translations, stt_cache, mt_cache, all_stt.
+    Logs action to admin_audit_log.
+    """
+    import redis as redis_sync
+
+    cache_type = request.get("cache_type")
+    room_code = request.get("room_code")
+
+    if cache_type == "room_translations" and not room_code:
+        raise HTTPException(status_code=400, detail="room_code required for room_translations")
+
+    r = redis_sync.from_url(REDIS_URL, decode_responses=True)
+    try:
+        keys_deleted = 0
+
+        if cache_type == "room_translations":
+            patterns = [f"stt_cache:{room_code.upper()}:*", f"mt_cache:{room_code.upper()}:*"]
+        elif cache_type == "stt_cache":
+            patterns = ["stt_cache:*"]
+        elif cache_type == "mt_cache":
+            patterns = ["mt_cache:*"]
+        elif cache_type == "all_stt":
+            patterns = ["stt_*"]
+        else:
+            raise HTTPException(status_code=400, detail="Invalid cache_type")
+
+        # SCAN + DEL for each pattern
+        for pattern in patterns:
+            cursor = 0
+            while True:
+                cursor, keys = r.scan(cursor, match=pattern, count=100)
+                if keys:
+                    keys_deleted += r.delete(*keys)
+                if cursor == 0:
+                    break
+
+        # Audit log
+        audit_query = text("""
+            INSERT INTO admin_audit_log (admin_id, action, details, created_at)
+            VALUES (:admin_id, 'cache_clear', :details, NOW())
+        """)
+
+        db.execute(audit_query, {
+            "admin_id": admin.id,
+            "details": json.dumps({
+                "cache_type": cache_type,
+                "room_code": room_code,
+                "keys_deleted": keys_deleted
+            })
+        })
+        db.commit()
+
+        return {
+            "message": "Cache cleared",
+            "keys_deleted": keys_deleted,
+            "cache_type": cache_type,
+            "room_code": room_code
+        }
+    finally:
+        r.close()
+
+@router.get("/cache/stats")
+def get_cache_stats(admin: User = Depends(require_admin)):
+    """
+    Get cache statistics (US-007).
+    Shows Redis memory usage and key counts by type.
+    """
+    import redis as redis_sync
+
+    r = redis_sync.from_url(REDIS_URL, decode_responses=True)
+    try:
+        info = r.info()
+
+        # Count keys by pattern
+        patterns = {
+            "stt_cache": "stt_cache:*",
+            "mt_cache": "mt_cache:*",
+            "room_presence": "room:*:presence",
+            "debug_keys": "debug:*"
+        }
+
+        breakdown = {}
+        for name, pattern in patterns.items():
+            cursor = 0
+            count = 0
+            while True:
+                cursor, keys = r.scan(cursor, match=pattern, count=100)
+                count += len(keys)
+                if cursor == 0:
+                    break
+            breakdown[name] = count
+
+        return {
+            "redis_info": {
+                "used_memory_human": info.get("used_memory_human", "Unknown"),
+                "total_keys": r.dbsize(),
+                "uptime_days": info.get("uptime_in_seconds", 0) // 86400
+            },
+            "cache_breakdown": breakdown
+        }
+    finally:
+        r.close()
