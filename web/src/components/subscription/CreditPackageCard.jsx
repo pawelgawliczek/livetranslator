@@ -8,9 +8,9 @@ import { useTranslation } from 'react-i18next';
 export default function CreditPackageCard({ package: pkg, onBuy, loading }) {
   const { t } = useTranslation();
 
-  const hours = pkg.credit_hours;
+  const hours = pkg.hours || pkg.credit_hours;
   const price = pkg.price_usd;
-  const discount = pkg.discount_pct;
+  const discount = pkg.discount_percent || pkg.discount_pct;
 
   // Calculate per-hour rate
   const perHourRate = (price / hours).toFixed(2);
@@ -81,9 +81,11 @@ export default function CreditPackageCard({ package: pkg, onBuy, loading }) {
 CreditPackageCard.propTypes = {
   package: PropTypes.shape({
     id: PropTypes.number.isRequired,
-    credit_hours: PropTypes.number.isRequired,
+    hours: PropTypes.number, // API field
+    credit_hours: PropTypes.number, // Legacy field
     price_usd: PropTypes.number.isRequired,
-    discount_pct: PropTypes.number,
+    discount_percent: PropTypes.number, // API field
+    discount_pct: PropTypes.number, // Legacy field
   }).isRequired,
   onBuy: PropTypes.func.isRequired,
   loading: PropTypes.bool,
