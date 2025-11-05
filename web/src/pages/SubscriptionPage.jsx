@@ -217,9 +217,17 @@ export default function SubscriptionPage({ token, onLogout }) {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-fg mb-8">
-          {t('subscription.title')}
-        </h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-fg">
+            {t('subscription.title')}
+          </h1>
+          <button
+            onClick={() => navigate('/billing/history')}
+            className="text-accent hover:underline text-sm"
+          >
+            {t('subscription.viewHistory') || 'View Billing History →'}
+          </button>
+        </div>
 
         {/* Error Banner */}
         {error && (

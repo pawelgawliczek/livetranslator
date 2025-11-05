@@ -29,6 +29,7 @@ import NotificationToast from "./components/NotificationToast";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import BillingSuccessPage from "./pages/BillingSuccessPage";
 import BillingCancelPage from "./pages/BillingCancelPage";
+import BillingHistoryPage from "./pages/BillingHistoryPage";
 
 function App() {
   const [token, setToken] = React.useState(localStorage.getItem("token") || "");
@@ -243,6 +244,10 @@ function App() {
         <Route
           path="/billing/cancel"
           element={token ? <BillingCancelPage token={token} /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/billing/history"
+          element={token ? <BillingHistoryPage token={token} onLogout={logout} /> : <Navigate to="/login" />}
         />
       </Routes>
     </BrowserRouter>

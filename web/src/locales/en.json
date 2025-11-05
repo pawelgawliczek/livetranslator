@@ -947,6 +947,48 @@
       "loadTiers": "Failed to load subscription plans",
       "downgradeNotAllowed": "Downgrades are not available via self-service. Please contact support to change your plan.",
       "checkoutFailed": "Failed to start checkout process"
+    },
+    "viewHistory": "View Billing History"
+  },
+  "billing": {
+    "title": "Billing History",
+    "subtitle": "View all your past payments and download receipts",
+    "totalSpent": "Total Spent",
+    "table": {
+      "date": "Date",
+      "description": "Description",
+      "amount": "Amount",
+      "status": "Status",
+      "platform": "Platform",
+      "actions": "Actions"
+    },
+    "status": {
+      "completed": "Completed",
+      "pending": "Pending",
+      "failed": "Failed",
+      "refunded": "Refunded"
+    },
+    "descriptions": {
+      "subscription": "Subscription Payment",
+      "credits": "Credit Purchase"
+    },
+    "actions": {
+      "download": "Download Receipt"
+    },
+    "empty": {
+      "title": "No payment history",
+      "message": "Your payments will appear here once you subscribe or purchase credits.",
+      "cta": "View Subscription Plans"
+    },
+    "errors": {
+      "loadFailed": "Failed to load payment history. Please try again.",
+      "retry": "Retry"
+    },
+    "pagination": {
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page",
+      "of": "of"
     }
   }
 }

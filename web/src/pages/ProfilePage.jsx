@@ -580,7 +580,15 @@ export default function ProfilePage({ token, onLogout }) {
 
           {activeTab === "subscription" && subscription && (
             <div className="max-w-4xl mx-auto">
-              <h2 className="text-2xl font-bold mb-5 text-fg">Subscription</h2>
+              <div className="flex justify-between items-center mb-5">
+                <h2 className="text-2xl font-bold text-fg">Subscription</h2>
+                <button
+                  onClick={() => navigate('/billing/history')}
+                  className="text-accent hover:underline text-sm"
+                >
+                  View Billing History →
+                </button>
+              </div>
 
               <div className="bg-bg-secondary p-5 rounded-lg mb-8 flex justify-between items-center flex-wrap gap-2.5">
                 <div className="text-lg text-fg">
