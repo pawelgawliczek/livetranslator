@@ -18,6 +18,7 @@ from sqlalchemy import text
 from ..db import SessionLocal
 from ..auth import get_current_user
 from ..models import User, UserSubscription, SubscriptionTier, QuotaTransaction
+from ..settings import INTERNAL_API_KEY
 import os
 
 logger = logging.getLogger(__name__)
@@ -183,9 +184,10 @@ def deduct_quota(
     4. Create quota_transaction record
     5. Invalidate Redis cache
     """
-    # TODO: Add internal API key validation in production
-    # if x_internal_api_key != INTERNAL_API_KEY:
-    #     raise HTTPException(status_code=403, detail="Invalid API key")
+    # CRIT-2: Validate internal API key
+    if x_internal_api_key != INTERNAL_API_KEY:
+        logger.warning(f"Invalid internal API key attempt for user {request.user_id}")
+        raise HTTPException(status_code=403, detail="Invalid API key")
 
     # Get user's available quota
     available_seconds = db.execute(

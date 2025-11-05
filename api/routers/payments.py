@@ -6,9 +6,11 @@ Security features:
 - Apple receipt duplicate transaction check (prevent fraud)
 - Apple bundle_id validation (prevent replay attacks)
 - Idempotent webhook processing (Redis deduplication)
+- Rate limiting (MED-1)
 """
 import os
 import httpx
+import structlog
 from decimal import Decimal
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -16,18 +18,28 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from ..auth import get_current_user
 from ..db import SessionLocal
 from ..models import User, UserSubscription, SubscriptionTier, PaymentTransaction, CreditPackage, QuotaTransaction
-from ..settings import settings
+from ..settings import (
+    settings,
+    STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET,
+    APPLE_SHARED_SECRET
+)
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
+# MED-1: Rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
+# MED-2: Structured logging
+log = structlog.get_logger("payments")
+
 # Environment variables
-STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-APPLE_SHARED_SECRET = os.getenv("APPLE_SHARED_SECRET", "")
 FRONTEND_URL = os.getenv("FRONTEND_URL", f"https://{settings.LT_DOMAIN}")
 EXPECTED_BUNDLE_ID = os.getenv("APPLE_BUNDLE_ID", "com.livetranslator.ios")
 
@@ -69,7 +81,9 @@ class AppleReceiptRequest(BaseModel):
 # ============================================================================
 
 @router.post("/stripe/create-checkout")
+@limiter.limit("10/minute")  # MED-1: Rate limit to prevent abuse
 async def create_stripe_checkout(
+    request_obj: Request,
     request: StripeCheckoutRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -95,6 +109,28 @@ async def create_stripe_checkout(
 
         if not tier.stripe_price_id:
             raise HTTPException(400, f"Tier {tier.tier_name} does not support Stripe payments")
+
+        # Check if user has existing subscription
+        current_sub = db.scalar(
+            select(UserSubscription)
+            .where(UserSubscription.user_id == current_user.id)
+        )
+
+        # Validate downgrade rules
+        if current_sub and current_sub.tier_id:
+            current_tier = db.get(SubscriptionTier, current_sub.tier_id)
+            if current_tier:
+                # Prevent downgrade if current tier is more expensive
+                if current_tier.monthly_price_usd > tier.monthly_price_usd:
+                    raise HTTPException(
+                        400,
+                        detail={
+                            "error": "downgrade_not_allowed",
+                            "message": "Downgrades are not available via self-service. Please contact support.",
+                            "current_tier": current_tier.tier_name,
+                            "requested_tier": tier.tier_name
+                        }
+                    )
 
         price_id = tier.stripe_price_id
         mode = 'subscription'
@@ -179,7 +215,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     event_id = event['id']
 
     if await redis.get(f"stripe:event:{event_id}"):
-        print(f"[Stripe Webhook] Event {event_id} already processed, skipping")
+        log.info("stripe_webhook_duplicate", event_id=event_id)
         return {"status": "duplicate"}
 
     # Mark as processed (TTL 7 days)
@@ -208,7 +244,7 @@ async def handle_checkout_completed(session: dict, db: Session):
 
     user = db.get(User, user_id)
     if not user:
-        print(f"[Stripe] User {user_id} not found")
+        log.warning("stripe_user_not_found", user_id=user_id)
         return
 
     if product_type == 'subscription':
@@ -280,7 +316,7 @@ async def handle_checkout_completed(session: dict, db: Session):
     db.add(payment_tx)
     db.commit()
 
-    print(f"[Stripe] Checkout completed for user {user_id}, type={product_type}")
+    log.info("stripe_checkout_completed", user_id=user_id, product_type=product_type, amount_usd=float(session['amount_total']) / 100)
 
 
 async def handle_subscription_updated(subscription_data: dict, db: Session):
@@ -299,7 +335,7 @@ async def handle_subscription_updated(subscription_data: dict, db: Session):
         subscription.billing_period_end = current_period_end
         subscription.status = 'active'
         db.commit()
-        print(f"[Stripe] Subscription {stripe_subscription_id} updated")
+        log.info("stripe_subscription_updated", subscription_id=stripe_subscription_id, user_id=subscription.user_id)
 
 
 async def handle_payment_failed(invoice_data: dict, db: Session):
@@ -313,7 +349,7 @@ async def handle_payment_failed(invoice_data: dict, db: Session):
     if subscription:
         subscription.status = 'past_due'
         db.commit()
-        print(f"[Stripe] Payment failed for user {subscription.user_id}")
+        log.warning("stripe_payment_failed", user_id=subscription.user_id, customer_id=customer_id)
 
 
 async def handle_subscription_deleted(subscription_data: dict, db: Session):
@@ -330,7 +366,7 @@ async def handle_subscription_deleted(subscription_data: dict, db: Session):
         subscription.status = 'canceled'
         subscription.auto_renew = False
         db.commit()
-        print(f"[Stripe] Subscription {stripe_subscription_id} canceled")
+        log.info("stripe_subscription_canceled", subscription_id=stripe_subscription_id, user_id=subscription.user_id)
 
 
 # ============================================================================
@@ -425,7 +461,9 @@ async def verify_apple_receipt_with_apple(receipt_data: str) -> dict:
 
 
 @router.post("/apple/verify")
+@limiter.limit("5/minute")  # MED-1: Rate limit Apple IAP verification
 async def verify_apple_receipt(
+    request_obj: Request,
     request: AppleReceiptRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -652,7 +690,7 @@ async def apple_webhook(request: Request, db: Session = Depends(get_db)):
     )
 
     if not subscription:
-        print(f"[Apple Webhook] Subscription not found for original_transaction_id={original_transaction_id}")
+        log.warning("apple_webhook_subscription_not_found", original_transaction_id=original_transaction_id)
         return {"status": "subscription_not_found"}
 
     # Handle notification types
@@ -663,14 +701,14 @@ async def apple_webhook(request: Request, db: Session = Depends(get_db)):
             subscription.billing_period_end = datetime.fromtimestamp(expires_date_ms / 1000, tz=timezone.utc)
             subscription.status = 'active'
             db.commit()
-            print(f"[Apple] Subscription renewed for user {subscription.user_id}")
+            log.info("apple_subscription_renewed", user_id=subscription.user_id)
 
     elif notification_type == 'DID_FAIL_TO_RENEW':
         # Start grace period
         subscription.status = 'past_due'
         subscription.grace_quota_seconds = subscription.bonus_credits_seconds
         db.commit()
-        print(f"[Apple] Payment failed for user {subscription.user_id}")
+        log.warning("apple_payment_failed", user_id=subscription.user_id)
 
     elif notification_type == 'REFUND':
         # Revoke access immediately
@@ -678,13 +716,13 @@ async def apple_webhook(request: Request, db: Session = Depends(get_db)):
         subscription.status = 'canceled'
         subscription.tier_id = free_tier.id if free_tier else None
         db.commit()
-        print(f"[Apple] Refund processed for user {subscription.user_id}")
+        log.warning("apple_refund_processed", user_id=subscription.user_id)
 
     elif notification_type == 'DID_CHANGE_RENEWAL_STATUS':
         auto_renew_status = transaction.get("auto_renew_status", "0")
         subscription.auto_renew = (auto_renew_status == "1")
         db.commit()
-        print(f"[Apple] Auto-renew changed to {subscription.auto_renew} for user {subscription.user_id}")
+        log.info("apple_auto_renew_changed", user_id=subscription.user_id, auto_renew=subscription.auto_renew)
 
     return {"status": "success"}
 

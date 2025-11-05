@@ -890,5 +890,63 @@
         }
       }
     }
+  },
+  "subscription": {
+    "title": "Subscription & Credits",
+    "choosePlan": "Choose Your Plan",
+    "buyCredits": "Buy Additional Credits",
+    "buyCreditsDescription": "Top up your quota with bonus hours that never expire",
+    "currentPlan": "Current Plan",
+    "subscribe": "Subscribe",
+    "upgrade": "Upgrade to {{tier}}",
+    "buyNow": "Buy Now",
+    "quotaStatus": "Quota Status",
+    "quotaUsed": "{{used}} / {{total}} hours",
+    "hoursThisMonth": "hours this month",
+    "bonusHours": "+ {{hours}} bonus hours",
+    "nextReset": "Next reset",
+    "perMonth": "/month",
+    "free": "Free",
+    "hours": "hours",
+    "hour": "hour",
+    "minutes": "minutes",
+    "processing": "Processing...",
+    "upgradeSuccess": "Subscription activated!",
+    "paymentCanceled": "Payment canceled. You can try again anytime.",
+    "tryAgain": "Try Again",
+    "continueToDashboard": "Continue to Dashboard",
+    "stripeError": "Payment system unavailable. Try again later.",
+    "errorLoading": "Failed to load subscription data",
+    "noPackages": "No credit packages available",
+    "bestValue": "Best Value",
+    "savePercent": "Save {{percent}}%",
+    "lowQuotaWarning": "You're running low on quota. Consider upgrading or purchasing credits.",
+    "success": {
+      "title": "Payment Successful!",
+      "message": "Your subscription is being activated. This may take a few moments."
+    },
+    "cancel": {
+      "title": "Payment Cancelled",
+      "message": "No charges were made to your account."
+    },
+    "features": {
+      "basicTranslation": "Basic translation",
+      "webSpeech": "Web Speech API",
+      "multiSpeaker": "Multi-speaker support",
+      "communitySupportOnly": "Community support",
+      "premiumProviders": "Premium STT/MT providers",
+      "deepLOpenAI": "DeepL & OpenAI translation",
+      "historyExport": "History export (PDF/TXT)",
+      "emailSupport": "Email support",
+      "allProviders": "All providers (Azure, Google, AWS)",
+      "serverTTS": "Server-side TTS",
+      "apiAccess": "API access",
+      "prioritySupport": "Priority support (24/7)"
+    },
+    "errors": {
+      "loadTiers": "Failed to load subscription plans",
+      "downgradeNotAllowed": "Downgrades are not available via self-service. Please contact support to change your plan.",
+      "checkoutFailed": "Failed to start checkout process"
+    }
   }
 }

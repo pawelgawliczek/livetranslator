@@ -26,6 +26,9 @@ import AdminNotificationsPage from "./pages/AdminNotificationsPage";
 import AdminAuditLogsPage from "./pages/AdminAuditLogsPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import NotificationToast from "./components/NotificationToast";
+import SubscriptionPage from "./pages/SubscriptionPage";
+import BillingSuccessPage from "./pages/BillingSuccessPage";
+import BillingCancelPage from "./pages/BillingCancelPage";
 
 function App() {
   const [token, setToken] = React.useState(localStorage.getItem("token") || "");
@@ -226,6 +229,20 @@ function App() {
         <Route
           path="/notifications"
           element={token ? <NotificationsPage token={token} onLogout={logout} /> : <Navigate to="/login" />}
+        />
+
+        {/* Phase 4: Billing & Subscription */}
+        <Route
+          path="/subscription"
+          element={token ? <SubscriptionPage token={token} onLogout={logout} /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/billing/success"
+          element={token ? <BillingSuccessPage token={token} /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/billing/cancel"
+          element={token ? <BillingCancelPage token={token} /> : <Navigate to="/login" />}
         />
       </Routes>
     </BrowserRouter>

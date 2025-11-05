@@ -31,3 +31,4 @@ pytest-asyncio==0.24.0
 python-dateutil==2.9.0
 deepl==1.18.0
 stripe==7.9.0
+slowapi==0.1.9

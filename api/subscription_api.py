@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 from .db import SessionLocal
-from .models import User, UserSubscription
+from .models import User, UserSubscription, SubscriptionTier
 from .auth_deps import get_current_user
 
 router = APIRouter(prefix="/api/subscription", tags=["subscription"])
@@ -123,3 +123,37 @@ def update_subscription(
 def get_plans():
     """Get available subscription plans"""
     return PLAN_CONFIG
+
+@router.get("/tiers")
+def get_subscription_tiers(db: Session = Depends(get_db)):
+    """
+    Get all active subscription tiers with pricing and features.
+    Public endpoint (no auth required) for pricing page.
+    """
+    tiers = db.scalars(
+        select(SubscriptionTier)
+        .where(SubscriptionTier.is_active == True)
+        .order_by(SubscriptionTier.monthly_price_usd)
+    ).all()
+
+    # Calculate quota in seconds for compatibility
+    return {
+        "tiers": [
+            {
+                "id": tier.id,
+                "name": tier.tier_name,
+                "display_name": tier.display_name,
+                "plan": tier.tier_name.lower(),
+                "price_usd": float(tier.monthly_price_usd or 0),
+                "monthly_quota_seconds": int(float(tier.monthly_quota_hours or 0) * 3600) if tier.monthly_quota_hours else 0,
+                "stripe_price_id": tier.stripe_price_id,
+                "features": {
+                    "basic_translation": True,
+                    "premium_providers": tier.tier_name.lower() in ["plus", "pro"],
+                    "server_tts": tier.tier_name.lower() == "pro",
+                    "priority_support": tier.tier_name.lower() == "pro"
+                }
+            }
+            for tier in tiers
+        ]
+    }

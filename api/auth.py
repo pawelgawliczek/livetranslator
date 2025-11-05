@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Cookie, Response
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from passlib.hash import bcrypt_sha256 as bcrypt
 from jose import jwt, JWTError
 from sqlalchemy import select
@@ -12,6 +12,7 @@ from .db import SessionLocal
 from .models import User
 from .schemas import SignupIn, TokenOut
 from .settings import JWT_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI
+import os
 
 ALGO = "HS256"
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -22,19 +23,19 @@ def get_db():
     finally: db.close()
 
 @router.post("/signup", response_model=TokenOut)
-def signup(p: SignupIn, db: Session = Depends(get_db)):
+def signup(p: SignupIn, response: Response, db: Session = Depends(get_db)):
     if db.scalar(select(User).where(User.email == p.email)):
         raise HTTPException(400, "email_exists")
     u = User(email=p.email, password_hash=bcrypt.hash(p.password), display_name=p.display_name or "", preferred_lang="en")
     db.add(u); db.commit()
-    return _issue(u)
+    return _issue(u, response)
 
 @router.post("/login", response_model=TokenOut)
-def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(form: OAuth2PasswordRequestForm = Depends(), response: Response = None, db: Session = Depends(get_db)):
     u = db.scalar(select(User).where(User.email == form.username))
     if not u or not bcrypt.verify(form.password, u.password_hash):
         raise HTTPException(401, "invalid_credentials")
-    return _issue(u)
+    return _issue(u, response)
 
 @router.get("/google/login")
 def google_login():
@@ -125,27 +126,52 @@ def google_callback(code: str, db: Session = Depends(get_db)):
         print(f"[Google OAuth] Error: {e}")
         raise HTTPException(400, f"Google authentication failed: {str(e)}")
 
-def _issue(u: User) -> TokenOut:
+def _issue(u: User, response: Response = None) -> TokenOut:
+    """Issue JWT token and optionally set httpOnly cookie (CRIT-3)"""
     claims = {
         "sub": str(u.id),
         "email": u.email,
         "preferred_lang": u.preferred_lang,
-        "is_admin": u.is_admin,  # Add is_admin flag to JWT token for Phase 3A
+        "is_admin": u.is_admin,
         "exp": datetime.utcnow() + timedelta(hours=12)
     }
-    return TokenOut(access_token=jwt.encode(claims, JWT_SECRET, algorithm=ALGO))
+    token = jwt.encode(claims, JWT_SECRET, algorithm=ALGO)
 
-def get_current_user(authorization: str = Header(None), db: Session = Depends(get_db)) -> User:
-    """Dependency to get the current authenticated user from JWT token"""
-    if not authorization:
+    # CRIT-3: Set httpOnly cookie if response object provided
+    if response:
+        is_production = os.getenv("ENV", "dev") == "prod"
+        response.set_cookie(
+            key="auth_token",
+            value=token,
+            httponly=True,
+            secure=is_production,  # HTTPS only in production
+            samesite="lax",  # Allow top-level navigation (OAuth redirects)
+            max_age=7 * 24 * 60 * 60,  # 7 days
+            path="/"
+        )
+
+    return TokenOut(access_token=token)
+
+def get_current_user(
+    authorization: str = Header(None),
+    auth_token: str = Cookie(None),
+    db: Session = Depends(get_db)
+) -> User:
+    """Dependency to get the current authenticated user from JWT token (CRIT-3: Cookie support)"""
+
+    # Try Authorization header first (backward compatibility)
+    token = None
+    if authorization:
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token = parts[1]
+
+    # Fallback to cookie
+    if not token and auth_token:
+        token = auth_token
+
+    if not token:
         raise HTTPException(401, "Not authenticated")
-
-    # Extract token from "Bearer <token>" format
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(401, "Invalid authorization header")
-
-    token = parts[1]
 
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGO])
@@ -161,20 +187,28 @@ def get_current_user(authorization: str = Header(None), db: Session = Depends(ge
 
     return user
 
-def get_optional_current_user(authorization: str = Header(None), db: Session = Depends(get_db)) -> dict | None:
+def get_optional_current_user(
+    authorization: str = Header(None),
+    auth_token: str = Cookie(None),
+    db: Session = Depends(get_db)
+) -> dict | None:
     """
     Optional dependency to get the current authenticated user from JWT token.
-    Returns user dict if authenticated, None otherwise.
+    Returns user dict if authenticated, None otherwise. (CRIT-3: Cookie support)
     """
-    if not authorization:
-        return None
+    # Try Authorization header first (backward compatibility)
+    token = None
+    if authorization:
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token = parts[1]
 
-    # Extract token from "Bearer <token>" format
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        return None
+    # Fallback to cookie
+    if not token and auth_token:
+        token = auth_token
 
-    token = parts[1]
+    if not token:
+        return None
 
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGO])
@@ -186,6 +220,12 @@ def get_optional_current_user(authorization: str = Header(None), db: Session = D
         return payload
     except JWTError:
         return None
+
+@router.post("/logout")
+def logout(response: Response):
+    """Logout by clearing httpOnly cookie (CRIT-3)"""
+    response.delete_cookie(key="auth_token", path="/")
+    return {"status": "logged_out"}
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """Dependency to require admin privileges"""

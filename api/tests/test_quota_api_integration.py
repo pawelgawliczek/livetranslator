@@ -23,7 +23,7 @@ from api.models import (
 from api.main import app
 from api.auth import get_db
 from api.db import SessionLocal
-from api.settings import JWT_SECRET
+from api.settings import JWT_SECRET, INTERNAL_API_KEY
 from jose import jwt
 
 
@@ -258,7 +258,11 @@ async def test_quota_deduct_success(test_db_session, test_user, test_room):
         "quota_source": "own"
     }
 
-    response = client.post("/api/quota/deduct", json=request_data)
+    response = client.post(
+        "/api/quota/deduct",
+        json=request_data,
+        headers={"X-Internal-API-Key": INTERNAL_API_KEY}
+    )
 
     # Assert
     assert response.status_code == 200
@@ -328,7 +332,11 @@ async def test_quota_deduct_exhausted(test_db_session, test_user, test_room):
         "quota_source": "own"
     }
 
-    response = client.post("/api/quota/deduct", json=request_data)
+    response = client.post(
+        "/api/quota/deduct",
+        json=request_data,
+        headers={"X-Internal-API-Key": INTERNAL_API_KEY}
+    )
 
     # Assert: Quota exhausted
     assert response.status_code == 200
@@ -336,6 +344,56 @@ async def test_quota_deduct_exhausted(test_db_session, test_user, test_room):
     assert data["quota_exhausted"] == True
     assert data["remaining_seconds"] == 0
     assert data["transaction_id"] == 0  # No transaction created
+
+    # Cleanup
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_quota_deduct_invalid_api_key(test_db_session, test_user, test_room):
+    """Test POST /api/quota/deduct with invalid API key (CRIT-2)"""
+    # Setup: Plus tier with quota
+    tier_result = await test_db_session.execute(
+        select(SubscriptionTier).where(SubscriptionTier.tier_name == "plus")
+    )
+    plus_tier = tier_result.scalar_one()
+
+    subscription = UserSubscription(
+        user_id=test_user.id,
+        plan="plus",
+        status="active",
+        tier_id=plus_tier.id,
+        billing_period_start=datetime.utcnow(),
+        billing_period_end=datetime.utcnow() + timedelta(days=30)
+    )
+    test_db_session.add(subscription)
+    await test_db_session.commit()
+
+    # Test: Deduct without API key
+    client = get_sync_test_client()
+
+    request_data = {
+        "user_id": test_user.id,
+        "room_code": test_room.code,
+        "amount_seconds": 300,
+        "service_type": "stt",
+        "provider_used": "speechmatics",
+        "quota_source": "own"
+    }
+
+    # No header
+    response = client.post("/api/quota/deduct", json=request_data)
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Invalid API key"
+
+    # Wrong key
+    response = client.post(
+        "/api/quota/deduct",
+        json=request_data,
+        headers={"X-Internal-API-Key": "wrong-key"}
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Invalid API key"
 
     # Cleanup
     app.dependency_overrides.clear()
