@@ -1011,7 +1011,7 @@ export default function RoomPage({ token, onLogout }) {
           }}
           onShowCosts={() => {
             setShowSettings(false);
-            navigate(`/admin/costs?room_id=${encodeURIComponent(roomId)}`);
+            navigate(`/admin/cost-analytics?room_id=${encodeURIComponent(roomId)}`);
           }}
           onShowSound={() => {
             setShowSettings(false);

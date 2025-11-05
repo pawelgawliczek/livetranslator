@@ -85,15 +85,7 @@ function App() {
         />
         <Route
           path="/admin/costs"
-          element={
-            token ? (
-              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
-                <AdminCostAnalyticsPage token={token} onLogout={logout} />
-              </ProtectedAdminRoute>
-            ) : (
-              <Navigate to="/login" />
-            )
-          }
+          element={<Navigate to="/admin/cost-analytics" replace />}
         />
 
         {/* Phase 3A: New Admin Panel Routes */}
@@ -211,6 +203,18 @@ function App() {
             token ? (
               <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
                 <AdminAuditLogsPage token={token} onLogout={logout} />
+              </ProtectedAdminRoute>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        />
+        <Route
+          path="/admin/cost-analytics"
+          element={
+            token ? (
+              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
+                <AdminCostAnalyticsPage token={token} onLogout={logout} />
               </ProtectedAdminRoute>
             ) : (
               <Navigate to="/login" />

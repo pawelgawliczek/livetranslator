@@ -192,7 +192,7 @@ export default function RoomsPage({ token, onLogout, onLogin }) {
         isOpen={showMenu}
         onClose={() => setShowMenu(false)}
         isAdmin={isAdmin}
-        onAdminClick={() => navigate("/admin")}
+        onAdminClick={() => navigate("/admin/overview")}
         onProfileClick={() => navigate("/profile")}
         onLogout={onLogout}
       />

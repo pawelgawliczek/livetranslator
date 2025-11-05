@@ -33,6 +33,12 @@ export default function AdminLayout({ children, onLogout }) {
       icon: '💰',
     },
     {
+      id: 'cost-analytics',
+      label: t('admin.menu.costAnalytics') || 'Cost Analytics',
+      path: '/admin/cost-analytics',
+      icon: '💸',
+    },
+    {
       id: 'subscriptions',
       label: t('admin.menu.subscriptions') || 'Subscriptions',
       path: '/admin/subscriptions',

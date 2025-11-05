@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getCostOverview, getUserCosts, getRoomCosts, getDatePresets, exportToCSV } from '../utils/costAnalytics';
+import AdminLayout from '../components/admin/AdminLayout';
 import DateRangePicker from '../components/admin/DateRangePicker';
 import CostOverviewCards from '../components/admin/CostOverviewCards';
 import CostTrendChart from '../components/admin/CostTrendChart';
@@ -218,38 +219,21 @@ export default function AdminCostAnalyticsPage({ token, onLogout }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => roomFilter ? navigate(-1) : navigate('/admin')}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
-            ← Back
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold">
-              {roomFilter || userFilter ? 'Cost Analytics' : 'Cost Analytics'}
-            </h1>
-            {roomFilter && (
-              <p className="text-sm text-gray-400 mt-1">Room: {roomFilter}</p>
-            )}
-            {userFilter && !roomFilter && (
-              <p className="text-sm text-gray-400 mt-1">User ID: {userFilter}</p>
-            )}
-          </div>
+    <AdminLayout onLogout={onLogout}>
+      {/* Context Info */}
+      {(roomFilter || userFilter) && (
+        <div className="mb-6">
+          {roomFilter && (
+            <p className="text-sm text-muted">Filtering by Room: <span className="font-semibold text-fg">{roomFilter}</span></p>
+          )}
+          {userFilter && !roomFilter && (
+            <p className="text-sm text-muted">Filtering by User ID: <span className="font-semibold text-fg">{userFilter}</span></p>
+          )}
         </div>
-        <button
-          onClick={onLogout}
-          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors"
-        >
-          Logout
-        </button>
-      </div>
+      )}
 
       {/* Main Content */}
-      <div className="container mx-auto px-6 py-8 space-y-6 max-w-7xl">
+      <div className="space-y-6 max-w-7xl">
         {/* Date Range Picker */}
         <DateRangePicker startDate={startDate} endDate={endDate} onChange={handleDateChange} />
 
@@ -338,6 +322,6 @@ export default function AdminCostAnalyticsPage({ token, onLogout }) {
           onClose={() => setSelectedUser(null)}
         />
       )}
-    </div>
+    </AdminLayout>
   );
 }
