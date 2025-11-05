@@ -14,9 +14,8 @@ import csv
 import io
 import json
 
-from ..db import get_db
 from ..models import AdminAuditLog, User
-from ..auth import require_admin
+from ..auth import require_admin, get_db
 
 router = APIRouter(prefix="/api/admin/audit-logs", tags=["admin-audit"])
 
