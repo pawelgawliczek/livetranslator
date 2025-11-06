@@ -14,11 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+import asyncio
 
 from ..db import SessionLocal
 from ..auth import get_current_user
 from ..models import User, UserSubscription, SubscriptionTier, QuotaTransaction
 from ..settings import INTERNAL_API_KEY
+from ..email_service import send_quota_email_task
 import os
 
 logger = logging.getLogger(__name__)
@@ -233,6 +235,77 @@ def deduct_quota(
     redis_client.delete(cache_key)
 
     new_remaining = available_seconds - request.amount_seconds
+
+    # === US-012: Email notification for quota thresholds ===
+    # Calculate total quota for percentage
+    result = db.execute(
+        text("""
+            SELECT us.billing_period_start, st.monthly_quota_hours
+            FROM user_subscriptions us
+            JOIN subscription_tiers st ON us.tier_id = st.id
+            WHERE us.user_id = :user_id
+        """),
+        {"user_id": request.user_id}
+    ).fetchone()
+
+    if result:
+        billing_period_start = result[0]
+        monthly_quota_seconds = int((result[1] or 0) * 3600)
+        bonus_seconds = db.execute(
+            text("SELECT COALESCE(bonus_credits_seconds, 0) FROM user_subscriptions WHERE user_id = :user_id"),
+            {"user_id": request.user_id}
+        ).scalar() or 0
+        total_quota = monthly_quota_seconds + bonus_seconds
+
+        if total_quota > 0:
+            old_percentage = (available_seconds / total_quota) * 100
+            new_percentage = (new_remaining / total_quota) * 100
+
+            # 80% warning: Trigger when crossing FROM >80% TO <=80% remaining
+            if old_percentage > 20 and new_percentage <= 20:
+                logger.info(
+                    "quota_threshold_crossed_80",
+                    extra={
+                        "user_id": request.user_id,
+                        "old_pct_remaining": old_percentage,
+                        "new_pct_remaining": new_percentage
+                    }
+                )
+
+                # Send email asynchronously (don't block quota deduction)
+                # P0-1 FIX: Use wrapper that creates own DB session
+                asyncio.create_task(
+                    send_quota_email_task(
+                        user_id=request.user_id,
+                        notification_type="quota_80",
+                        percentage=80,  # 80% used = 20% remaining
+                        remaining_seconds=new_remaining,
+                        billing_period_start=billing_period_start
+                    )
+                )
+
+            # 100% exhaustion: Send once per billing period
+            elif new_remaining <= 0:
+                logger.info(
+                    "quota_exhausted",
+                    extra={
+                        "user_id": request.user_id,
+                        "billing_period_start": billing_period_start
+                    }
+                )
+
+                # Send email asynchronously
+                # P0-1 FIX: Use wrapper that creates own DB session
+                asyncio.create_task(
+                    send_quota_email_task(
+                        user_id=request.user_id,
+                        notification_type="quota_100",
+                        percentage=100,
+                        remaining_seconds=0,
+                        billing_period_start=billing_period_start
+                    )
+                )
+    # === END US-012 ===
 
     logger.info(
         f"Quota deducted: user={request.user_id}, amount={request.amount_seconds}s, "

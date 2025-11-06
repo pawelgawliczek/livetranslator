@@ -13,6 +13,7 @@ import JoinPage from "./pages/JoinPage";
 import ProfilePage from "./pages/ProfilePage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AdminCostAnalyticsPage from "./pages/AdminCostAnalyticsPage";
+import AdminMultiSpeakerPage from "./pages/AdminMultiSpeakerPage";
 import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
 import AdminOverviewPage from "./pages/AdminOverviewPage";
 import AdminFinancialPage from "./pages/AdminFinancialPage";
@@ -27,8 +28,8 @@ import AdminAuditLogsPage from "./pages/AdminAuditLogsPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import NotificationToast from "./components/NotificationToast";
 import SubscriptionPage from "./pages/SubscriptionPage";
-import BillingSuccessPage from "./pages/BillingSuccessPage";
-import BillingCancelPage from "./pages/BillingCancelPage";
+import CheckoutSuccessPage from "./pages/billing/CheckoutSuccessPage";
+import CheckoutCancelPage from "./pages/billing/CheckoutCancelPage";
 import BillingHistoryPage from "./pages/BillingHistoryPage";
 
 function App() {
@@ -225,6 +226,18 @@ function App() {
             )
           }
         />
+        <Route
+          path="/admin/costs/multi-speaker"
+          element={
+            token ? (
+              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
+                <AdminMultiSpeakerPage token={token} onLogout={logout} />
+              </ProtectedAdminRoute>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        />
 
         {/* User notifications page */}
         <Route
@@ -239,11 +252,11 @@ function App() {
         />
         <Route
           path="/billing/success"
-          element={token ? <BillingSuccessPage token={token} /> : <Navigate to="/login" />}
+          element={<CheckoutSuccessPage />}
         />
         <Route
           path="/billing/cancel"
-          element={token ? <BillingCancelPage token={token} /> : <Navigate to="/login" />}
+          element={<CheckoutCancelPage />}
         />
         <Route
           path="/billing/history"

@@ -54,19 +54,40 @@ module.exports = defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
+    // Setup project - runs auth.setup.js to authenticate once
+    {
+      name: 'setup',
+      testMatch: '**/auth.setup.js',
+      testDir: '.',
+    },
+
+    // Main test project - uses authenticated state
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        // Use saved authentication state from setup
+        storageState: '.auth/user.json',
+      },
+      dependencies: ['setup'],
     },
 
     // Uncomment to test on Firefox and WebKit too
     // {
     //   name: 'firefox',
-    //   use: { ...devices['Desktop Firefox'] },
+    //   use: {
+    //     ...devices['Desktop Firefox'],
+    //     storageState: '.auth/user.json',
+    //   },
+    //   dependencies: ['setup'],
     // },
     // {
     //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] },
+    //   use: {
+    //     ...devices['Desktop Safari'],
+    //     storageState: '.auth/user.json',
+    //   },
+    //   dependencies: ['setup'],
     // },
   ],
 

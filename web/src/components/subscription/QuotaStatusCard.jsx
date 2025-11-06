@@ -21,12 +21,12 @@ export default function QuotaStatusCard({ quotaStatus }) {
   }
 
   // Support both API formats: new (seconds) and legacy (minutes)
-  const quota_used_seconds = quotaStatus.quota_used_seconds ||
+  const quota_used_seconds = quotaStatus.quota_seconds_used || quotaStatus.quota_used_seconds ||
     (quotaStatus.usage_minutes ? quotaStatus.usage_minutes * 60 : 0);
-  const quota_available_seconds = quotaStatus.quota_available_seconds ||
+  const quota_available_seconds = quotaStatus.quota_seconds_total || quotaStatus.quota_available_seconds ||
     (quotaStatus.monthly_quota_minutes ? quotaStatus.monthly_quota_minutes * 60 : 0);
-  const bonus_credits_seconds = quotaStatus.bonus_credits_seconds || 0;
-  const billing_period_end = quotaStatus.billing_period_end;
+  const bonus_credits_seconds = quotaStatus.grace_quota_seconds || quotaStatus.bonus_credits_seconds || 0;
+  const billing_period_end = quotaStatus.quota_reset_date || quotaStatus.billing_period_end;
 
   // Convert seconds to hours
   const usedHours = (quota_used_seconds / 3600).toFixed(2);

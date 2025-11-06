@@ -112,6 +112,29 @@ class WSManager:
                 await self._handle_presence_event(data, room)
 
     async def _handle_stt_event(self, data: dict, room: str):
+        # US-005: Handle quota exhausted events
+        if data.get("type") == "quota_exhausted":
+            speaker = data.get("speaker", "unknown")
+            message = data.get("message", "Quota exhausted")
+            quota_type = data.get("quota_type", "unknown")
+
+            self.log.warning(
+                "quota_exhausted",
+                room=room,
+                speaker=speaker,
+                quota_type=quota_type
+            )
+
+            # Broadcast to all users in room
+            await self.broadcast(room, {
+                "type": "quota_exhausted",
+                "speaker": speaker,
+                "message": message,
+                "quota_type": quota_type,
+                "available_seconds": data.get("available_seconds", 0)
+            })
+            return
+
         seg_id = int(data.get("segment_id") or 0)
         rev = int(data.get("revision") or 0)
         is_final = bool(data.get("final"))

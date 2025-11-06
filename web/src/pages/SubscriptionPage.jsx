@@ -7,6 +7,7 @@ import QuotaStatusCard from '../components/subscription/QuotaStatusCard';
 import CreditPackageCard from '../components/subscription/CreditPackageCard';
 import {
   createCheckoutSession,
+  createPortalSession,
   getSubscription,
   getQuotaStatus,
   getCreditPackages,
@@ -29,6 +30,7 @@ export default function SubscriptionPage({ token, onLogout }) {
   const [error, setError] = useState(null);
   const [processingTierId, setProcessingTierId] = useState(null);
   const [processingPackageId, setProcessingPackageId] = useState(null);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -174,6 +176,24 @@ export default function SubscriptionPage({ token, onLogout }) {
     }
   };
 
+  // Handle manage subscription (Customer Portal)
+  const handleManageSubscription = async () => {
+    if (!token || portalLoading) return;
+
+    setPortalLoading(true);
+    setError(null);
+
+    try {
+      const { portal_url } = await createPortalSession(token);
+      // Redirect to Stripe Customer Portal
+      window.location.href = portal_url;
+    } catch (err) {
+      console.error('[SubscriptionPage] Failed to create portal session:', err);
+      setError(err.message || t('subscription.portalError'));
+      setPortalLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-bg">
       {/* Header */}
@@ -240,6 +260,56 @@ export default function SubscriptionPage({ token, onLogout }) {
         {/* Quota Status Card */}
         <div className="mb-8">
           <QuotaStatusCard quotaStatus={quotaStatus} />
+
+          {/* US-007: Grace Period Warning (Payment Failed) */}
+          {subscription && subscription.status === 'past_due' && subscription.grace_period_end && (
+            <div className="mt-4 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-4 rounded">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+                    {t('subscription.paymentFailed') || 'Payment Failed'}
+                  </h3>
+                  <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-400">
+                    <p>
+                      {t('subscription.paymentFailedMessage') || 'Your last payment failed. Please update your payment method by'}{' '}
+                      <strong>{new Date(subscription.grace_period_end).toLocaleDateString()}</strong>
+                      {' '}{t('subscription.paymentFailedAction') || 'to avoid losing access.'}
+                    </p>
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      onClick={handleManageSubscription}
+                      disabled={portalLoading}
+                      className="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {portalLoading ? t('subscription.loading') || 'Loading...' : t('subscription.updatePayment') || 'Update Payment Method'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Manage Subscription Button (only show if user has Stripe subscription and NOT past_due) */}
+          {subscription && subscription.plan !== 'free' && subscription.status !== 'past_due' && (
+            <div className="mt-4">
+              <button
+                onClick={handleManageSubscription}
+                disabled={portalLoading}
+                className="w-full px-4 py-3 bg-card border-2 border-accent text-accent font-semibold rounded-lg hover:bg-accent hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {portalLoading ? t('subscription.loading') || 'Loading...' : t('subscription.manageSubscription') || 'Manage Subscription'}
+              </button>
+              <p className="text-sm text-fg-secondary mt-2 text-center">
+                {t('subscription.manageSubscriptionHint') || 'Cancel, update payment method, or view billing history'}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Tier Comparison */}

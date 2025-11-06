@@ -9,6 +9,9 @@ import ProviderBreakdownChart from '../components/admin/ProviderBreakdownChart';
 import UserCostTable from '../components/admin/UserCostTable';
 import RoomCostTable from '../components/admin/RoomCostTable';
 import UserDetailModal from '../components/admin/UserDetailModal';
+import MultiSpeakerOverviewCard from '../components/admin/MultiSpeakerOverviewCard';
+import TopCostDrivers from '../components/admin/TopCostDrivers';
+import BudgetTracker from '../components/admin/BudgetTracker';
 
 export default function AdminCostAnalyticsPage({ token, onLogout }) {
   const navigate = useNavigate();
@@ -240,11 +243,14 @@ export default function AdminCostAnalyticsPage({ token, onLogout }) {
         {/* Overview Cards */}
         <CostOverviewCards overview={overview} loading={overviewLoading} />
 
+        {/* Budget Tracker */}
+        {!roomFilter && !userFilter && <BudgetTracker token={token} />}
+
         {/* Cost Trend Chart */}
         <CostTrendChart token={token} startDate={startDate} endDate={endDate} roomId={roomFilter} userId={userFilter} />
 
-        {/* Provider Breakdown Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Provider Breakdown Charts + Multi-Speaker */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <ProviderBreakdownChart
             title="🔌 STT Provider Breakdown"
             breakdown={overview?.stt_breakdown}
@@ -257,7 +263,17 @@ export default function AdminCostAnalyticsPage({ token, onLogout }) {
             type="mt"
             loading={overviewLoading}
           />
+          <MultiSpeakerOverviewCard
+            token={token}
+            startDate={startDate}
+            endDate={endDate}
+          />
         </div>
+
+        {/* Top Cost Drivers */}
+        {!roomFilter && !userFilter && (
+          <TopCostDrivers token={token} startDate={startDate} endDate={endDate} />
+        )}
 
         {/* Hide user/room tables when filtering by room or user */}
         {!roomFilter && !userFilter && (

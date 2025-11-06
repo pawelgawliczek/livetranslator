@@ -26,36 +26,42 @@ export default function CostOverviewCards({ overview, loading }) {
       label: 'Total Cost',
       value: formatCurrency(totals.cost_usd),
       change: totals.growth_rate,
+      improvementDirection: 'decrease', // Costs: lower is better
     },
     {
       icon: '🎤',
       label: 'STT Cost',
       value: formatCurrency(totals.stt_cost_usd),
-      subValue: null,
+      change: totals.stt_growth_rate,
+      improvementDirection: 'decrease',
     },
     {
       icon: '🌐',
       label: 'MT Cost',
       value: formatCurrency(totals.mt_cost_usd),
-      subValue: null,
+      change: totals.mt_growth_rate,
+      improvementDirection: 'decrease',
     },
     {
       icon: '⏱️',
       label: 'Total Time',
       value: `${formatNumber(totals.total_minutes)} min`,
       subValue: `(${totals.total_hours.toFixed(2)} hrs)`,
+      change: null, // No comparison for time
     },
     {
       icon: '👥',
       label: 'Active Users',
       value: totals.active_users,
-      subValue: null,
+      change: totals.users_growth_rate,
+      improvementDirection: 'increase', // Users: higher is better
     },
     {
       icon: '🏠',
       label: 'Active Rooms',
       value: totals.active_rooms,
-      subValue: null,
+      change: totals.rooms_growth_rate,
+      improvementDirection: 'increase', // Rooms: higher is better
     },
   ];
 
@@ -68,7 +74,10 @@ export default function CostOverviewCards({ overview, loading }) {
             {card.change !== null && card.change !== undefined && (
               <span
                 className={`text-xs font-medium ${
-                  card.change >= 0 ? 'text-green-400' : 'text-red-400'
+                  // Green = improvement, Red = concern
+                  card.improvementDirection === 'decrease'
+                    ? (card.change < 0 ? 'text-green-400' : 'text-red-400')
+                    : (card.change > 0 ? 'text-green-400' : 'text-red-400')
                 }`}
               >
                 {card.change >= 0 ? '↑' : '↓'} {Math.abs(card.change).toFixed(1)}%

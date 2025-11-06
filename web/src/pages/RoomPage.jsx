@@ -1137,12 +1137,57 @@ export default function RoomPage({ token, onLogout }) {
       )}
 
       {/* Notification Toasts */}
-      {notifications.map(notif => (
-        <NotificationToast
-          key={notif.id}
-          message={notif.message}
-        />
-      ))}
+      {notifications.map(notif => {
+        // US-005: Special handling for quota exhaustion
+        if (notif.type === 'quota_exhausted') {
+          return (
+            <div
+              key={notif.id}
+              className="fixed top-20 right-5 z-[1000] pointer-events-none"
+            >
+              <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800 rounded-lg px-4 py-4 text-red-700 dark:text-red-300 text-sm shadow-lg max-w-[350px] pointer-events-auto toast-slide-in">
+                <div className="font-semibold mb-2">{t('errors.quotaExhausted')}</div>
+                <div className="mb-3">{notif.message}</div>
+                <button
+                  onClick={() => navigate('/subscription')}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded transition-colors"
+                >
+                  {t('subscription.upgradeNow')}
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        // US-005: Special handling for quota warning
+        if (notif.type === 'quota_warning') {
+          return (
+            <div
+              key={notif.id}
+              className="fixed top-20 right-5 z-[1000] pointer-events-none"
+            >
+              <div className="bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-400 dark:border-yellow-800 rounded-lg px-4 py-4 text-yellow-700 dark:text-yellow-300 text-sm shadow-lg max-w-[350px] pointer-events-auto toast-slide-in">
+                <div className="font-semibold mb-2">⚠️ {t('quota.warning', 'Low Quota')}</div>
+                <div className="mb-3">{notif.message}</div>
+                <button
+                  onClick={() => navigate('/subscription')}
+                  className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2 px-4 rounded transition-colors"
+                >
+                  {t('subscription.buyCredits', 'Buy Credits')}
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        // Default notification toast
+        return (
+          <NotificationToast
+            key={notif.id}
+            message={notif.message}
+          />
+        );
+      })}
     </div>
   );
 }

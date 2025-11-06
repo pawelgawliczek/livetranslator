@@ -126,3 +126,6 @@ OPENAI_API_KEY=sk-...
 ---
 
 **Full docs**: `.claude/DOCUMENTATION.md` | **Tests**: `.claude/test-strategy.md`
+- 3 1 per billing
+#7 B
+#1 80% everytime this level is crossed. if user had 60% and then he crossed 80% then trigger. if then package is bought and user will again cross 80% then trigger it again

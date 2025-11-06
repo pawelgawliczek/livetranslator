@@ -578,175 +578,59 @@ export default function ProfilePage({ token, onLogout }) {
             </div>
           )}
 
-          {activeTab === "subscription" && subscription && (
+          {activeTab === "subscription" && (
             <div className="max-w-4xl mx-auto">
-              <div className="flex justify-between items-center mb-5">
-                <h2 className="text-2xl font-bold text-fg">Subscription</h2>
-                <button
-                  onClick={() => navigate('/billing/history')}
-                  className="text-accent hover:underline text-sm"
-                >
-                  View Billing History →
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold text-fg mb-6">Subscription & Billing</h2>
 
-              <div className="bg-bg-secondary p-5 rounded-lg mb-8 flex justify-between items-center flex-wrap gap-2.5">
-                <div className="text-lg text-fg">
-                  Current Plan: <strong>{subscription.plan.toUpperCase()}</strong>
-                </div>
-                <div className="text-sm text-muted">
-                  Status: <span className={subscription.status === "active" ? "text-green-500" : "text-red-500"}>
-                    {subscription.status}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-5">
-                <div className={`border-2 rounded-xl p-6 transition-all ${
-                  subscription.plan === "free"
-                    ? "border-accent bg-purple-50 dark:bg-purple-950/20"
-                    : "border-border bg-card"
-                }`}>
-                  <h3 className="text-xl font-bold mb-2.5 text-fg">Free</h3>
-                  <div className="text-2xl font-bold text-accent mb-5">$0/month</div>
-                  <ul className="list-none p-0 m-0 mb-5 text-sm text-muted space-y-1">
-                    <li>1 hour per month</li>
-                    <li>Basic translation</li>
-                    <li>Community support</li>
-                  </ul>
-                  {subscription.plan !== "free" && (
-                    <button
-                      onClick={() => handleChangePlan("free")}
-                      className="w-full px-2.5 py-2.5 bg-accent text-white border-none rounded-lg cursor-pointer text-sm font-semibold
-                                 hover:bg-accent-dark transition-colors"
-                    >
-                      Downgrade
-                    </button>
-                  )}
-                </div>
-
-                <div className={`border-2 rounded-xl p-6 transition-all ${
-                  subscription.plan === "plus"
-                    ? "border-accent bg-purple-50 dark:bg-purple-950/20"
-                    : "border-border bg-card"
-                }`}>
-                  <h3 className="text-xl font-bold mb-2.5 text-fg">Plus</h3>
-                  <div className="text-2xl font-bold text-accent mb-5">$9.99/month</div>
-                  <ul className="list-none p-0 m-0 mb-5 text-sm text-muted space-y-1">
-                    <li>Unlimited translation</li>
-                    <li>Priority support</li>
-                    <li>Advanced features</li>
-                  </ul>
-                  {subscription.plan !== "plus" && (
-                    <button
-                      onClick={() => handleChangePlan("plus")}
-                      className="w-full px-2.5 py-2.5 bg-accent text-white border-none rounded-lg cursor-pointer text-sm font-semibold
-                                 hover:bg-accent-dark transition-colors"
-                    >
-                      {subscription.plan === "free" ? "Upgrade" : "Switch"}
-                    </button>
-                  )}
-                </div>
-
-                <div className={`border-2 rounded-xl p-6 transition-all ${
-                  subscription.plan === "pro"
-                    ? "border-accent bg-purple-50 dark:bg-purple-950/20"
-                    : "border-border bg-card"
-                }`}>
-                  <h3 className="text-xl font-bold mb-2.5 text-fg">Pro</h3>
-                  <div className="text-2xl font-bold text-accent mb-5">$29.99/month</div>
-                  <ul className="list-none p-0 m-0 mb-5 text-sm text-muted space-y-1">
-                    <li>Unlimited translation</li>
-                    <li>24/7 support</li>
-                    <li>Advanced features</li>
-                    <li>API access</li>
-                  </ul>
-                  {subscription.plan !== "pro" && (
-                    <button
-                      onClick={() => handleChangePlan("pro")}
-                      className="w-full px-2.5 py-2.5 bg-accent text-white border-none rounded-lg cursor-pointer text-sm font-semibold
-                                 hover:bg-accent-dark transition-colors"
-                    >
-                      Upgrade
-                    </button>
-                  )}
+              <div className="bg-bg-secondary border border-border rounded-lg p-8 text-center">
+                <svg className="mx-auto h-16 w-16 text-accent mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+                <h3 className="text-xl font-semibold text-fg mb-2">
+                  Manage Your Subscription
+                </h3>
+                <p className="text-muted mb-6">
+                  View plans, upgrade your tier, purchase credits, and manage billing
+                </p>
+                <div className="flex gap-4 justify-center flex-wrap">
+                  <button
+                    onClick={() => navigate('/subscription')}
+                    className="px-6 py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-colors"
+                  >
+                    View Subscription Plans
+                  </button>
+                  <button
+                    onClick={() => navigate('/billing/history')}
+                    className="px-6 py-3 border border-border bg-card text-fg rounded-lg font-medium hover:bg-bg-secondary transition-colors"
+                  >
+                    View Billing History
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
-          {activeTab === "billing" && billing && (
+          {activeTab === "billing" && (
             <div className="max-w-4xl mx-auto">
-              <h2 className="text-2xl font-bold mb-5 text-fg">Billing & Usage</h2>
+              <h2 className="text-2xl font-bold text-fg mb-6">Billing & Usage</h2>
 
-              <div className="bg-bg-secondary p-4 rounded-lg mb-5 text-center">
-                <div className="text-fg font-semibold">
-                  Current Billing Period
-                </div>
-                <div className="text-sm text-muted mt-2">
-                  {new Date(billing.billing_period_start).toLocaleDateString()} - {new Date(billing.billing_period_end).toLocaleDateString()}
-                </div>
+              <div className="bg-bg-secondary border border-border rounded-lg p-8 text-center">
+                <svg className="mx-auto h-16 w-16 text-accent mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <h3 className="text-xl font-semibold text-fg mb-2">
+                  View Your Usage & Billing
+                </h3>
+                <p className="text-muted mb-6">
+                  Track your quota usage and view detailed billing information
+                </p>
+                <button
+                  onClick={() => navigate('/subscription')}
+                  className="px-6 py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-colors"
+                >
+                  Go to Subscription & Billing
+                </button>
               </div>
-
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-5 mb-8">
-                <div className="bg-bg-secondary p-5 rounded-lg text-center">
-                  <div className="text-xs font-semibold text-muted mb-2">STT Minutes Used</div>
-                  <div className="text-2xl font-bold text-fg">
-                    {billing.total_stt_minutes.toFixed(2)}
-                    {billing.quota_minutes && ` / ${billing.quota_minutes}`}
-                  </div>
-                  {billing.quota_remaining_minutes !== null && (
-                    <div className="text-xs text-muted mt-1">
-                      {billing.quota_remaining_minutes.toFixed(2)} minutes remaining
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-bg-secondary p-5 rounded-lg text-center">
-                  <div className="text-xs font-semibold text-muted mb-2">STT Cost</div>
-                  <div className="text-2xl font-bold text-fg">${billing.total_stt_cost_usd.toFixed(4)}</div>
-                </div>
-
-                <div className="bg-bg-secondary p-5 rounded-lg text-center">
-                  <div className="text-xs font-semibold text-muted mb-2">Translation Cost</div>
-                  <div className="text-2xl font-bold text-fg">${billing.total_mt_cost_usd.toFixed(4)}</div>
-                </div>
-
-                <div className="bg-bg-secondary p-5 rounded-lg text-center">
-                  <div className="text-xs font-semibold text-muted mb-2">Total Cost</div>
-                  <div className="text-2xl font-bold text-fg">${billing.total_cost_usd.toFixed(4)}</div>
-                </div>
-              </div>
-
-              {billing.rooms && billing.rooms.length > 0 && (
-                <>
-                  <h3 className="text-lg font-semibold mt-8 mb-4 text-fg">Room Usage</h3>
-                  <div className="overflow-x-auto w-full mt-4">
-                    <table className="w-full border-collapse min-w-[600px]">
-                      <thead>
-                        <tr>
-                          <th className="text-left p-3 bg-bg-secondary font-semibold text-xs text-muted border-b-2 border-border whitespace-nowrap">Room Code</th>
-                          <th className="text-left p-3 bg-bg-secondary font-semibold text-xs text-muted border-b-2 border-border whitespace-nowrap">STT Minutes</th>
-                          <th className="text-left p-3 bg-bg-secondary font-semibold text-xs text-muted border-b-2 border-border whitespace-nowrap">STT Cost</th>
-                          <th className="text-left p-3 bg-bg-secondary font-semibold text-xs text-muted border-b-2 border-border whitespace-nowrap">MT Cost</th>
-                          <th className="text-left p-3 bg-bg-secondary font-semibold text-xs text-muted border-b-2 border-border whitespace-nowrap">Total Cost</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {billing.rooms.map((room) => (
-                          <tr key={room.room_code}>
-                            <td className="p-3 border-b border-border text-sm text-fg">{room.room_code}</td>
-                            <td className="p-3 border-b border-border text-sm text-fg">{room.stt_minutes.toFixed(2)}</td>
-                            <td className="p-3 border-b border-border text-sm text-fg">${room.stt_cost_usd.toFixed(4)}</td>
-                            <td className="p-3 border-b border-border text-sm text-fg">${room.mt_cost_usd.toFixed(4)}</td>
-                            <td className="p-3 border-b border-border text-sm text-fg">${room.total_cost_usd.toFixed(4)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
             </div>
           )}
 

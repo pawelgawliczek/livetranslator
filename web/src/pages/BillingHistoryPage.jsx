@@ -17,6 +17,7 @@ export default function BillingHistoryPage({ token, onLogout }) {
   const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
   const [totalSpent, setTotalSpent] = useState(0);
+  const [downloadingInvoice, setDownloadingInvoice] = useState(null);
 
   const PAYMENTS_PER_PAGE = 20;
 
@@ -52,12 +53,44 @@ export default function BillingHistoryPage({ token, onLogout }) {
     }
   };
 
-  const handleDownloadInvoice = (payment) => {
+  // US-009: Download invoice PDF from backend
+  const handleDownloadInvoice = async (payment) => {
     if (payment.platform === 'stripe' && payment.stripe_invoice_id) {
-      // Open Stripe-hosted invoice in new tab
-      window.open(`https://invoice.stripe.com/i/${payment.stripe_invoice_id}`, '_blank');
+      setDownloadingInvoice(payment.stripe_invoice_id);
+
+      try {
+        const response = await fetch(
+          `/api/payments/stripe/invoice/${payment.stripe_invoice_id}/pdf`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to download invoice');
+        }
+
+        // Create blob and download
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `invoice_${payment.stripe_invoice_id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } catch (error) {
+        console.error('[BillingHistoryPage] Invoice download error:', error);
+        setError(t('billing.errors.downloadFailed') || 'Failed to download invoice');
+      } finally {
+        setDownloadingInvoice(null);
+      }
     } else {
-      // Generate text receipt
+      // Generate text receipt for non-Stripe payments
       const receipt = generateTextReceipt(payment);
       const blob = new Blob([receipt], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
@@ -317,9 +350,13 @@ LiveTranslator - livetranslator.pawelgawliczek.cloud
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
                           onClick={() => handleDownloadInvoice(payment)}
-                          className="text-accent hover:text-accent-dark"
+                          disabled={downloadingInvoice === payment.stripe_invoice_id}
+                          className="text-accent hover:text-accent-dark disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {t('billing.actions.download') || 'Download'}
+                          {downloadingInvoice === payment.stripe_invoice_id
+                            ? (t('billing.actions.downloading') || 'Downloading...')
+                            : (t('billing.actions.download') || 'Download')
+                          }
                         </button>
                       </td>
                     </tr>

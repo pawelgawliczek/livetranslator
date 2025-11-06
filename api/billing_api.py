@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
 from .db import SessionLocal
-from .models import User, UserSubscription, UserUsage, RoomCost, Room
+from .models import User, UserSubscription, UserUsage, RoomCost, Room, SubscriptionTier
 from .auth_deps import get_current_user
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
@@ -109,10 +109,16 @@ def get_current_usage(user: dict = Depends(get_current_user), db: Session = Depe
             total_stt_cost += stt_cost
             total_mt_cost += mt_cost
 
-    # Calculate remaining quota
+    # Calculate remaining quota - use tier quota if available
+    quota_minutes = subscription.monthly_quota_minutes
+    if subscription.tier_id:
+        tier = db.get(SubscriptionTier, subscription.tier_id)
+        if tier and tier.monthly_quota_hours:
+            quota_minutes = int(tier.monthly_quota_hours * 60)
+
     quota_remaining = None
-    if subscription.monthly_quota_minutes is not None:
-        quota_remaining = subscription.monthly_quota_minutes - float(total_stt_minutes)
+    if quota_minutes is not None:
+        quota_remaining = quota_minutes - float(total_stt_minutes)
 
     return BillingPeriodUsageOut(
         billing_period_start=billing_start,
@@ -121,7 +127,7 @@ def get_current_usage(user: dict = Depends(get_current_user), db: Session = Depe
         total_stt_cost_usd=float(total_stt_cost),
         total_mt_cost_usd=float(total_mt_cost),
         total_cost_usd=float(total_stt_cost + total_mt_cost),
-        quota_minutes=subscription.monthly_quota_minutes,
+        quota_minutes=quota_minutes,
         quota_remaining_minutes=quota_remaining,
         rooms=room_usage_list
     )
@@ -182,15 +188,30 @@ def get_quota_status(user: dict = Depends(get_current_user), db: Session = Depen
     if not subscription:
         raise HTTPException(404, "Subscription not found")
 
+    # Get quota from tier (new schema) or subscription (legacy)
+    quota_minutes = subscription.monthly_quota_minutes  # Legacy default
+    plan_name = subscription.plan
+    is_unlimited = False
+
+    if subscription.tier_id:
+        tier = db.get(SubscriptionTier, subscription.tier_id)
+        if tier:
+            plan_name = tier.tier_name
+            if tier.monthly_quota_hours:
+                quota_minutes = int(tier.monthly_quota_hours * 60)
+            else:
+                is_unlimited = True
+                quota_minutes = None
+
     # Get current usage
     usage = get_current_usage(user=user, db=db)
 
     return {
-        "plan": subscription.plan,
-        "quota_minutes": subscription.monthly_quota_minutes,
+        "plan": plan_name,
+        "quota_minutes": quota_minutes,
         "used_minutes": usage.total_stt_minutes,
-        "remaining_minutes": usage.quota_remaining_minutes,
-        "is_unlimited": subscription.monthly_quota_minutes is None,
+        "remaining_minutes": usage.quota_remaining_minutes if quota_minutes else None,
+        "is_unlimited": is_unlimited,
         "billing_period_start": subscription.billing_period_start,
         "billing_period_end": subscription.billing_period_end
     }

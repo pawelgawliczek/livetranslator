@@ -282,6 +282,98 @@ async def test_room(test_db_session, test_user):
     return room
 
 
+# FastAPI TestClient Fixtures
+@pytest.fixture(scope="function")
+def test_client():
+    """Create a FastAPI TestClient for synchronous HTTP tests."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    # Disable rate limiters for testing
+    try:
+        from api.routers.payments import limiter
+        limiter._enabled = False
+    except:
+        pass
+
+    client = TestClient(app)
+    yield client
+
+    # Re-enable rate limiters after test
+    try:
+        from api.routers.payments import limiter
+        limiter._enabled = True
+    except:
+        pass
+
+
+@pytest.fixture(scope="function")
+def test_db():
+    """Create sync database session for integration tests."""
+    from api.db import SessionLocal
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.rollback()
+        db.close()
+
+
+@pytest.fixture(scope="function")
+def test_user_token(test_db):
+    """Create test user and return JWT token."""
+    from api.models import User, UserSubscription, SubscriptionTier
+    from api.auth import _issue
+    from datetime import datetime, timedelta
+    from sqlalchemy import select
+    import uuid
+
+    # Get existing free tier
+    free_tier = test_db.execute(
+        select(SubscriptionTier).where(SubscriptionTier.tier_name == "free")
+    ).scalar_one_or_none()
+
+    if not free_tier:
+        # Create free tier if it doesn't exist
+        free_tier = SubscriptionTier(
+            tier_name="free",
+            stripe_price_id=None,
+            price_usd=0.0,
+            hours_included=1.0,
+            recording_enabled=False
+        )
+        test_db.add(free_tier)
+        test_db.commit()
+        test_db.refresh(free_tier)
+
+    # Create test user with unique email
+    unique_email = f'test-{uuid.uuid4().hex[:8]}@example.com'
+    user = User(
+        email=unique_email,
+        password_hash='hashed',
+        display_name='Test User',
+        preferred_lang='en'
+    )
+    test_db.add(user)
+    test_db.commit()
+    test_db.refresh(user)
+
+    # Create subscription
+    subscription = UserSubscription(
+        user_id=user.id,
+        tier_id=free_tier.id,
+        billing_period_start=datetime.utcnow(),
+        billing_period_end=datetime.utcnow() + timedelta(days=30),
+        status='active'
+    )
+    test_db.add(subscription)
+    test_db.commit()
+
+    # Generate token
+    token = _issue(user)
+    return token.access_token
+
+
 # Pytest Configuration
 def pytest_configure(config):
     """Configure pytest with custom settings."""

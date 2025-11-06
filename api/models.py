@@ -27,6 +27,9 @@ class User(Base):
     tts_rate: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
     tts_pitch: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
 
+    # Email notification preferences (US-012)
+    email_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
 class Room(Base):
     __tablename__ = "rooms"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -172,6 +175,9 @@ class UserSubscription(Base):
     apple_transaction_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     apple_original_transaction_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
     auto_renew: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # US-007: Failed payment handling (Migration 026)
+    grace_period_end: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     user = relationship("User", backref="subscription")
     tier = relationship("SubscriptionTier")
@@ -344,3 +350,33 @@ class NotificationDelivery(Base):
 
     notification = relationship("Notification")
     user = relationship("User")
+
+
+class CostBudget(Base):
+    __tablename__ = "cost_budgets"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    period_type: Mapped[str] = mapped_column(String(20), default="monthly", nullable=False)  # 'monthly', 'weekly', 'daily'
+    budget_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    alert_threshold_pct: Mapped[int] = mapped_column(Integer, default=80, nullable=False)
+    critical_threshold_pct: Mapped[int] = mapped_column(Integer, default=95, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+class BudgetAlert(Base):
+    __tablename__ = "budget_alerts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    budget_id: Mapped[int] = mapped_column(ForeignKey("cost_budgets.id", ondelete="CASCADE"), nullable=False, index=True)
+    alert_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'warning', 'critical', 'exceeded'
+    period_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    period_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    actual_cost_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    budget_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    percentage_used: Mapped[int] = mapped_column(Integer, nullable=False)
+    triggered_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    acknowledged_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    budget = relationship("CostBudget")

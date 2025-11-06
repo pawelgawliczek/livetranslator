@@ -100,6 +100,124 @@ async def get_next_segment_id(r: redis.Redis, room: str) -> int:
     return segment_id
 
 
+# ============================================================
+# US-005: Quota Enforcement Cache and Helper
+# ============================================================
+
+# Quota enforcement cache (in-memory, 10-second TTL)
+quota_cache = {}  # {user_id: {'quota': int, 'timestamp': float}}
+QUOTA_CACHE_TTL = 10  # seconds
+
+
+async def check_quota_before_processing(
+    user_email: str,
+    room_code: str,
+    db_pool,
+    required_seconds: float = 5.0
+) -> dict:
+    """
+    Check if user has sufficient quota to process audio.
+
+    Uses 10-second cache to reduce database load.
+    Falls back to admin quota if participant exhausted.
+
+    Returns:
+        dict: {'has_quota': bool, 'available': int, 'source': 'participant'|'admin'|None}
+
+    Raises:
+        Exception: If both participant and admin quota exhausted
+    """
+    import time
+
+    try:
+        async with db_pool.acquire() as conn:
+            # Get user ID
+            user_row = await conn.fetchrow(
+                "SELECT id FROM users WHERE email = $1",
+                user_email
+            )
+
+            if not user_row:
+                # Guest users - skip quota check (use admin quota directly)
+                return {'has_quota': True, 'available': 999999, 'source': 'guest'}
+
+            user_id = user_row['id']
+
+            # Check cache first
+            now = time.time()
+            cache_key = user_id
+            if cache_key in quota_cache:
+                cached = quota_cache[cache_key]
+                if now - cached['timestamp'] < QUOTA_CACHE_TTL:
+                    available = cached['quota']
+                    if available >= required_seconds:
+                        return {'has_quota': True, 'available': available, 'source': 'participant_cached'}
+
+            # Cache miss or expired - query database
+            participant_quota = await conn.fetchval(
+                "SELECT get_user_quota_available($1)",
+                user_id
+            )
+
+            # Update cache
+            quota_cache[cache_key] = {
+                'quota': participant_quota or 0,
+                'timestamp': now
+            }
+
+            # Check participant quota
+            if participant_quota and participant_quota >= required_seconds:
+                return {'has_quota': True, 'available': participant_quota, 'source': 'participant'}
+
+            # Participant exhausted - check admin quota
+            room_row = await conn.fetchrow("""
+                SELECT u.id as admin_id, u.email as admin_email
+                FROM rooms r
+                JOIN users u ON r.owner_id = u.id
+                WHERE r.code = $1
+            """, room_code)
+
+            if not room_row:
+                raise Exception("Room not found")
+
+            admin_id = room_row['admin_id']
+
+            # Check admin quota cache
+            admin_cache_key = admin_id
+            if admin_cache_key in quota_cache:
+                cached = quota_cache[admin_cache_key]
+                if now - cached['timestamp'] < QUOTA_CACHE_TTL:
+                    admin_quota = cached['quota']
+                    if admin_quota >= required_seconds:
+                        return {'has_quota': True, 'available': admin_quota, 'source': 'admin_cached'}
+
+            # Query admin quota
+            admin_quota = await conn.fetchval(
+                "SELECT get_user_quota_available($1)",
+                admin_id
+            )
+
+            # Update admin cache
+            quota_cache[admin_cache_key] = {
+                'quota': admin_quota or 0,
+                'timestamp': now
+            }
+
+            if admin_quota and admin_quota >= required_seconds:
+                return {'has_quota': True, 'available': admin_quota, 'source': 'admin'}
+
+            # Both exhausted
+            raise Exception(
+                f"Quota exhausted - participant: {participant_quota or 0}s, "
+                f"admin: {admin_quota or 0}s, required: {required_seconds}s"
+            )
+
+    except Exception as e:
+        print(f"[STT Router] Quota check error: {e}")
+        # Fail open - allow processing (availability over strict enforcement)
+        return {'has_quota': True, 'available': 0, 'source': 'error_fallback'}
+
+
 async def transcribe_with_provider(
     audio_b64: str,
     provider: str,
@@ -632,6 +750,53 @@ async def router_loop():
                 timestamp = time.time()
                 print(f"[STT Router] 🛑 [{timestamp:.3f}] audio_end received for room={room}")
 
+                # ============================================================
+                # US-005: Check quota before processing final transcript
+                # ============================================================
+                try:
+                    # Import database pool from language_router
+                    from .language_router import db_pool
+
+                    # Skip quota check for guests (identified by "guest:" prefix)
+                    if not speaker.startswith('guest:'):
+                        quota_check = await check_quota_before_processing(
+                            user_email=speaker,  # speaker is user email
+                            room_code=room,
+                            db_pool=db_pool,
+                            required_seconds=5.0  # Require minimum 5s quota
+                        )
+
+                        if not quota_check['has_quota']:
+                            # Quota exhausted - send notification and skip processing
+                            print(f"[STT Router] ⚠️ Quota exhausted for {speaker} in {room}")
+
+                            quota_event = {
+                                "type": "quota_exhausted",
+                                "room_id": room,
+                                "speaker": speaker,
+                                "message": "Your quota has been exhausted. Please upgrade to continue.",
+                                "quota_type": quota_check.get('source', 'unknown'),
+                                "available_seconds": quota_check.get('available', 0)
+                            }
+                            await r.publish(STT_OUTPUT_EVENTS, jdumps(quota_event))
+
+                            # Clear partial session and skip processing
+                            if room in partial_sessions:
+                                # Close streaming connection if exists
+                                session = partial_sessions[room]
+                                if session.get("streaming_connection"):
+                                    await streaming_manager.close_connection(room, session["provider"])
+                                del partial_sessions[room]
+
+                            continue  # Skip to next message
+                        else:
+                            print(f"[STT Router] ✅ Quota check passed: {quota_check['available']}s available ({quota_check['source']})")
+
+                except Exception as quota_err:
+                    # Log error but don't block (fail open)
+                    print(f"[STT Router] ⚠️ Quota check error (failing open): {quota_err}")
+                # ============================================================
+
                 if room in partial_sessions:
                     session = partial_sessions[room]
 
@@ -688,6 +853,64 @@ async def router_loop():
 
                             await r.publish(STT_OUTPUT_EVENTS, jdumps(final_event))
                             print(f"[STT Router] 🏁 [{timestamp:.3f}] Sent stt_final event to trigger final translation")
+
+                            # ============================================================
+                            # US-005: Deduct quota after final transcript published
+                            # ============================================================
+                            try:
+                                from .language_router import db_pool
+                                from ..tier_helpers import deduct_quota_waterfall
+
+                                # Calculate audio duration from accumulated audio
+                                if session.get("accumulated_audio"):
+                                    audio_bytes = session["accumulated_audio"]
+                                    duration_seconds = len(audio_bytes) / (16000 * 2)  # 16kHz, 16-bit PCM
+                                else:
+                                    # Fallback: estimate from text length (average 3 words/second)
+                                    duration_seconds = len(last_partial_text.split()) / 3.0
+
+                                # Skip deduction for guests
+                                if not speaker.startswith('guest:'):
+                                    try:
+                                        deduction_result = await deduct_quota_waterfall(
+                                            user_email=speaker,
+                                            room_code=room,
+                                            seconds=duration_seconds,
+                                            service_type='stt',
+                                            provider=session.get('provider', 'unknown'),
+                                            db_pool=db_pool
+                                        )
+
+                                        print(f"[STT Router] 💰 Quota deducted: {duration_seconds:.1f}s from {deduction_result['source']}, "
+                                              f"remaining: {deduction_result['remaining']:.1f}s")
+
+                                        # Invalidate cache for this user
+                                        async with db_pool.acquire() as conn:
+                                            user_row = await conn.fetchrow(
+                                                "SELECT id FROM users WHERE email = $1",
+                                                speaker
+                                            )
+                                            if user_row and user_row['id'] in quota_cache:
+                                                del quota_cache[user_row['id']]
+
+                                    except Exception as deduct_err:
+                                        # This shouldn't happen (we already checked), but handle gracefully
+                                        print(f"[STT Router] ⚠️ Quota exhausted during deduction: {deduct_err}")
+
+                                        # Send quota exhausted event
+                                        quota_event = {
+                                            "type": "quota_exhausted",
+                                            "room_id": room,
+                                            "speaker": speaker,
+                                            "message": "Quota exhausted. This was your last segment.",
+                                            "quota_type": "exhausted_during_deduction"
+                                        }
+                                        await r.publish(STT_OUTPUT_EVENTS, jdumps(quota_event))
+
+                            except Exception as quota_err:
+                                print(f"[STT Router] ❌ Quota deduction error: {quota_err}")
+                                # Don't block - segment already transcribed
+                            # ============================================================
 
                         # Send finalization marker event (tells frontend the last partial is now final)
                         finalization_event = {

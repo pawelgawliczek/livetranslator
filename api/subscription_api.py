@@ -25,6 +25,7 @@ class SubscriptionOut(BaseModel):
     billing_period_end: datetime
     created_at: datetime
     updated_at: datetime
+    grace_period_end: Optional[datetime] = None  # US-007: Failed payment grace period
 
 class SubscriptionPlanIn(BaseModel):
     plan: str  # free, plus, pro
@@ -69,15 +70,23 @@ def get_subscription(user: dict = Depends(get_current_user), db: Session = Depen
         db.commit()
         db.refresh(subscription)
 
+    # Get plan name from tier_id (new schema) or plan field (legacy)
+    plan_name = subscription.plan  # Default to legacy field
+    if subscription.tier_id:
+        tier = db.get(SubscriptionTier, subscription.tier_id)
+        if tier:
+            plan_name = tier.tier_name
+
     return SubscriptionOut(
         id=subscription.id,
-        plan=subscription.plan,
+        plan=plan_name,
         status=subscription.status,
         monthly_quota_minutes=subscription.monthly_quota_minutes,
         billing_period_start=subscription.billing_period_start,
         billing_period_end=subscription.billing_period_end,
         created_at=subscription.created_at,
-        updated_at=subscription.updated_at
+        updated_at=subscription.updated_at,
+        grace_period_end=subscription.grace_period_end
     )
 
 @router.patch("", response_model=SubscriptionOut)
@@ -116,7 +125,8 @@ def update_subscription(
         billing_period_start=subscription.billing_period_start,
         billing_period_end=subscription.billing_period_end,
         created_at=subscription.created_at,
-        updated_at=subscription.updated_at
+        updated_at=subscription.updated_at,
+        grace_period_end=subscription.grace_period_end
     )
 
 @router.get("/plans")

@@ -38,6 +38,10 @@ class TotalsInfo(BaseModel):
     active_users: int
     active_rooms: int
     growth_rate: Optional[float] = None
+    stt_growth_rate: Optional[float] = None
+    mt_growth_rate: Optional[float] = None
+    users_growth_rate: Optional[float] = None
+    rooms_growth_rate: Optional[float] = None
 
 
 class OverviewResponse(BaseModel):
@@ -161,6 +165,111 @@ def calculate_growth_rate(db: Session, start_date: datetime, end_date: datetime,
         return None
 
 
+def calculate_all_growth_rates(
+    db: Session,
+    start_date: datetime,
+    end_date: datetime,
+    current_metrics: dict,
+    query_params: dict
+) -> dict:
+    """
+    Calculate growth rates for all metrics vs previous period.
+
+    Args:
+        current_metrics: Dict with total_cost, stt_cost, mt_cost, active_users, active_rooms
+        query_params: Dict with filters (start_date, end_date, room_id, user_id)
+
+    Returns:
+        Dict with all growth rates (or None if no previous data)
+    """
+    try:
+        period_duration = end_date - start_date
+        previous_start = start_date - period_duration
+        previous_end = start_date
+
+        # Build WHERE clause with same filters as main query
+        where_conditions = ["ts >= :prev_start", "ts < :prev_end"]
+        prev_params = {
+            "prev_start": previous_start,
+            "prev_end": previous_end
+        }
+
+        if "room_id" in query_params:
+            where_conditions.append("room_id = :room_id")
+            prev_params["room_id"] = query_params["room_id"]
+
+        if "user_id" in query_params:
+            where_conditions.append("""
+                room_id IN (
+                    SELECT code FROM rooms WHERE owner_id = :user_id
+                )
+            """)
+            prev_params["user_id"] = query_params["user_id"]
+
+        where_clause = " AND ".join(where_conditions)
+
+        # Single query for all previous metrics
+        prev_query = text(f"""
+            SELECT
+                COALESCE(SUM(amount_usd), 0) as total_cost,
+                COALESCE(SUM(CASE WHEN pipeline = 'stt' THEN amount_usd ELSE 0 END), 0) as stt_cost,
+                COALESCE(SUM(CASE WHEN pipeline = 'mt' THEN amount_usd ELSE 0 END), 0) as mt_cost,
+                COUNT(DISTINCT room_id) as active_rooms
+            FROM room_costs
+            WHERE {where_clause}
+        """)
+
+        prev_totals = db.execute(prev_query, prev_params).fetchone()
+
+        # Get previous active users
+        users_where_conditions = ["rc.ts >= :prev_start", "rc.ts < :prev_end"]
+        if "room_id" in query_params:
+            users_where_conditions.append("rc.room_id = :room_id")
+        if "user_id" in query_params:
+            users_where_conditions.append("r.owner_id = :user_id")
+
+        users_where_clause = " AND ".join(users_where_conditions)
+
+        prev_users_query = text(f"""
+            SELECT COUNT(DISTINCT r.owner_id)
+            FROM room_costs rc
+            JOIN rooms r ON rc.room_id = r.code
+            WHERE {users_where_clause}
+        """)
+
+        prev_active_users = db.execute(prev_users_query, prev_params).scalar() or 0
+
+        # Extract previous values
+        prev_total_cost = float(prev_totals[0])
+        prev_stt_cost = float(prev_totals[1])
+        prev_mt_cost = float(prev_totals[2])
+        prev_active_rooms = int(prev_totals[3])
+
+        # Calculate growth rates
+        def calc_growth(current, previous):
+            if previous > 0:
+                return ((current - previous) / previous) * 100
+            return None
+
+        return {
+            "growth_rate": calc_growth(current_metrics['total_cost'], prev_total_cost),
+            "stt_growth_rate": calc_growth(current_metrics['stt_cost'], prev_stt_cost),
+            "mt_growth_rate": calc_growth(current_metrics['mt_cost'], prev_mt_cost),
+            "users_growth_rate": calc_growth(current_metrics['active_users'], prev_active_users),
+            "rooms_growth_rate": calc_growth(current_metrics['active_rooms'], prev_active_rooms)
+        }
+
+    except Exception as e:
+        print(f"[Admin Costs] Error calculating growth rates: {e}")
+        return {
+            "growth_rate": None,
+            "stt_growth_rate": None,
+            "mt_growth_rate": None,
+            "users_growth_rate": None,
+            "rooms_growth_rate": None
+        }
+
+
 # ============================================================================
 # API Endpoints
 # ============================================================================
@@ -245,8 +354,18 @@ async def get_cost_overview(
 
     active_users = db.execute(users_query, query_params).scalar() or 0
 
-    # Calculate growth rate
-    growth_rate = calculate_growth_rate(db, start_date, end_date, total_cost)
+    # Calculate all growth rates
+    current_metrics = {
+        'total_cost': total_cost,
+        'stt_cost': stt_cost,
+        'mt_cost': mt_cost,
+        'active_users': active_users,
+        'active_rooms': active_rooms
+    }
+
+    growth_rates = calculate_all_growth_rates(
+        db, start_date, end_date, current_metrics, query_params
+    )
 
     # Get STT provider breakdown
     stt_where_conditions = where_conditions.copy()
@@ -332,7 +451,11 @@ async def get_cost_overview(
             "total_hours": round(total_minutes / 60, 2),
             "active_users": active_users,
             "active_rooms": active_rooms,
-            "growth_rate": round(growth_rate, 1) if growth_rate is not None else None
+            "growth_rate": round(growth_rates['growth_rate'], 1) if growth_rates['growth_rate'] is not None else None,
+            "stt_growth_rate": round(growth_rates['stt_growth_rate'], 1) if growth_rates['stt_growth_rate'] is not None else None,
+            "mt_growth_rate": round(growth_rates['mt_growth_rate'], 1) if growth_rates['mt_growth_rate'] is not None else None,
+            "users_growth_rate": round(growth_rates['users_growth_rate'], 1) if growth_rates['users_growth_rate'] is not None else None,
+            "rooms_growth_rate": round(growth_rates['rooms_growth_rate'], 1) if growth_rates['rooms_growth_rate'] is not None else None
         },
         "stt_breakdown": stt_breakdown,
         "mt_breakdown": mt_breakdown
