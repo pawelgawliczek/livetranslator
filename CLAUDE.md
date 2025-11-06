@@ -25,6 +25,8 @@ Good: "Bug in api/main.py:42 - missing await. Fixed."
 
 Use **Project Manager** (`.claude/agents/project-manager.md`) for all requests. PM delegates to specialists.
 
+**Optimization**: PM uses **Explore agent** for context gathering (medium+ tasks) before creating TEMP_context.md. Token savings: ~60%.
+
 ## 📄 Documentation Policy
 
 **CRITICAL: Minimal documentation only!**
