@@ -1653,11 +1653,12 @@ def update_feature_flag(
 
     # Create audit log entry
     audit_query = text("""
-        INSERT INTO admin_audit_log (admin_id, action, target, details, created_at)
-        VALUES (:admin_id, 'update_setting', :key, :details, NOW())
+        INSERT INTO admin_audit_log (admin_id, action, details, created_at)
+        VALUES (:admin_id, 'update_setting', :details, NOW())
     """)
 
     audit_details = json.dumps({
+        "key": key,
         "old_value": old_value,
         "new_value": new_value,
         "value_type": value_type
@@ -1665,7 +1666,6 @@ def update_feature_flag(
 
     db.execute(audit_query, {
         "admin_id": admin.id,
-        "key": key,
         "details": audit_details
     })
 

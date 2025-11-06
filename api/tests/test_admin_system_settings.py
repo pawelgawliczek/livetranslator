@@ -6,33 +6,40 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from api.main import app
-from api.auth import create_access_token
-from api.database import get_db
+from api.auth import _issue
+from api.models import User
 
 @pytest.fixture
-def admin_token():
+def admin_token(test_db):
     """Create admin JWT token"""
-    return create_access_token({
-        "sub": "1",
-        "email": "admin@test.com",
-        "is_admin": True
-    })
+    import uuid
+    user = User(
+        email=f"admin-{uuid.uuid4().hex[:8]}@test.com",
+        password_hash="hashed",
+        is_admin=True
+    )
+    test_db.add(user)
+    test_db.commit()
+    test_db.refresh(user)
+
+    token = _issue(user)
+    return token.access_token
 
 @pytest.fixture
-def user_token():
+def user_token(test_db):
     """Create regular user JWT token"""
-    return create_access_token({
-        "sub": "2",
-        "email": "user@test.com",
-        "is_admin": False
-    })
+    import uuid
+    user = User(
+        email=f"user-{uuid.uuid4().hex[:8]}@test.com",
+        password_hash="hashed",
+        is_admin=False
+    )
+    test_db.add(user)
+    test_db.commit()
+    test_db.refresh(user)
 
-@pytest.fixture
-def db_session():
-    """Get database session"""
-    db = next(get_db())
-    yield db
-    db.close()
+    token = _issue(user)
+    return token.access_token
 
 def test_get_feature_flags_requires_admin(admin_token, user_token):
     """Test GET /settings/feature-flags requires admin access"""
@@ -76,7 +83,7 @@ def test_get_feature_flags_returns_metadata(admin_token):
     assert "description" in flag
     assert "category" in flag
 
-def test_update_feature_flag_boolean(admin_token, db_session):
+def test_update_feature_flag_boolean(admin_token, test_db):
     """Test PUT /settings/feature-flags/{key} for boolean value"""
     client = TestClient(app)
 
@@ -102,7 +109,7 @@ def test_update_feature_flag_boolean(admin_token, db_session):
     assert data["new_value"] == False
 
     # Verify in database
-    result = db_session.execute(
+    result = test_db.execute(
         text("SELECT value FROM system_settings WHERE key = 'enable_diarization'")
     ).fetchone()
     assert result[0] == "false"
@@ -128,7 +135,7 @@ def test_update_feature_flag_invalid_boolean(admin_token):
     assert response.status_code == 400
     assert "Boolean value must be" in response.json()["detail"]
 
-def test_update_feature_flag_integer(admin_token, db_session):
+def test_update_feature_flag_integer(admin_token, test_db):
     """Test PUT /settings/feature-flags/{key} for integer value"""
     client = TestClient(app)
 
@@ -153,7 +160,7 @@ def test_update_feature_flag_integer(admin_token, db_session):
     assert data["key"] == "max_speakers_per_room"
 
     # Verify in database
-    result = db_session.execute(
+    result = test_db.execute(
         text("SELECT value FROM system_settings WHERE key = 'max_speakers_per_room'")
     ).fetchone()
     assert result[0] == "15"
@@ -165,12 +172,12 @@ def test_update_feature_flag_integer(admin_token, db_session):
         json={"value": str(original_value)}
     )
 
-def test_update_feature_flag_creates_audit_log(admin_token, db_session):
+def test_update_feature_flag_creates_audit_log(admin_token, test_db):
     """Test feature flag updates are logged in admin_audit_log"""
     client = TestClient(app)
 
     # Count existing logs
-    count_before = db_session.execute(
+    count_before = test_db.execute(
         text("SELECT COUNT(*) FROM admin_audit_log WHERE action = 'update_setting'")
     ).scalar()
 
@@ -182,7 +189,7 @@ def test_update_feature_flag_creates_audit_log(admin_token, db_session):
     )
 
     # Verify audit log created
-    count_after = db_session.execute(
+    count_after = test_db.execute(
         text("SELECT COUNT(*) FROM admin_audit_log WHERE action = 'update_setting'")
     ).scalar()
 
@@ -208,7 +215,7 @@ def test_get_rate_limits(admin_token):
     assert "stt_max_concurrent_connections" in limit_keys
     assert "max_room_participants" in limit_keys
 
-def test_update_rate_limits(admin_token, db_session):
+def test_update_rate_limits(admin_token, test_db):
     """Test PUT /settings/rate-limits updates multiple limits"""
     client = TestClient(app)
 
@@ -236,7 +243,7 @@ def test_update_rate_limits(admin_token, db_session):
     assert len(data["updated"]) == 2
 
     # Verify in database
-    result = db_session.execute(
+    result = test_db.execute(
         text("SELECT value FROM system_settings WHERE key = 'max_room_participants'")
     ).fetchone()
     assert int(result[0]) == 75
@@ -283,12 +290,12 @@ def test_get_usage_stats(admin_token):
     assert "active_rooms" in data
     assert "mt_requests_last_minute" in data
 
-def test_update_stt_routing_requires_admin(admin_token, user_token, db_session):
+def test_update_stt_routing_requires_admin(admin_token, user_token, test_db):
     """Test PUT /routing/stt/{id} requires admin access"""
     client = TestClient(app)
 
     # Get a valid STT routing config ID
-    result = db_session.execute(
+    result = test_db.execute(
         text("SELECT id FROM stt_routing_config LIMIT 1")
     ).fetchone()
 
@@ -313,12 +320,12 @@ def test_update_stt_routing_requires_admin(admin_token, user_token, db_session):
     )
     assert response.status_code == 200
 
-def test_update_stt_routing_clears_cache(admin_token, db_session):
+def test_update_stt_routing_clears_cache(admin_token, test_db):
     """Test PUT /routing/stt/{id} clears language router cache"""
     client = TestClient(app)
 
     # Get a valid STT routing config ID
-    result = db_session.execute(
+    result = test_db.execute(
         text("SELECT id, provider_primary FROM stt_routing_config LIMIT 1")
     ).fetchone()
 
