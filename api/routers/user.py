@@ -41,20 +41,26 @@ def update_email_preferences(
 
     Allows users to opt-out of email notifications (GDPR compliance).
     """
-    current_user.email_notifications_enabled = request.email_notifications_enabled
+    # Query user from this session to ensure proper ORM tracking
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        return {"success": False, "error": "User not found"}
+
+    user.email_notifications_enabled = request.email_notifications_enabled
     db.commit()
+    db.refresh(user)
 
     logger.info(
         "email_preferences_updated",
         extra={
-            "user_id": current_user.id,
+            "user_id": user.id,
             "enabled": request.email_notifications_enabled
         }
     )
 
     return {
         "success": True,
-        "email_notifications_enabled": current_user.email_notifications_enabled
+        "email_notifications_enabled": user.email_notifications_enabled
     }
 
 

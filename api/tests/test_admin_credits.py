@@ -9,6 +9,7 @@ Test Coverage:
 - Security: Non-admin access denied
 """
 import pytest
+import uuid
 from fastapi.testclient import TestClient
 from decimal import Decimal
 from datetime import datetime, timedelta
@@ -40,7 +41,7 @@ def client():
 def admin_user(db):
     """Create admin user"""
     user = User(
-        email="admin@test.com",
+        email=f"admin-{uuid.uuid4().hex[:8]}@test.com",
         password_hash="hashed",
         display_name="Admin",
         preferred_lang="en",
@@ -63,7 +64,7 @@ def admin_token(admin_user):
 def regular_user(db):
     """Create regular user"""
     user = User(
-        email="user@test.com",
+        email=f"user-{uuid.uuid4().hex[:8]}@test.com",
         password_hash="hashed",
         display_name="User",
         preferred_lang="en",
@@ -258,7 +259,7 @@ def test_get_purchase_history_with_filters(client, db, admin_token, regular_user
 
     # Test: Filter by user email
     response = client.get(
-        "/api/admin/credits/purchases?user_email=user@test",
+        f"/api/admin/credits/purchases?user_email={regular_user.email[:8]}",
         headers={"Authorization": f"Bearer {admin_token}"}
     )
     assert response.status_code == 200
@@ -267,7 +268,7 @@ def test_get_purchase_history_with_filters(client, db, admin_token, regular_user
 
     # All results should match filter
     for purchase in data["purchases"]:
-        assert "user@test" in purchase["user_email"].lower()
+        assert regular_user.email[:8] in purchase["user_email"].lower()
 
     # Test: Pagination
     response = client.get(

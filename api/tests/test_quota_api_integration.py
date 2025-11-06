@@ -43,8 +43,23 @@ def create_test_token(user_id: int, email: str = "test@example.com") -> str:
 # Helper to create sync database session override
 def get_sync_test_client(mock_user=None):
     """Create TestClient with sync database session and optional user override."""
+    import os
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    # Clear any previous overrides
+    app.dependency_overrides.clear()
+
+    # Use TEST database
+    test_db_url = os.getenv("TEST_POSTGRES_DSN", "postgresql+asyncpg://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator_test")
+    # Convert async URL to sync URL for TestClient
+    sync_test_db_url = test_db_url.replace("+asyncpg", "").replace("postgresql://", "postgresql://")
+
+    test_engine = create_engine(sync_test_db_url, pool_pre_ping=True)
+    TestSessionLocal = sessionmaker(bind=test_engine, autoflush=False, autocommit=False)
+
     def override_get_db():
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             yield db
         finally:
@@ -55,8 +70,20 @@ def get_sync_test_client(mock_user=None):
     # If mock_user provided, override authentication
     if mock_user:
         from api.auth import get_current_user
+        from api.models import User
+
+        # Create a new User object in the sync session to avoid detached instance issues
         def override_get_current_user():
-            return mock_user
+            # Return a mock User-like object with the required attributes
+            class MockUser:
+                def __init__(self, user_id, email="test@example.com"):
+                    self.id = user_id
+                    self.email = email
+                    self.display_name = "Test User"
+                    self.preferred_lang = "en"
+
+            return MockUser(user_id=mock_user.id)
+
         app.dependency_overrides[get_current_user] = override_get_current_user
 
     client = TestClient(app)
@@ -67,6 +94,8 @@ def get_sync_test_client(mock_user=None):
 async def test_quota_status_free_tier(test_db_session, test_user):
     """Test GET /api/quota/status for free tier user"""
     # Setup: Create free tier subscription
+    # No action needed - seed data is already committed by test_db_session fixture
+
     tier_result = await test_db_session.execute(
         select(SubscriptionTier).where(SubscriptionTier.tier_name == "free")
     )
@@ -84,6 +113,7 @@ async def test_quota_status_free_tier(test_db_session, test_user):
     )
     test_db_session.add(subscription)
     await test_db_session.commit()
+    await test_db_session.refresh(test_user)  # Refresh to ensure ID is accessible
 
     # Calculate expected quota
     monthly_quota_seconds = int(float(free_tier.monthly_quota_hours) * 3600)  # 612 seconds (0.17 hours)
@@ -94,6 +124,7 @@ async def test_quota_status_free_tier(test_db_session, test_user):
     response = client.get("/api/quota/status")
 
     # Assert
+    print(f"DEBUG free_tier: Response status={response.status_code}, body={response.text[:200]}")
     assert response.status_code == 200
     data = response.json()
     assert data["tier"] == "free"
@@ -207,13 +238,9 @@ async def test_quota_status_80_percent_alert(test_db_session, test_user, test_ro
     await test_db_session.commit()
 
     # Test via HTTP
-    client = get_sync_test_client()
-    token = create_access_token(data={"sub": str(test_user.id)})
+    client = get_sync_test_client(mock_user=test_user)
 
-    response = client.get(
-        "/api/quota/status",
-        headers={"Authorization": f"Bearer {token}"}
-    )
+    response = client.get("/api/quota/status")
 
     # Assert: Warning alert triggered
     assert response.status_code == 200

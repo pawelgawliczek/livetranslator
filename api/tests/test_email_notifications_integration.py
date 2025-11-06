@@ -15,7 +15,9 @@ import pytest_asyncio
 from datetime import datetime, timedelta
 from decimal import Decimal
 from sqlalchemy import select, text
+from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
+from fastapi import Depends
 from unittest.mock import patch, AsyncMock, MagicMock
 
 from api.models import (
@@ -44,26 +46,41 @@ from api.email_service import (
 @pytest_asyncio.fixture(scope="function")
 async def seed_subscription_tiers(test_db_session):
     """Seed subscription tiers for tests."""
-    # Insert subscription tiers
-    await test_db_session.execute(
-        text("""
-            INSERT INTO subscription_tiers (id, tier_name, display_name, monthly_price_usd, monthly_quota_hours, features, provider_tier, is_active, created_at, updated_at)
-            VALUES
-            (1, 'free', 'Free', 0.00, 0.17, '["10 minutes per month"]'::jsonb, 'free', true, NOW(), NOW()),
-            (2, 'plus', 'Plus', 29.00, 2.00, '["2 hours per month"]'::jsonb, 'standard', true, NOW(), NOW()),
-            (3, 'pro', 'Pro', 199.00, 10.00, '["10 hours per month"]'::jsonb, 'premium', true, NOW(), NOW())
-            ON CONFLICT (id) DO NOTHING
-        """)
-    )
-    await test_db_session.commit()
+    # Subscription tiers are already seeded globally in conftest.py
+    # This fixture exists for compatibility but does nothing
     yield
 
 
 # Helper to create sync database session override
 def get_sync_test_client(mock_user=None):
     """Create TestClient with sync database session and optional user override."""
+    import os
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    # Use TEST database URL (sync version)
+    test_db_url = os.getenv(
+        "TEST_POSTGRES_DSN",
+        "postgresql+asyncpg://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator_test"
+    )
+    # Convert async URL to sync URL
+    sync_test_db_url = test_db_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    # Create engine for test database
+    test_engine = create_engine(
+        sync_test_db_url,
+        pool_pre_ping=True,
+        isolation_level="READ COMMITTED"
+    )
+    TestSessionLocal = sessionmaker(
+        bind=test_engine,
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False
+    )
+
     def override_get_db():
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             yield db
         finally:
@@ -84,7 +101,32 @@ def get_sync_test_client(mock_user=None):
 
 def get_sync_db():
     """Get synchronous database session for email tests."""
-    db = SessionLocal()
+    import os
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    # Use TEST database URL (sync version)
+    test_db_url = os.getenv(
+        "TEST_POSTGRES_DSN",
+        "postgresql+asyncpg://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator_test"
+    )
+    # Convert async URL to sync URL
+    sync_test_db_url = test_db_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    # Create engine with isolation level that sees committed data
+    engine = create_engine(
+        sync_test_db_url,
+        pool_pre_ping=True,
+        isolation_level="READ COMMITTED"
+    )
+    TestSessionLocal = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False
+    )
+
+    db = TestSessionLocal()
     try:
         return db
     finally:
@@ -121,7 +163,7 @@ async def test_quota_email_80_percent_trigger(test_db_session, test_user, test_r
     with patch('api.email_service.send_email_via_web3forms', new_callable=AsyncMock) as mock_email:
         mock_email.return_value = mock_response
 
-        # Get sync DB for email service
+        # Get sync DB for email service (creates new transaction that should see committed data)
         db = get_sync_db()
 
         # Send 80% warning email
@@ -665,7 +707,8 @@ async def test_patch_email_preferences_disable(test_db_session, test_user, seed_
     assert data["success"] is True
     assert data["email_notifications_enabled"] is False
 
-    # Verify in database
+    # Verify in database - commit first to ensure fresh read
+    await test_db_session.commit()
     result = await test_db_session.execute(
         text("SELECT email_notifications_enabled FROM users WHERE id = :user_id"),
         {"user_id": test_user.id}
@@ -699,7 +742,8 @@ async def test_patch_email_preferences_enable(test_db_session, test_user, seed_s
     assert data["success"] is True
     assert data["email_notifications_enabled"] is True
 
-    # Verify in database
+    # Verify in database - commit first to ensure fresh read
+    await test_db_session.commit()
     result = await test_db_session.execute(
         text("SELECT email_notifications_enabled FROM users WHERE id = :user_id"),
         {"user_id": test_user.id}
@@ -835,7 +879,7 @@ async def test_email_notification_record_fields(test_db_session, test_user, seed
     assert record[1] == "quota_80"
     assert record[2] == billing_start
     assert record[3] == "sent"
-    assert '"success": true' in record[4].lower()  # JSONB field
+    assert record[4].get("success") is True  # JSONB field returned as dict
     assert record[5] == test_user.email
     assert '80%' in record[6]
     assert record[7] == 80
@@ -895,7 +939,7 @@ async def test_email_failure_recorded_in_database(test_db_session, test_user, se
 
     assert record is not None
     assert record[0] == "failed"
-    assert '"success": false' in record[1].lower()
+    assert record[1].get("success") is False  # JSONB field returned as dict
 
 
 # ============================================================================

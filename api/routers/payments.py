@@ -748,8 +748,8 @@ async def verify_apple_receipt_with_apple(receipt_data: str) -> dict:
 @router.post("/apple/verify")
 @limiter.limit("5/minute")  # MED-1: Rate limit Apple IAP verification
 async def verify_apple_receipt(
-    request_obj: Request,
-    request: AppleReceiptRequest,
+    request: Request,
+    receipt_request: AppleReceiptRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -765,15 +765,15 @@ async def verify_apple_receipt(
     # 1. CHECK DUPLICATE TRANSACTION (SECURITY: Prevent fraud)
     existing = db.scalar(
         select(PaymentTransaction).where(
-            PaymentTransaction.apple_transaction_id == request.transaction_id
+            PaymentTransaction.apple_transaction_id == receipt_request.transaction_id
         )
     )
     if existing:
-        raise HTTPException(409, f"Transaction {request.transaction_id} already processed")
+        raise HTTPException(409, f"Transaction {receipt_request.transaction_id} already processed")
 
     # 2. VERIFY WITH APPLE
     try:
-        apple_response = await verify_apple_receipt_with_apple(request.receipt_data)
+        apple_response = await verify_apple_receipt_with_apple(receipt_request.receipt_data)
     except AppleReceiptError as e:
         raise HTTPException(422, str(e))
 
@@ -794,11 +794,11 @@ async def verify_apple_receipt(
     transaction = latest_info[0]
 
     # Validate product_id
-    if transaction["product_id"] != request.product_id:
+    if transaction["product_id"] != receipt_request.product_id:
         raise HTTPException(400, "Product ID mismatch")
 
     # 5. UPDATE SUBSCRIPTION OR CREDITS
-    product_id = request.product_id
+    product_id = receipt_request.product_id
 
     if 'subscription' in product_id or 'plus' in product_id or 'pro' in product_id:
         # Handle subscription
@@ -832,8 +832,8 @@ async def verify_apple_receipt(
             db.add(subscription)
         else:
             subscription.tier_id = tier.id
-            subscription.apple_transaction_id = request.transaction_id
-            subscription.apple_original_transaction_id = request.original_transaction_id
+            subscription.apple_transaction_id = receipt_request.transaction_id
+            subscription.apple_original_transaction_id = receipt_request.original_transaction_id
             subscription.billing_period_start = datetime.utcnow()
             subscription.billing_period_end = datetime.utcnow() + timedelta(days=30)
             subscription.status = 'active'
@@ -847,10 +847,10 @@ async def verify_apple_receipt(
             transaction_type='subscription',
             amount_usd=Decimal('29.00') if tier_name == 'plus' else Decimal('199.00'),
             currency='USD',
-            apple_transaction_id=request.transaction_id,
-            apple_original_transaction_id=request.original_transaction_id,
-            apple_product_id=request.product_id,
-            apple_receipt_data=request.receipt_data[:500],  # Store truncated for debugging
+            apple_transaction_id=receipt_request.transaction_id,
+            apple_original_transaction_id=receipt_request.original_transaction_id,
+            apple_product_id=receipt_request.product_id,
+            apple_receipt_data=receipt_request.receipt_data[:500],  # Store truncated for debugging
             status='completed',
             created_at=datetime.utcnow(),
             completed_at=datetime.utcnow()
@@ -919,10 +919,10 @@ async def verify_apple_receipt(
             transaction_type='credit_purchase',
             amount_usd=amount_usd,
             currency='USD',
-            apple_transaction_id=request.transaction_id,
-            apple_original_transaction_id=request.original_transaction_id,
-            apple_product_id=request.product_id,
-            apple_receipt_data=request.receipt_data[:500],
+            apple_transaction_id=receipt_request.transaction_id,
+            apple_original_transaction_id=receipt_request.original_transaction_id,
+            apple_product_id=receipt_request.product_id,
+            apple_receipt_data=receipt_request.receipt_data[:500],
             status='completed',
             created_at=datetime.utcnow(),
             completed_at=datetime.utcnow()

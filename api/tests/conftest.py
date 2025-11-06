@@ -13,8 +13,9 @@ import sys
 import subprocess
 import pytest
 import pytest_asyncio
+from decimal import Decimal
 from unittest.mock import Mock, AsyncMock
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 # Set TEST_POSTGRES_DSN for all tests
@@ -71,6 +72,33 @@ def verify_test_database_schema():
 async def verify_migrations():
     """Session-scoped fixture to verify migrations once before all tests."""
     verify_test_database_schema()
+
+    # Ensure seed data exists after migrations
+    test_db_dsn = os.getenv("TEST_POSTGRES_DSN")
+    engine = create_async_engine(test_db_dsn, echo=False)
+    async with engine.begin() as conn:
+        # Insert subscription tiers seed data
+        await conn.execute(text("""
+            INSERT INTO subscription_tiers (tier_name, display_name, monthly_price_usd, monthly_quota_hours, features, provider_tier, stripe_price_id, apple_product_id)
+            VALUES
+            ('free', 'Free', 0, 0.167, '["10 minutes per month", "Apple STT/MT/TTS (iOS)", "Speechmatics STT (Web)", "Browser Web Speech API (Web)", "Basic support"]', 'free', NULL, NULL),
+            ('plus', 'Plus', 29, 2, '["2 hours per month", "Premium STT providers", "Premium MT providers", "Client-side TTS only", "Email support", "History export (PDF/TXT)"]', 'standard', 'price_plus_monthly_prod', 'com.livetranslator.plus.monthly'),
+            ('pro', 'Pro', 199, 10, '["10 hours per month", "All premium providers", "Server-side TTS (Google/AWS/Azure)", "Priority support", "Advanced analytics", "API access", "History export (PDF/TXT)"]', 'premium', 'price_pro_monthly_prod', 'com.livetranslator.pro.monthly')
+            ON CONFLICT (tier_name) DO NOTHING;
+        """))
+
+        # Insert credit packages seed data
+        await conn.execute(text("""
+            INSERT INTO credit_packages (package_name, display_name, hours, price_usd, discount_percent, sort_order, stripe_price_id, apple_product_id)
+            VALUES
+            ('1hr', '1 Hour', 1, 5, 0, 1, 'price_1hr_prod', 'com.livetranslator.credits.1hr'),
+            ('4hr', '4 Hours', 4, 19, 5, 2, 'price_4hr_prod', 'com.livetranslator.credits.4hr'),
+            ('8hr', '8 Hours (Best Value!)', 8, 35, 12.5, 3, 'price_8hr_prod', 'com.livetranslator.credits.8hr'),
+            ('20hr', '20 Hours (Enterprise)', 20, 80, 20, 4, 'price_20hr_prod', 'com.livetranslator.credits.20hr')
+            ON CONFLICT DO NOTHING;
+        """))
+    await engine.dispose()
+
     yield
 
 
@@ -91,6 +119,7 @@ async def test_db_session(test_db_engine):
 
     Each test gets a fresh session, and all data is cleaned up before and after the test.
     """
+    print("\n🔧 Creating test_db_session fixture...")
     AsyncTestSession = async_sessionmaker(
         test_db_engine,
         class_=AsyncSession,
@@ -98,14 +127,14 @@ async def test_db_session(test_db_engine):
     )
 
     async with AsyncTestSession() as session:
-        # Clean up all data BEFORE the test (preserve schema_migrations)
+        # Clean up all data BEFORE the test (preserve schema_migrations and seed data)
         try:
-            # Get all table names dynamically (excluding schema_migrations)
+            # Get all table names dynamically (excluding schema_migrations and seed data tables)
             result = await session.execute(
                 text("""
                     SELECT tablename FROM pg_tables
                     WHERE schemaname = 'public'
-                    AND tablename != 'schema_migrations'
+                    AND tablename NOT IN ('schema_migrations', 'subscription_tiers', 'credit_packages')
                     ORDER BY tablename;
                 """)
             )
@@ -120,16 +149,53 @@ async def test_db_session(test_db_engine):
             print(f"Pre-test cleanup error: {e}")
             await session.rollback()
 
+        # ALWAYS re-seed static data after cleanup (CASCADE can delete seed data via FK constraints)
+        # Note: Re-seeding is required because TRUNCATE ... CASCADE can delete seed data
+        try:
+            from api.models import SubscriptionTier, CreditPackage
+            # Use raw SQL with ON CONFLICT to ensure data exists
+            await session.execute(text("""
+                INSERT INTO subscription_tiers (tier_name, display_name, monthly_price_usd, monthly_quota_hours, features, provider_tier, stripe_price_id, apple_product_id)
+                VALUES
+                ('free', 'Free', 0, 0.17, '["10 minutes per month"]'::jsonb, 'free', NULL, NULL),
+                ('plus', 'Plus', 29, 2.00, '["2 hours per month"]'::jsonb, 'standard', 'price_plus_monthly_prod', 'com.livetranslator.plus.monthly'),
+                ('pro', 'Pro', 199, 10.00, '["10 hours per month"]'::jsonb, 'premium', 'price_pro_monthly_prod', 'com.livetranslator.pro.monthly')
+                ON CONFLICT (tier_name) DO UPDATE SET
+                    monthly_quota_hours = EXCLUDED.monthly_quota_hours,
+                    display_name = EXCLUDED.display_name;
+            """))
+            await session.execute(text("""
+                INSERT INTO credit_packages (package_name, display_name, hours, price_usd, discount_percent, sort_order, stripe_price_id, apple_product_id)
+                VALUES
+                ('1hr', '1 Hour', 1, 5, 0, 1, 'price_1hr_prod', 'com.livetranslator.credits.1hr'),
+                ('4hr', '4 Hours', 4, 19, 5, 2, 'price_4hr_prod', 'com.livetranslator.credits.4hr'),
+                ('8hr', '8 Hours (Best Value!)', 8, 35, 12.5, 3, 'price_8hr_prod', 'com.livetranslator.credits.8hr'),
+                ('20hr', '20 Hours (Enterprise)', 20, 80, 20, 4, 'price_20hr_prod', 'com.livetranslator.credits.20hr')
+                ON CONFLICT (package_name) DO UPDATE SET
+                    hours = EXCLUDED.hours,
+                    price_usd = EXCLUDED.price_usd;
+            """))
+            await session.commit()
+            # Force expire to ensure fresh read
+            session.expire_all()
+        except Exception as e:
+            import sys
+            print(f"❌ Test fixture re-seed failed: {e}", file=sys.stderr, flush=True)
+            import traceback
+            traceback.print_exc()
+            await session.rollback()
+            raise
+
         yield session
 
-        # Clean up all data after the test (preserve schema_migrations)
+        # Clean up all data after the test (preserve schema_migrations and seed data)
         try:
-            # Get all table names dynamically (excluding schema_migrations)
+            # Get all table names dynamically (excluding schema_migrations and seed data tables)
             result = await session.execute(
                 text("""
                     SELECT tablename FROM pg_tables
                     WHERE schemaname = 'public'
-                    AND tablename != 'schema_migrations'
+                    AND tablename NOT IN ('schema_migrations', 'subscription_tiers', 'credit_packages')
                     ORDER BY tablename;
                 """)
             )
@@ -230,14 +296,88 @@ def mock_mt_service():
     return mock
 
 
+# Seed data fixture (ensures subscription_tiers and credit_packages exist)
+@pytest_asyncio.fixture(scope="function")
+async def seed_data(test_db_session):
+    """Ensure seed data exists for tests that need subscription tiers or credit packages."""
+    from api.models import SubscriptionTier, CreditPackage
+    try:
+        # Check if subscription tiers exist
+        result = await test_db_session.execute(select(SubscriptionTier))
+        tiers = result.scalars().all()
+
+        if not tiers:
+            # Insert seed data using ORM models
+            free_tier = SubscriptionTier(
+                tier_name="free",
+                display_name="Free",
+                monthly_price_usd=Decimal("0"),
+                monthly_quota_hours=Decimal("0.167"),
+                features=["10 minutes per month"],
+                provider_tier="free"
+            )
+            plus_tier = SubscriptionTier(
+                tier_name="plus",
+                display_name="Plus",
+                monthly_price_usd=Decimal("29"),
+                monthly_quota_hours=Decimal("2"),
+                features=["2 hours per month"],
+                provider_tier="standard",
+                stripe_price_id="price_plus_monthly_prod",
+                apple_product_id="com.livetranslator.plus.monthly"
+            )
+            pro_tier = SubscriptionTier(
+                tier_name="pro",
+                display_name="Pro",
+                monthly_price_usd=Decimal("199"),
+                monthly_quota_hours=Decimal("10"),
+                features=["10 hours per month"],
+                provider_tier="premium",
+                stripe_price_id="price_pro_monthly_prod",
+                apple_product_id="com.livetranslator.pro.monthly"
+            )
+            test_db_session.add_all([free_tier, plus_tier, pro_tier])
+
+            # Insert credit packages
+            pkg_1hr = CreditPackage(
+                package_name="1hr",
+                display_name="1 Hour",
+                hours=Decimal("1"),
+                price_usd=Decimal("5"),
+                discount_percent=Decimal("0"),
+                sort_order=1,
+                stripe_price_id="price_1hr_prod",
+                apple_product_id="com.livetranslator.credits.1hr"
+            )
+            pkg_4hr = CreditPackage(
+                package_name="4hr",
+                display_name="4 Hours",
+                hours=Decimal("4"),
+                price_usd=Decimal("19"),
+                discount_percent=Decimal("5"),
+                sort_order=2,
+                stripe_price_id="price_4hr_prod",
+                apple_product_id="com.livetranslator.credits.4hr"
+            )
+            test_db_session.add_all([pkg_1hr, pkg_4hr])
+
+            await test_db_session.commit()
+    except Exception as e:
+        print(f"Seed data fixture error: {e}")
+        await test_db_session.rollback()
+
+    return True
+
+
 # User Fixtures
 @pytest_asyncio.fixture(scope="function")
 async def test_user(test_db_session):
     """Create a test user."""
     from api.models import User
+    import uuid
 
     user = User(
-        email="test@example.com",
+        email=f"user-{uuid.uuid4().hex[:8]}@test.com",
         password_hash="hashed"
     )
     test_db_session.add(user)
@@ -250,9 +390,10 @@ async def test_user(test_db_session):
 async def admin_user(test_db_session):
     """Create an admin test user."""
     from api.models import User
+    import uuid
 
     user = User(
-        email="admin@example.com",
+        email=f"admin-{uuid.uuid4().hex[:8]}@test.com",
         password_hash="hashed",
         is_admin=True
     )
@@ -399,3 +540,58 @@ def pytest_collection_modifyitems(config, items):
         # Add unit marker to test files without integration/e2e
         elif "e2e" not in item.nodeid and "integration" not in item.nodeid:
             item.add_marker(pytest.mark.unit)
+
+
+# Additional fixtures for integration tests
+@pytest.fixture(scope="function")
+def client():
+    """Alias for test_client (for compatibility)"""
+    from fastapi.testclient import TestClient
+    from api.main import app
+    return TestClient(app)
+
+
+@pytest.fixture(scope="function")
+def db_session(test_db):
+    """Alias for test_db (for compatibility)"""
+    return test_db
+
+
+@pytest.fixture(scope="function")
+def admin_token(test_db):
+    """Create admin user and return JWT token"""
+    from api.models import User
+    from api.auth import _issue
+    import uuid
+
+    user = User(
+        email=f"admin-{uuid.uuid4().hex[:8]}@test.com",
+        password_hash="hashed",
+        is_admin=True
+    )
+    test_db.add(user)
+    test_db.commit()
+    test_db.refresh(user)
+
+    token = _issue(user)
+    return token.access_token
+
+
+@pytest.fixture(scope="function")
+def user_token(test_db):
+    """Create regular user and return JWT token"""
+    from api.models import User
+    from api.auth import _issue
+    import uuid
+
+    user = User(
+        email=f"user-{uuid.uuid4().hex[:8]}@test.com",
+        password_hash="hashed",
+        is_admin=False
+    )
+    test_db.add(user)
+    test_db.commit()
+    test_db.refresh(user)
+
+    token = _issue(user)
+    return token.access_token

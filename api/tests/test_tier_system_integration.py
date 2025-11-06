@@ -45,7 +45,7 @@ async def test_tier_seed_data_exists(test_db_session):
     assert "free" in tier_dict
     free_tier = tier_dict["free"]
     assert free_tier.monthly_price_usd == 0
-    assert float(free_tier.monthly_quota_hours) == float(Decimal("0.167"))  # 10 minutes
+    assert float(free_tier.monthly_quota_hours) == float(Decimal("0.17"))  # 10 minutes (0.167 rounded by NUMERIC(6,2))
     assert free_tier.provider_tier == "free"
     assert free_tier.is_active == True
 

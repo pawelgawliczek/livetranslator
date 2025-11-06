@@ -1,5 +1,6 @@
 """Tests for Admin Subscriptions API - Phase 3C US-011"""
 import pytest
+import uuid
 from fastapi.testclient import TestClient
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -22,7 +23,7 @@ def db():
 def admin_user(db):
     """Create admin user for testing"""
     user = User(
-        email="admin@test.com",
+        email=f"admin-{uuid.uuid4().hex[:8]}@test.com",
         password_hash="test_hash",
         display_name="Admin User",
         preferred_lang="en",
@@ -38,7 +39,7 @@ def admin_user(db):
 def regular_user(db):
     """Create regular user for testing"""
     user = User(
-        email="user@test.com",
+        email=f"user-{uuid.uuid4().hex[:8]}@test.com",
         password_hash="test_hash",
         display_name="Regular User",
         preferred_lang="en",

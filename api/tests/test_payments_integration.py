@@ -184,7 +184,7 @@ class TestAppleIAP:
         assert response.status_code == 409
         assert "already processed" in response.json()["detail"]
 
-    @patch('api.billing_api.verify_apple_receipt_with_apple')
+    @patch('api.routers.payments.verify_apple_receipt_with_apple')
     def test_bundle_id_validation(self, mock_verify, test_client, test_user_token):
         """Test bundle_id spoofing prevention (security)"""
         # Generate unique transaction ID for this test
@@ -219,7 +219,7 @@ class TestAppleIAP:
         assert response.status_code == 403
         assert "Bundle ID mismatch" in response.json()["detail"]
 
-    @patch('api.billing_api.verify_apple_receipt_with_apple')
+    @patch('api.routers.payments.verify_apple_receipt_with_apple')
     def test_apple_subscription_success(self, mock_verify, test_client, test_user_token, test_db):
         """Test successful Apple subscription verification"""
         # Generate unique transaction ID for this test
@@ -259,7 +259,7 @@ class TestAppleIAP:
         assert data["tier_updated"] is True
         assert data["tier"] == "plus"
 
-    @patch('api.billing_api.verify_apple_receipt_with_apple')
+    @patch('api.routers.payments.verify_apple_receipt_with_apple')
     def test_apple_credits_success(self, mock_verify, test_client, test_user_token, test_db):
         """Test successful Apple credit purchase"""
         # Generate unique transaction ID for this test
