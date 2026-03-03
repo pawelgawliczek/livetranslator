@@ -81,13 +81,6 @@ export default function AdminUsersPage({ token, onLogout }) {
     setSelectedUser(null);
   };
 
-  const handleUserUpdate = () => {
-    // Refresh search results to show updated data
-    if (searchQuery.trim().length > 0) {
-      performSearch(searchQuery);
-    }
-  };
-
   const formatDate = (isoString) => {
     if (!isoString) return 'N/A';
     try {
@@ -152,8 +145,6 @@ export default function AdminUsersPage({ token, onLogout }) {
                     <th className="px-6 py-3 text-left text-sm font-semibold">{t('admin.users.userId')}</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold">{t('admin.users.email')}</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold">{t('admin.users.displayName')}</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">{t('admin.users.tier')}</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">{t('admin.users.quotaUsed')}</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold">{t('admin.users.signupDate')}</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold">{t('admin.users.actions')}</th>
                   </tr>
@@ -164,8 +155,6 @@ export default function AdminUsersPage({ token, onLogout }) {
                       <td className="px-6 py-4 text-sm">{user.user_id}</td>
                       <td className="px-6 py-4 text-sm">{user.email}</td>
                       <td className="px-6 py-4 text-sm">{user.display_name || 'N/A'}</td>
-                      <td className="px-6 py-4 text-sm capitalize">{user.tier_name || 'free'}</td>
-                      <td className="px-6 py-4 text-sm">{user.quota_used_hours} hours</td>
                       <td className="px-6 py-4 text-sm">{formatDate(user.signup_date)}</td>
                       <td className="px-6 py-4 text-sm">
                         <button
@@ -193,8 +182,6 @@ export default function AdminUsersPage({ token, onLogout }) {
           <UserProfileModal
             user={selectedUser}
             onClose={handleCloseModal}
-            token={token}
-            onUserUpdate={handleUserUpdate}
           />
         )}
       </div>

@@ -58,7 +58,7 @@ git commit                   # Unit + Integration (~30s, default)
 TEST_LEVEL=full git commit   # All tests (~2-3min)
 
 # Database
-PGPASSWORD=CHANGE_ME_BEFORE_DEPLOY docker compose exec -T postgres psql -U lt_user -d livetranslator
+PGPASSWORD=${POSTGRES_PASSWORD} docker compose exec -T postgres psql -U lt_user -d livetranslator
 
 # Redis debug
 docker compose exec redis redis-cli -n 5 SUBSCRIBE stt_events
@@ -106,7 +106,7 @@ docker compose exec redis redis-cli -n 5 SUBSCRIBE stt_events
 **Required (.env)**:
 ```
 POSTGRES_USER=lt_user
-POSTGRES_PASSWORD=CHANGE_ME_BEFORE_DEPLOY
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 POSTGRES_DB=livetranslator
 REDIS_URL=redis://redis:6379/5
 OPENAI_API_KEY=sk-...

@@ -49,7 +49,6 @@ describe('AdminLayout', () => {
 
     expect(screen.getByText('Admin Panel')).toBeInTheDocument();
     expect(screen.getAllByText('Overview').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Financial')).toBeInTheDocument();
     expect(screen.getByText('Users')).toBeInTheDocument();
     expect(screen.getByText('Metrics')).toBeInTheDocument();
     expect(screen.getByText('System')).toBeInTheDocument();

@@ -12,7 +12,7 @@ from passlib.hash import bcrypt_sha256 as bcrypt
 from jose import jwt
 
 from ..main import app
-from ..models import Base, User, Notification, NotificationDelivery, UserSubscription, SubscriptionTier
+from ..models import Base, User, Notification, NotificationDelivery
 from ..jwt_tools import JWT_SECRET, ALGO
 
 
@@ -114,47 +114,15 @@ def test_user(setup_database):
 
 @pytest.fixture
 def test_users(setup_database):
-    """Create multiple test users with different tiers."""
+    """Create multiple test users."""
     db = TestingSessionLocal()
 
-    # Create tiers
-    tiers = [
-        SubscriptionTier(
-            id=1,
-            tier_name="free",
-            display_name="Free",
-            monthly_price_usd=0,
-            monthly_quota_hours=1,
-            is_active=True
-        ),
-        SubscriptionTier(
-            id=2,
-            tier_name="plus",
-            display_name="Plus",
-            monthly_price_usd=9.99,
-            monthly_quota_hours=10,
-            is_active=True
-        ),
-        SubscriptionTier(
-            id=3,
-            tier_name="pro",
-            display_name="Pro",
-            monthly_price_usd=29.99,
-            monthly_quota_hours=50,
-            is_active=True
-        )
-    ]
-    for tier in tiers:
-        db.add(tier)
-    db.commit()
-
-    # Create users with different tiers
     users = []
-    for i, tier_name in enumerate(["free", "plus", "pro"]):
+    for i, name in enumerate(["alpha", "beta", "gamma"]):
         user = User(
-            email=f"{tier_name}{i}@example.com",
+            email=f"{name}{i}@example.com",
             password_hash=bcrypt.hash("pass123"),
-            display_name=f"{tier_name.title()} User {i}",
+            display_name=f"{name.title()} User {i}",
             preferred_lang="en",
             is_admin=False,
             created_at=datetime.utcnow()
@@ -162,21 +130,8 @@ def test_users(setup_database):
         db.add(user)
         db.commit()
         db.refresh(user)
-
-        # Create subscription
-        tier = db.query(SubscriptionTier).filter_by(tier_name=tier_name).first()
-        subscription = UserSubscription(
-            user_id=user.id,
-            tier_id=tier.id,
-            plan=tier_name,
-            status="active",
-            billing_period_start=datetime.utcnow(),
-            billing_period_end=datetime.utcnow() + timedelta(days=30)
-        )
-        db.add(subscription)
         users.append(user)
 
-    db.commit()
     db.close()
     return users
 
@@ -261,41 +216,23 @@ class TestNotificationCreation:
         assert notification.status == "scheduled"
         assert notification.sent_at is None
 
-    def test_create_notification_tier_targeting(self, client, admin_token, db_session, test_users):
-        """TC-003: Target notification by tier (pro users only)"""
+    def test_create_notification_all_targeting(self, client, admin_token, db_session, test_users):
+        """TC-003: Target notification to all users"""
         response = client.post(
             "/api/admin/notifications",
             headers={"Authorization": f"Bearer {admin_token}"},
             json={
-                "title": "Pro Feature",
-                "message": "New Pro feature available!",
+                "title": "Feature Update",
+                "message": "New feature available!",
                 "type": "success",
-                "target": "pro",
+                "target": "all",
                 "schedule_type": "immediate"
             }
         )
 
         assert response.status_code == 201
         data = response.json()
-
-        # Verify only Pro users receive notification
-        deliveries = db_session.scalars(
-            select(NotificationDelivery).where(
-                NotificationDelivery.notification_id == data["notification_id"]
-            )
-        ).all()
-
-        # Get Pro tier user count
-        pro_tier = db_session.scalar(
-            select(SubscriptionTier).where(SubscriptionTier.tier_name == "pro")
-        )
-        if pro_tier:
-            pro_users = db_session.scalars(
-                select(UserSubscription.user_id).where(
-                    UserSubscription.tier_id == pro_tier.id
-                )
-            ).all()
-            assert len(deliveries) == len(pro_users)
+        assert data["target_user_count"] >= len(test_users)
 
     def test_create_notification_individual_targeting(self, client, admin_token, db_session, test_user):
         """TC-009: Individual user targeting"""

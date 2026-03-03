@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 
 # Configuration
 # Support TEST_POSTGRES_DSN for test environments
-POSTGRES_DSN = os.getenv("TEST_POSTGRES_DSN") or os.getenv("POSTGRES_DSN", "postgresql+asyncpg://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator")
+POSTGRES_DSN = os.getenv("TEST_POSTGRES_DSN") or os.getenv("POSTGRES_DSN", "postgresql+asyncpg://lt_user:${POSTGRES_PASSWORD}@postgres:5432/livetranslator")
 CLEANUP_INTERVAL_SECONDS = int(os.getenv("ROOM_CLEANUP_INTERVAL", "300"))  # Default: 5 minutes
 ADMIN_ABSENT_THRESHOLD_MINUTES = int(os.getenv("ADMIN_ABSENT_THRESHOLD", "30"))  # Default: 30 minutes
 

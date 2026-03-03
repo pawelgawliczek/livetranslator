@@ -166,9 +166,6 @@ export default function CreateNotificationModal({ token, onClose, onSuccess }) {
                   disabled={submitting}
                 >
                   <option value="all">{t('admin.notifications.target.all') || 'All Users'}</option>
-                  <option value="free">{t('admin.notifications.target.free') || 'Free Tier'}</option>
-                  <option value="plus">{t('admin.notifications.target.plus') || 'Plus Tier'}</option>
-                  <option value="pro">{t('admin.notifications.target.pro') || 'Pro Tier'}</option>
                 </select>
               </div>
             </div>

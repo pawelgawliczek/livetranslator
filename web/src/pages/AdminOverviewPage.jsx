@@ -7,19 +7,15 @@ import DateRangePicker from '../components/admin/DateRangePicker';
 import MetricCard from '../components/admin/MetricCard';
 import { getDatePresets } from '../utils/costAnalytics';
 import {
-  getFinancialSummary,
   getUserEngagement,
   getSystemPerformance,
 } from '../utils/adminApi';
 
 /**
- * AdminOverviewPage - US-001: View Admin Dashboard Overview
+ * AdminOverviewPage - Admin Dashboard Overview
  *
- * Displays 8 key metric cards:
- * - Total Revenue (MTD)
+ * Displays key metric cards:
  * - Total Costs (MTD)
- * - Gross Profit (MTD)
- * - Gross Margin % (color-coded: red <30%, yellow 30-40%, green >40%)
  * - Active Users (DAU)
  * - Total Rooms Created (MTD)
  * - Avg Cost per User
@@ -52,8 +48,7 @@ export default function AdminOverviewPage({ token, onLogout }) {
 
     try {
       // Fetch from multiple endpoints in parallel
-      const [financial, engagement, performance] = await Promise.all([
-        getFinancialSummary(token, startDate, endDate),
+      const [engagement, performance] = await Promise.all([
         getUserEngagement(token, startDate, endDate),
         getSystemPerformance(token, startDate, endDate),
       ]);
@@ -64,23 +59,14 @@ export default function AdminOverviewPage({ token, onLogout }) {
         : 0;
 
       // Calculate rooms created (TODO: need dedicated API endpoint)
-      // For now, using 0 as placeholder
       const roomsCreated = 0;
-
-      // Calculate avg cost per user
-      const avgCostPerUser = dau > 0 ? financial.total_cost_usd / dau : 0;
 
       // Aggregate provider health
       const providerHealth = aggregateProviderHealth(performance.providers || []);
 
       setMetrics({
-        revenue: financial.total_revenue_usd,
-        costs: financial.total_cost_usd,
-        profit: financial.gross_profit_usd,
-        margin: financial.gross_margin_pct,
         dau,
         roomsCreated,
-        avgCostPerUser,
         providerHealth,
       });
     } catch (err) {
@@ -97,16 +83,8 @@ export default function AdminOverviewPage({ token, onLogout }) {
       return 'Unknown';
     }
 
-    // All providers are healthy if they have requests
     const allHealthy = providers.every(p => p.request_count > 0);
     return allHealthy ? 'Healthy' : 'Degraded';
-  };
-
-  // Get color code for margin
-  const getMarginColorCode = (margin) => {
-    if (margin < 30) return 'red';
-    if (margin < 40) return 'yellow';
-    return 'green';
   };
 
   // Fetch metrics on mount and when date range changes
@@ -122,7 +100,7 @@ export default function AdminOverviewPage({ token, onLogout }) {
 
     const interval = setInterval(() => {
       fetchMetrics();
-    }, 60000); // 60 seconds
+    }, 60000);
 
     return () => clearInterval(interval);
   }, [token, startDate, endDate]);
@@ -151,35 +129,6 @@ export default function AdminOverviewPage({ token, onLogout }) {
 
         {/* Metric Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {/* Total Revenue */}
-          <MetricCard
-            title={t('admin.overview.totalRevenue')}
-            value={metrics ? `$${metrics.revenue.toFixed(2)}` : '--'}
-            loading={loading}
-          />
-
-          {/* Total Costs */}
-          <MetricCard
-            title={t('admin.overview.totalCosts')}
-            value={metrics ? `$${metrics.costs.toFixed(2)}` : '--'}
-            loading={loading}
-          />
-
-          {/* Gross Profit */}
-          <MetricCard
-            title={t('admin.overview.grossProfit')}
-            value={metrics ? `$${metrics.profit.toFixed(2)}` : '--'}
-            loading={loading}
-          />
-
-          {/* Gross Margin (color-coded) */}
-          <MetricCard
-            title={t('admin.overview.grossMargin')}
-            value={metrics ? `${metrics.margin.toFixed(1)}%` : '--'}
-            colorCode={metrics ? getMarginColorCode(metrics.margin) : undefined}
-            loading={loading}
-          />
-
           {/* Active Users (DAU) */}
           <MetricCard
             title={t('admin.overview.activeUsers')}
@@ -191,13 +140,6 @@ export default function AdminOverviewPage({ token, onLogout }) {
           <MetricCard
             title={t('admin.overview.roomsCreated')}
             value={metrics ? metrics.roomsCreated : '--'}
-            loading={loading}
-          />
-
-          {/* Avg Cost per User */}
-          <MetricCard
-            title={t('admin.overview.avgCostPerUser')}
-            value={metrics ? `$${metrics.avgCostPerUser.toFixed(2)}` : '--'}
             loading={loading}
           />
 
@@ -214,10 +156,10 @@ export default function AdminOverviewPage({ token, onLogout }) {
           <h2 className="text-xl font-semibold mb-4">{t('admin.overview.quickLinks')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Link
-              to="/admin/financial"
+              to="/admin/cost-analytics"
               className="block p-4 bg-bg-secondary hover:bg-accent hover:text-accent-fg rounded-lg transition-colors text-center"
             >
-              {t('admin.overview.viewFinancial')}
+              Cost Analytics
             </Link>
             <Link
               to="/admin/users"

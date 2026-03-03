@@ -142,7 +142,7 @@ db-migrate:
 	docker compose exec api python /app/scripts/db/migrate.py \
 		--database livetranslator \
 		--user lt_user \
-		--password CHANGE_ME_BEFORE_DEPLOY \
+		--password ${POSTGRES_PASSWORD} \
 		--host postgres
 
 db-migrate-test:
@@ -150,7 +150,7 @@ db-migrate-test:
 	docker compose exec api python /app/scripts/db/migrate.py \
 		--database livetranslator_test \
 		--user lt_user \
-		--password CHANGE_ME_BEFORE_DEPLOY \
+		--password ${POSTGRES_PASSWORD} \
 		--host postgres
 
 db-status:
@@ -158,7 +158,7 @@ db-status:
 	docker compose exec api python /app/scripts/db/migrate.py \
 		--database livetranslator \
 		--user lt_user \
-		--password CHANGE_ME_BEFORE_DEPLOY \
+		--password ${POSTGRES_PASSWORD} \
 		--host postgres \
 		--status
 
@@ -167,7 +167,7 @@ db-status-test:
 	docker compose exec api python /app/scripts/db/migrate.py \
 		--database livetranslator_test \
 		--user lt_user \
-		--password CHANGE_ME_BEFORE_DEPLOY \
+		--password ${POSTGRES_PASSWORD} \
 		--host postgres \
 		--status
 
@@ -179,6 +179,6 @@ db-reset-test:
 	docker compose exec api python /app/scripts/db/migrate.py \
 		--database livetranslator_test \
 		--user lt_user \
-		--password CHANGE_ME_BEFORE_DEPLOY \
+		--password ${POSTGRES_PASSWORD} \
 		--host postgres \
 		--reset

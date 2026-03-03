@@ -186,7 +186,7 @@ class TestMigrationRunner:
                 "python", "/app/scripts/db/migrate.py",
                 "--database", "livetranslator_test",
                 "--user", "lt_user",
-                "--password", os.getenv("POSTGRES_PASSWORD", "CHANGE_ME_BEFORE_DEPLOY"),
+                "--password", os.getenv("POSTGRES_PASSWORD", "${POSTGRES_PASSWORD}"),
                 "--host", "postgres",
                 "--status"
             ],
@@ -208,7 +208,7 @@ class TestMigrationRunner:
                 "python", "/app/scripts/db/migrate.py",
                 "--database", "livetranslator_test",
                 "--user", "lt_user",
-                "--password", os.getenv("POSTGRES_PASSWORD", "CHANGE_ME_BEFORE_DEPLOY"),
+                "--password", os.getenv("POSTGRES_PASSWORD", "${POSTGRES_PASSWORD}"),
                 "--host", "postgres",
                 "--status"
             ],
@@ -229,7 +229,7 @@ class TestMigrationRunner:
                 "python", "/app/scripts/db/migrate.py",
                 "--database", "livetranslator_test",
                 "--user", "lt_user",
-                "--password", os.getenv("POSTGRES_PASSWORD", "CHANGE_ME_BEFORE_DEPLOY"),
+                "--password", os.getenv("POSTGRES_PASSWORD", "${POSTGRES_PASSWORD}"),
                 "--host", "postgres"
             ],
             capture_output=True,
@@ -245,7 +245,7 @@ class TestMigrationRunner:
                 "python", "/app/scripts/db/migrate.py",
                 "--database", "livetranslator_test",
                 "--user", "lt_user",
-                "--password", os.getenv("POSTGRES_PASSWORD", "CHANGE_ME_BEFORE_DEPLOY"),
+                "--password", os.getenv("POSTGRES_PASSWORD", "${POSTGRES_PASSWORD}"),
                 "--host", "postgres"
             ],
             capture_output=True,

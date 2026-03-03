@@ -20,15 +20,12 @@
     "submit": "Submit",
     "or": "or",
     "account": "Account",
-    "subscription": "Subscription",
-    "billing": "Billing",
     "history": "History",
     "back_to_rooms": "Back to Rooms"
   },
   "nav": {
     "rooms": "Rooms",
     "profile": "Profile",
-    "billing": "Billing",
     "costs": "Costs"
   },
   "auth": {
@@ -55,7 +52,7 @@
     "creatingAccount": "Creating account...",
     "signIn": "Sign in",
     "emailPlaceholder": "you@example.com",
-    "passwordPlaceholder": "••••••••"
+    "passwordPlaceholder": "--------"
   },
   "rooms": {
     "title": "Your Rooms",
@@ -77,7 +74,7 @@
     "unarchiveConfirm": "Are you sure you want to unarchive this room?",
     "copyCode": "Copy Code",
     "codeCopied": "Room code copied!",
-    "footer": "Made with ❤️ by Pawel Brudnicki",
+    "footer": "Made with love by Pawel Brudnicki",
     "created": "Created",
     "public": "Public",
     "private": "Private",
@@ -120,7 +117,7 @@
     "noHistory": "No history available",
     "originalText": "Original",
     "translatedText": "Translation",
-    "adminLeftWarning": "⚠️ Room admin has left",
+    "adminLeftWarning": "Room admin has left",
     "roomClosingIn": "Room will close in {countdown}",
     "recordingDisabledWarning": "Recording and translation will be disabled soon",
     "pressToStart": "Press the microphone to start",
@@ -179,26 +176,7 @@
     "emailPassword": "Email/Password",
     "enterCurrentPassword": "Enter current password",
     "enterNewPassword": "Enter new password",
-    "confirmNewPassword2": "Confirm new password",
-    "planChangedSuccess": "Plan changed successfully!",
-    "planChangeFailed": "Failed to change plan"
-  },
-  "billing": {
-    "title": "Billing",
-    "currentPlan": "Current Plan",
-    "usageThisMonth": "Usage This Month",
-    "totalCost": "Total Cost",
-    "paymentMethod": "Payment Method",
-    "addPaymentMethod": "Add Payment Method",
-    "billingHistory": "Billing History",
-    "invoice": "Invoice",
-    "download": "Download",
-    "date": "Date",
-    "amount": "Amount",
-    "status": "Status",
-    "paid": "Paid",
-    "pending": "Pending",
-    "failed": "Failed"
+    "confirmNewPassword2": "Confirm new password"
   },
   "costs": {
     "title": "Usage & Costs",
@@ -264,7 +242,12 @@
     "testModeReady": "Ready to test microphone",
     "selectMicrophone": "Select Microphone",
     "defaultMicrophone": "Default Microphone",
-    "microphoneError": "Microphone Error"
+    "microphoneError": "Microphone Error",
+    "audioSettings": "Audio Settings",
+    "audioSettingsSaved": "Audio settings saved",
+    "audioSettingsFailed": "Failed to save audio settings",
+    "saveAudioSettings": "Save Audio Settings",
+    "microphoneHelp": "Select the microphone you want to use for recording"
   },
   "errors": {
     "networkError": "Network error. Please check your connection.",
@@ -307,7 +290,7 @@
     "roomLabel": "Room",
     "waitingForGuest": "Waiting for guest to join...",
     "connecting": "Connecting...",
-    "copyLink": "📋 Copy Link",
+    "copyLink": "Copy Link",
     "enterNow": "Enter Now",
     "expiresInMinutes": "Expires in {minutes} minutes"
   },
@@ -346,18 +329,18 @@
     "generatingInvite": "Generating Invite...",
     "error": "Error",
     "title": "Invite to Room",
-    "qrCodeTab": "📱 QR Code",
-    "linkTab": "🔗 Link",
-    "emailTab": "✉️ Email",
+    "qrCodeTab": "QR Code",
+    "linkTab": "Link",
+    "emailTab": "Email",
     "qrInstructions": "Scan this QR code with a smartphone to join the room",
-    "downloadQR": "⬇️ Download QR Code",
+    "downloadQR": "Download QR Code",
     "linkInstructions": "Share this link to invite someone",
     "emailInstructions": "Send an email invitation with the join link",
     "preview": "Preview:",
     "emailBodyGreeting": "Join me for a real-time translated conversation!",
     "emailBodyLink": "Click this link to join:",
     "emailBodyExpiry": "This invite expires in {minutes} minutes.",
-    "openEmail": "📧 Open Email App",
+    "openEmail": "Open Email App",
     "roomLabel": "Room:",
     "expiresLabel": "Expires:",
     "expiresInMinutes": "{minutes} minutes",
@@ -385,36 +368,7 @@
   "profileTabs": {
     "settings": "Settings",
     "account": "Account",
-    "subscription": "Subscription",
-    "billing": "Billing & Usage",
     "history": "Room History",
-    "currentPlan": "Current Plan",
-    "status": "Status",
-    "active": "active",
-    "free": "Free",
-    "plus": "Plus",
-    "pro": "Pro",
-    "perMonth": "/month",
-    "basicTranslation": "Basic translation",
-    "communitySup port": "Community support",
-    "unlimitedTranslation": "Unlimited translation",
-    "prioritySupport": "Priority support",
-    "advancedFeatures": "Advanced features",
-    "apiAccess": "API access",
-    "support247": "24/7 support",
-    "downgrade": "Downgrade",
-    "upgrade": "Upgrade",
-    "switch": "Switch",
-    "currentBillingPeriod": "Current Billing Period",
-    "sttMinutesUsed": "STT Minutes Used",
-    "minutesRemaining": "minutes remaining",
-    "sttCost": "STT Cost",
-    "translationCost": "Translation Cost",
-    "totalCost": "Total Cost",
-    "roomUsage": "Room Usage",
-    "roomCode": "Room Code",
-    "sttMinutes": "STT Minutes",
-    "mtCost": "MT Cost",
     "totalRooms": "Total Rooms",
     "totalMinutes": "Total Minutes",
     "duration": "Duration",
@@ -425,7 +379,6 @@
     "archivedRoomsCannotBeViewed": "Archived rooms cannot be viewed",
     "noRoomHistory": "No room history found",
     "createYourFirstRoom": "Create Your First Room",
-    "oneHourPerMonth": "1 hour per month",
     "languageControlsBoth": "Language controls both UI and translation language"
   },
   "discovery": {
@@ -492,61 +445,28 @@
     "menu": {
       "admin": "Admin",
       "overview": "Overview",
-      "financial": "Financial",
-      "subscriptions": "Subscriptions",
-      "credits": "Credits",
+      "costAnalytics": "Cost Analytics",
       "users": "Users",
       "metrics": "Metrics",
       "system": "System",
-      "tools": "Tools"
-    },
-    "subscriptions": {
-      "title": "Subscription Management",
-      "description": "Manage subscription tiers and user subscriptions",
-      "tiers_tab": "Subscription Tiers",
-      "users_tab": "User Subscriptions",
-      "analytics_tab": "Analytics",
-      "edit_tier": "Edit Tier",
-      "change_tier": "Change Tier",
-      "cancel_subscription": "Cancel Subscription",
-      "reactivate_subscription": "Reactivate Subscription"
+      "tools": "Tools",
+      "notifications": "Notifications"
     },
     "overview": {
       "title": "Dashboard Overview",
-      "totalRevenue": "Total Revenue",
       "totalCosts": "Total Costs",
-      "grossProfit": "Gross Profit",
-      "grossMargin": "Gross Margin",
       "activeUsers": "Active Users (DAU)",
       "roomsCreated": "Rooms Created",
       "avgCostPerUser": "Avg Cost per User",
       "providerHealth": "Provider Health",
       "quickLinks": "Quick Links",
-      "viewFinancial": "View Financial Details →",
-      "viewUsers": "View User Analytics →",
-      "viewSystem": "View System Status →",
+      "viewUsers": "View User Analytics",
+      "viewSystem": "View System Status",
       "loading": "Loading dashboard...",
       "error": "Failed to load dashboard data",
       "empty": "No data available for selected period",
       "trendUp": "up from last period",
       "trendDown": "down from last period"
-    },
-    "financial": {
-      "title": "Financial Analytics",
-      "exportCSV": "Export CSV",
-      "totalRevenue": "Total Revenue",
-      "totalCosts": "Total Costs",
-      "grossProfit": "Gross Profit",
-      "grossMargin": "Gross Margin",
-      "revenueVsCost": "Revenue vs Cost Trend",
-      "platformBreakdown": "Revenue by Platform",
-      "stripeRevenue": "Stripe Revenue",
-      "appleRevenue": "Apple IAP Revenue",
-      "creditUsage": "Credit Usage",
-      "loading": "Loading financial data...",
-      "error": "Failed to load financial data",
-      "empty": "No financial transactions in selected period",
-      "exportSuccess": "Financial data exported successfully"
     },
     "users": {
       "title": "User Management",
@@ -557,8 +477,6 @@
       "userId": "User ID",
       "email": "Email",
       "displayName": "Display Name",
-      "tier": "Tier",
-      "quotaUsed": "Quota Used",
       "signupDate": "Signup Date",
       "actions": "Actions",
       "viewDetails": "View Details",
@@ -567,36 +485,10 @@
       "modal": {
         "title": "User Details",
         "profile": "Profile",
-        "subscription": "Subscription",
         "activity": "Recent Activity",
-        "monthlyQuota": "Monthly Quota",
-        "bonusCredits": "Bonus Credits",
-        "grantCredits": "Grant Credits",
         "lastLogin": "Last Login",
         "recentRooms": "Recent Rooms",
         "close": "Close"
-      },
-      "grantCredits": {
-        "title": "Grant Bonus Credits",
-        "hoursLabel": "Hours to Grant",
-        "hoursPlaceholder": "Enter hours (0.1 - 100)",
-        "reasonLabel": "Reason (required)",
-        "reasonPlaceholder": "Explain why credits are being granted (min 10 characters)",
-        "submit": "Grant Credits",
-        "cancel": "Cancel",
-        "confirmTitle": "Confirm Grant Credits",
-        "confirmMessage": "Grant {{hours}} hours to {{email}}?",
-        "successTitle": "Credits Granted",
-        "successMessage": "Granted {{hours}} hours to {{email}}",
-        "errorTitle": "Grant Failed",
-        "errorMessage": "Failed to grant credits: {{error}}",
-        "validation": {
-          "hoursRequired": "Hours is required",
-          "hoursMin": "Hours must be at least 0.1",
-          "hoursMax": "Hours cannot exceed 100",
-          "reasonRequired": "Reason is required",
-          "reasonMinLength": "Reason must be at least 10 characters"
-        }
       }
     },
     "metrics": {
@@ -646,69 +538,8 @@
       "cacheCleared": "Cache cleared successfully",
       "error": "An error occurred"
     },
-    "credits": {
-      "title": "Credit Package Management",
-      "description": "Manage credit packages and purchase history",
-      "packages_tab": "Packages",
-      "purchases_tab": "Purchase History",
-      "package_name": "Package Name",
-      "hours": "Hours",
-      "price": "Price (USD)",
-      "discount": "Discount %",
-      "purchases_30d": "Purchases (30d)",
-      "status": "Status",
-      "active": "Active",
-      "inactive": "Inactive",
-      "actions": "Actions",
-      "edit": "Edit",
-      "loading": "Loading packages...",
-      "error": "Failed to load credit packages",
-      "no_packages": "No credit packages found",
-      "edit_package": "Edit Credit Package",
-      "update_package": "Update Package",
-      "cancel": "Cancel",
-      "save": "Save",
-      "updating": "Updating...",
-      "update_success": "Package updated successfully",
-      "update_error": "Failed to update package",
-      "hours_label": "Hours",
-      "price_label": "Price (USD)",
-      "discount_label": "Discount %",
-      "active_label": "Active",
-      "purchase_history": "Purchase History",
-      "filters": "Filters",
-      "user_email": "User Email",
-      "package": "Package",
-      "platform": "Platform",
-      "date_range": "Date Range",
-      "all_platforms": "All Platforms",
-      "all_packages": "All Packages",
-      "all_statuses": "All Statuses",
-      "apply_filters": "Apply Filters",
-      "reset_filters": "Reset",
-      "export_csv": "Export CSV",
-      "exporting": "Exporting...",
-      "export_success": "Export successful",
-      "export_error": "Failed to export",
-      "user": "User",
-      "amount": "Amount",
-      "transaction_id": "Transaction ID",
-      "date": "Date",
-      "no_purchases": "No purchases found",
-      "loading_purchases": "Loading purchases...",
-      "purchase_details": "Purchase Details",
-      "completed_at": "Completed At",
-      "metadata": "Metadata",
-      "close": "Close",
-      "showing_results": "Showing {count} of {total} results",
-      "stripe": "Stripe",
-      "apple": "Apple IAP",
-      "completed": "Completed",
-      "pending": "Pending",
-      "failed": "Failed"
-    },
     "notifications": {
-      "title": "Notifications",
+      "title": "Notification Management",
       "subtitle": "Create and manage in-app notifications",
       "createButton": "Create Notification",
       "refreshButton": "Refresh",
@@ -730,10 +561,7 @@
         "error": "Error"
       },
       "target": {
-        "all": "All Users",
-        "free": "Free Tier",
-        "plus": "Plus Tier",
-        "pro": "Pro Tier"
+        "all": "All Users"
       },
       "status": {
         "sent": "Sent",
@@ -795,200 +623,6 @@
         "hoursAgo": "hours ago",
         "daysAgo": "days ago"
       }
-    }
-  },
-  "admin": {
-    "menu": {
-      "admin": "Admin",
-      "overview": "Overview",
-      "financial": "Financial",
-      "subscriptions": "Subscriptions",
-      "credits": "Credits",
-      "users": "Users",
-      "metrics": "Metrics",
-      "system": "System",
-      "tools": "Tools",
-      "notifications": "Notifications"
-    },
-    "notifications": {
-      "title": "Notification Management",
-      "subtitle": "Create and manage in-app notifications",
-      "createButton": "Create Notification",
-      "refreshButton": "Refresh",
-      "loading": "Loading...",
-      "loadError": "Failed to load notifications",
-      "empty": "No notifications found",
-      "filter": {
-        "type": "Type",
-        "target": "Target",
-        "status": "Status",
-        "allTypes": "All Types",
-        "allTargets": "All Targets",
-        "allStatuses": "All Statuses"
-      },
-      "type": {
-        "info": "Info",
-        "warning": "Warning",
-        "success": "Success",
-        "error": "Error"
-      },
-      "target": {
-        "all": "All Users",
-        "free": "Free Tier",
-        "plus": "Plus Tier",
-        "pro": "Pro Tier"
-      },
-      "status": {
-        "sent": "Sent",
-        "scheduled": "Scheduled",
-        "draft": "Draft",
-        "expired": "Expired",
-        "cancelled": "Cancelled"
-      },
-      "table": {
-        "title": "Title",
-        "type": "Type",
-        "target": "Target",
-        "status": "Status",
-        "delivered": "Delivered",
-        "created": "Created"
-      },
-      "pagination": {
-        "showing": "Showing",
-        "of": "of",
-        "page": "Page",
-        "previous": "Previous",
-        "next": "Next"
-      },
-      "create": {
-        "title": "Create Notification",
-        "field": {
-          "title": "Title",
-          "message": "Message",
-          "type": "Type",
-          "target": "Target",
-          "expires": "Expires After",
-          "dismissible": "Allow users to dismiss this notification"
-        },
-        "placeholder": {
-          "title": "e.g., System Maintenance",
-          "message": "e.g., The system will be down for maintenance..."
-        },
-        "characters": "characters",
-        "hour": "hour",
-        "hours": "hours",
-        "days": "days",
-        "cancel": "Cancel",
-        "send": "Send Notification",
-        "sending": "Sending...",
-        "error": {
-          "titleRequired": "Title is required",
-          "messageRequired": "Message is required",
-          "titleTooLong": "Title must be 100 characters or less",
-          "messageTooLong": "Message must be 500 characters or less",
-          "failed": "Failed to create notification"
-        }
-      }
-    }
-  },
-  "subscription": {
-    "title": "Subscription & Credits",
-    "choosePlan": "Choose Your Plan",
-    "buyCredits": "Buy Additional Credits",
-    "buyCreditsDescription": "Top up your quota with bonus hours that never expire",
-    "currentPlan": "Current Plan",
-    "subscribe": "Subscribe",
-    "upgrade": "Upgrade to {{tier}}",
-    "buyNow": "Buy Now",
-    "quotaStatus": "Quota Status",
-    "quotaUsed": "{{used}} / {{total}} hours",
-    "hoursThisMonth": "hours this month",
-    "bonusHours": "+ {{hours}} bonus hours",
-    "nextReset": "Next reset",
-    "perMonth": "/month",
-    "free": "Free",
-    "hours": "hours",
-    "hour": "hour",
-    "minutes": "minutes",
-    "processing": "Processing...",
-    "upgradeSuccess": "Subscription activated!",
-    "paymentCanceled": "Payment canceled. You can try again anytime.",
-    "tryAgain": "Try Again",
-    "continueToDashboard": "Continue to Dashboard",
-    "stripeError": "Payment system unavailable. Try again later.",
-    "errorLoading": "Failed to load subscription data",
-    "noPackages": "No credit packages available",
-    "bestValue": "Best Value",
-    "savePercent": "Save {{percent}}%",
-    "lowQuotaWarning": "You're running low on quota. Consider upgrading or purchasing credits.",
-    "success": {
-      "title": "Payment Successful!",
-      "message": "Your subscription is being activated. This may take a few moments."
-    },
-    "cancel": {
-      "title": "Payment Cancelled",
-      "message": "No charges were made to your account."
-    },
-    "features": {
-      "basicTranslation": "Basic translation",
-      "webSpeech": "Web Speech API",
-      "multiSpeaker": "Multi-speaker support",
-      "communitySupportOnly": "Community support",
-      "premiumProviders": "Premium STT/MT providers",
-      "deepLOpenAI": "DeepL & OpenAI translation",
-      "historyExport": "History export (PDF/TXT)",
-      "emailSupport": "Email support",
-      "allProviders": "All providers (Azure, Google, AWS)",
-      "serverTTS": "Server-side TTS",
-      "apiAccess": "API access",
-      "prioritySupport": "Priority support (24/7)"
-    },
-    "errors": {
-      "loadTiers": "Failed to load subscription plans",
-      "downgradeNotAllowed": "Downgrades are not available via self-service. Please contact support to change your plan.",
-      "checkoutFailed": "Failed to start checkout process"
-    },
-    "viewHistory": "View Billing History"
-  },
-  "billing": {
-    "title": "Billing History",
-    "subtitle": "View all your past payments and download receipts",
-    "totalSpent": "Total Spent",
-    "table": {
-      "date": "Date",
-      "description": "Description",
-      "amount": "Amount",
-      "status": "Status",
-      "platform": "Platform",
-      "actions": "Actions"
-    },
-    "status": {
-      "completed": "Completed",
-      "pending": "Pending",
-      "failed": "Failed",
-      "refunded": "Refunded"
-    },
-    "descriptions": {
-      "subscription": "Subscription Payment",
-      "credits": "Credit Purchase"
-    },
-    "actions": {
-      "download": "Download Receipt"
-    },
-    "empty": {
-      "title": "No payment history",
-      "message": "Your payments will appear here once you subscribe or purchase credits.",
-      "cta": "View Subscription Plans"
-    },
-    "errors": {
-      "loadFailed": "Failed to load payment history. Please try again.",
-      "retry": "Retry"
-    },
-    "pagination": {
-      "previous": "Previous",
-      "next": "Next",
-      "page": "Page",
-      "of": "of"
     }
   }
 }

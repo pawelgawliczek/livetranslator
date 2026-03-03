@@ -611,24 +611,6 @@ def get_message_debug_info(
 # ============================================================================
 
 # Response Models
-class FinancialSummaryResponse(BaseModel):
-    period: str
-    total_revenue_usd: float
-    total_cost_usd: float
-    gross_profit_usd: float
-    gross_margin_pct: float
-    stripe_revenue: float
-    apple_revenue: float
-    credit_revenue: float
-
-class TierAnalysisResponse(BaseModel):
-    tier_name: str
-    user_count: int
-    total_revenue: float
-    avg_quota_used_hours: float
-    total_cost: float
-    profit_per_user: float
-
 class UserAcquisitionResponse(BaseModel):
     date: str
     new_users: int
@@ -640,8 +622,6 @@ class UserEngagementResponse(BaseModel):
     dau: int
     wau: int
     mau: int
-    paying_users: int
-    free_users: int
 
 class SystemPerformanceResponse(BaseModel):
     service: str
@@ -651,13 +631,6 @@ class SystemPerformanceResponse(BaseModel):
     avg_ms: float
     total_requests: int
 
-class QuotaUtilizationResponse(BaseModel):
-    tier_name: str
-    total_users: int
-    avg_quota_used_pct: float
-    total_quota_used_hours: float
-    total_quota_allocated_hours: float
-
 class ActiveRoomResponse(BaseModel):
     room_code: str
     room_id: int
@@ -666,183 +639,11 @@ class ActiveRoomResponse(BaseModel):
     created_at: datetime
     is_multi_speaker: bool
 
-class GrantCreditsRequest(BaseModel):
-    bonus_hours: float
-    reason: str
-
 class UserSearchResult(BaseModel):
     user_id: int
     email: str
     display_name: str
-    tier_name: Optional[str]
-    quota_used_hours: float
-    quota_limit_hours: Optional[float]
     signup_date: datetime
-
-# Endpoint 1: Financial Summary
-@router.get("/financial/summary")
-def get_financial_summary(
-    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
-    granularity: Optional[str] = Query("day", description="hour|day|week|month"),
-    admin: User = Depends(require_admin),
-    db: Session = Depends(get_db)
-):
-    """
-    Get financial summary: revenue, costs, profit, margins from materialized view.
-    Query admin_financial_summary view with date range filtering.
-    """
-    # Default to last 30 days if not specified
-    if not start_date:
-        start_date = datetime.utcnow() - timedelta(days=30)
-    if not end_date:
-        end_date = datetime.utcnow()
-
-    # Query materialized view
-    query = text("""
-        SELECT
-            day,
-            platform,
-            revenue_usd,
-            transaction_count
-        FROM admin_financial_summary
-        WHERE day >= :start_date AND day <= :end_date
-        ORDER BY day DESC, platform
-    """)
-
-    results = db.execute(query, {"start_date": start_date, "end_date": end_date}).fetchall()
-
-    # Get costs for the same period
-    costs_query = text("""
-        SELECT COALESCE(SUM(amount_usd), 0) as total_cost
-        FROM room_costs
-        WHERE ts >= :start_date AND ts <= :end_date
-    """)
-
-    total_cost = float(db.execute(costs_query, {"start_date": start_date, "end_date": end_date}).scalar() or 0)
-
-    # Aggregate by day
-    daily_data = {}
-    for row in results:
-        day_str = row[0].strftime('%Y-%m-%d')
-        if day_str not in daily_data:
-            daily_data[day_str] = {
-                "stripe_revenue": 0.0,
-                "apple_revenue": 0.0,
-                "credit_revenue": 0.0
-            }
-
-        platform = row[1]
-        revenue = float(row[2])
-
-        if platform == "stripe":
-            daily_data[day_str]["stripe_revenue"] += revenue
-        elif platform == "apple":
-            daily_data[day_str]["apple_revenue"] += revenue
-        elif platform == "credit":
-            daily_data[day_str]["credit_revenue"] += revenue
-
-    # Calculate totals
-    total_revenue = sum(
-        day["stripe_revenue"] + day["apple_revenue"] + day["credit_revenue"]
-        for day in daily_data.values()
-    )
-
-    gross_profit = total_revenue - total_cost
-    gross_margin = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0.0
-
-    stripe_revenue = sum(day["stripe_revenue"] for day in daily_data.values())
-    apple_revenue = sum(day["apple_revenue"] for day in daily_data.values())
-    credit_revenue = sum(day["credit_revenue"] for day in daily_data.values())
-
-    return {
-        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
-        "total_revenue_usd": round(total_revenue, 2),
-        "total_cost_usd": round(total_cost, 2),
-        "gross_profit_usd": round(gross_profit, 2),
-        "gross_margin_pct": round(gross_margin, 2),
-        "stripe_revenue": round(stripe_revenue, 2),
-        "apple_revenue": round(apple_revenue, 2),
-        "credit_revenue": round(credit_revenue, 2)
-    }
-
-# Endpoint 2: Tier Analysis
-@router.get("/financial/tier-analysis")
-def get_tier_analysis(
-    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
-    admin: User = Depends(require_admin),
-    db: Session = Depends(get_db)
-):
-    """
-    Get tier profitability analysis from admin_tier_analysis materialized view.
-    Shows Free/Plus/Pro revenue, costs, and profit per user.
-    """
-    # Default to current month if not specified
-    if not start_date:
-        start_date = datetime.utcnow().replace(day=1)
-    if not end_date:
-        end_date = datetime.utcnow()
-
-    # Query materialized view
-    query = text("""
-        SELECT
-            tier_name,
-            display_name,
-            active_users,
-            monthly_recurring_revenue,
-            total_costs_usd,
-            gross_profit_usd
-        FROM admin_tier_analysis
-        ORDER BY tier_name
-    """)
-
-    results = db.execute(query).fetchall()
-
-    tiers = []
-    for row in results:
-        tier_name = row[0]
-        active_users = row[2]
-        mrr = float(row[3] or 0)
-        costs = float(row[4] or 0)
-        profit = float(row[5] or 0)
-
-        # Calculate average quota used
-        quota_query = text("""
-            SELECT AVG(quota_used_hours) as avg_quota
-            FROM (
-                SELECT
-                    qt.user_id,
-                    SUM(-qt.amount_seconds) / 3600.0 as quota_used_hours
-                FROM quota_transactions qt
-                JOIN user_subscriptions us ON qt.user_id = us.user_id
-                JOIN subscription_tiers st ON us.tier_id = st.id
-                WHERE st.tier_name = :tier_name
-                  AND qt.transaction_type = 'deduct'
-                  AND qt.created_at >= :start_date
-                  AND qt.created_at <= :end_date
-                GROUP BY qt.user_id
-            ) user_quotas
-        """)
-
-        avg_quota = db.execute(quota_query, {
-            "tier_name": tier_name,
-            "start_date": start_date,
-            "end_date": end_date
-        }).scalar() or 0.0
-
-        profit_per_user = profit / active_users if active_users > 0 else 0.0
-
-        tiers.append({
-            "tier_name": tier_name,
-            "user_count": active_users,
-            "total_revenue": round(mrr, 2),
-            "avg_quota_used_hours": round(float(avg_quota), 2),
-            "total_cost": round(costs, 2),
-            "profit_per_user": round(profit_per_user, 2)
-        })
-
-    return {"tiers": tiers}
 
 # Endpoint 3: User Acquisition (US-004)
 @router.get("/users/acquisition")
@@ -1035,20 +836,7 @@ def get_user_engagement(
     query = text("""
         SELECT
             DATE(joined_at) as metric_date,
-            COUNT(DISTINCT user_id) as dau,
-            COUNT(DISTINCT user_id) FILTER (
-                WHERE user_id IN (
-                    SELECT user_id FROM user_subscriptions
-                    WHERE status = 'active'
-                    AND tier_id IN (SELECT id FROM subscription_tiers WHERE tier_name IN ('plus', 'pro'))
-                )
-            ) as paying_users,
-            COUNT(DISTINCT user_id) FILTER (
-                WHERE user_id IN (
-                    SELECT user_id FROM user_subscriptions
-                    WHERE tier_id IN (SELECT id FROM subscription_tiers WHERE tier_name = 'free')
-                )
-            ) as free_users
+            COUNT(DISTINCT user_id) as dau
         FROM room_participants
         WHERE joined_at >= :start_date AND joined_at <= :end_date
         GROUP BY DATE(joined_at)
@@ -1063,10 +851,8 @@ def get_user_engagement(
         metrics.append({
             "metric_date": row[0].strftime('%Y-%m-%d'),
             "dau": row[1] or 0,
-            "wau": None,  # Removed - requires separate calculation
-            "mau": None,  # Removed - requires separate calculation
-            "paying_users": row[2] or 0,
-            "free_users": row[3] or 0
+            "wau": None,
+            "mau": None
         })
 
     return {
@@ -1210,70 +996,6 @@ def get_system_performance(
         "recommendation": "Add latency tracking in future migration"
     }
 
-# Endpoint 7: Quota Utilization
-@router.get("/system/quota-utilization")
-def get_quota_utilization(
-    start_date: Optional[datetime] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[datetime] = Query(None, description="End date (ISO format)"),
-    admin: User = Depends(require_admin),
-    db: Session = Depends(get_db)
-):
-    """
-    Get quota usage by tier from quota_transactions table.
-    Shows how much quota each tier is consuming.
-    """
-    # Default to current billing period
-    if not start_date:
-        start_date = datetime.utcnow().replace(day=1)
-    if not end_date:
-        end_date = datetime.utcnow()
-
-    query = text("""
-        SELECT
-            st.tier_name,
-            st.display_name,
-            st.monthly_quota_hours,
-            COUNT(DISTINCT qt.user_id) as total_users,
-            SUM(-qt.amount_seconds) / 3600.0 as total_quota_used_hours,
-            AVG(-qt.amount_seconds) / 3600.0 as avg_quota_per_user_hours
-        FROM subscription_tiers st
-        LEFT JOIN user_subscriptions us ON st.id = us.tier_id
-        LEFT JOIN quota_transactions qt ON us.user_id = qt.user_id
-            AND qt.transaction_type = 'deduct'
-            AND qt.created_at >= :start_date
-            AND qt.created_at <= :end_date
-        WHERE us.status = 'active'
-        GROUP BY st.id, st.tier_name, st.display_name, st.monthly_quota_hours
-        ORDER BY st.tier_name
-    """)
-
-    results = db.execute(query, {"start_date": start_date, "end_date": end_date}).fetchall()
-
-    utilization = []
-    for row in results:
-        tier_name = row[0]
-        monthly_quota = float(row[2]) if row[2] else 0.0
-        total_users = row[3] or 0
-        total_used = float(row[4] or 0)
-        avg_per_user = float(row[5] or 0)
-
-        total_allocated = monthly_quota * total_users if monthly_quota > 0 else 0.0
-        avg_utilization_pct = (total_used / total_allocated * 100) if total_allocated > 0 else 0.0
-
-        utilization.append({
-            "tier_name": tier_name,
-            "total_users": total_users,
-            "avg_quota_used_pct": round(avg_utilization_pct, 2),
-            "total_quota_used_hours": round(total_used, 2),
-            "total_quota_allocated_hours": round(total_allocated, 2),
-            "avg_quota_per_user_hours": round(avg_per_user, 2)
-        })
-
-    return {
-        "period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
-        "utilization": utilization
-    }
-
 # Endpoint 8: Search Users (US-009)
 @router.get("/users/search")
 def search_users(
@@ -1283,7 +1005,7 @@ def search_users(
 ):
     """
     Search for users by email or user ID.
-    Returns user details including tier, quota, and signup date.
+    Returns user details and signup date.
     Limited to 50 results.
     """
     if not q or q.strip() == "":
@@ -1299,62 +1021,29 @@ def search_users(
         search_by_id = False
 
     if search_by_id:
-        # Search by user ID (exact match)
         sql_query = text("""
-            SELECT
-                u.id as user_id,
-                u.email,
-                u.display_name,
-                st.tier_name,
-                COALESCE(SUM(-qt.amount_seconds) / 3600.0, 0) as quota_used_hours,
-                st.monthly_quota_hours as quota_limit_hours,
-                u.created_at as signup_date
+            SELECT u.id, u.email, u.display_name, u.created_at
             FROM users u
-            LEFT JOIN user_subscriptions us ON u.id = us.user_id
-            LEFT JOIN subscription_tiers st ON us.tier_id = st.id
-            LEFT JOIN quota_transactions qt ON u.id = qt.user_id
-                AND qt.transaction_type = 'deduct'
-                AND qt.created_at >= us.billing_period_start
             WHERE u.id = :query
-            GROUP BY u.id, u.email, u.display_name, st.tier_name, st.monthly_quota_hours, u.created_at
             LIMIT 1
         """)
         results = db.execute(sql_query, {"query": user_id}).fetchall()
     else:
-        # Search by email (case-insensitive partial match)
         sql_query = text("""
-            SELECT
-                u.id as user_id,
-                u.email,
-                u.display_name,
-                st.tier_name,
-                COALESCE(SUM(-qt.amount_seconds) / 3600.0, 0) as quota_used_hours,
-                st.monthly_quota_hours as quota_limit_hours,
-                u.created_at as signup_date
+            SELECT u.id, u.email, u.display_name, u.created_at
             FROM users u
-            LEFT JOIN user_subscriptions us ON u.id = us.user_id
-            LEFT JOIN subscription_tiers st ON us.tier_id = st.id
-            LEFT JOIN quota_transactions qt ON u.id = qt.user_id
-                AND qt.transaction_type = 'deduct'
-                AND qt.created_at >= us.billing_period_start
             WHERE LOWER(u.email) LIKE LOWER(:query)
-            GROUP BY u.id, u.email, u.display_name, st.tier_name, st.monthly_quota_hours, u.created_at
             ORDER BY u.created_at DESC
             LIMIT 50
         """)
         search_pattern = f"%{query}%"
         results = db.execute(sql_query, {"query": search_pattern}).fetchall()
 
-    # Format results
     user_results = []
     for row in results:
-        # Handle signup_date - can be datetime or string (SQLite)
-        signup_date = row[6]
+        signup_date = row[3]
         if signup_date:
-            if isinstance(signup_date, str):
-                signup_date_str = signup_date
-            else:
-                signup_date_str = signup_date.isoformat()
+            signup_date_str = signup_date.isoformat() if not isinstance(signup_date, str) else signup_date
         else:
             signup_date_str = None
 
@@ -1362,112 +1051,11 @@ def search_users(
             "user_id": row[0],
             "email": row[1],
             "display_name": row[2] or "",
-            "tier_name": row[3] or "free",
-            "quota_used_hours": round(float(row[4]), 2),
-            "quota_limit_hours": float(row[5]) if row[5] else None,
             "signup_date": signup_date_str
         })
 
     return {"results": user_results}
 
-
-# Endpoint 9: Grant Credits to User
-@router.post("/users/{user_id}/grant-credits")
-def grant_credits_to_user(
-    user_id: int,
-    request: GrantCreditsRequest,
-    admin: User = Depends(require_admin),
-    db: Session = Depends(get_db)
-):
-    """
-    Grant bonus quota to a user (admin action).
-    Creates quota_transaction and updates user_subscriptions.
-    """
-    # Verify user exists
-    user_query = text("""
-        SELECT id, email, display_name FROM users WHERE id = :user_id
-    """)
-    user = db.execute(user_query, {"user_id": user_id}).fetchone()
-
-    if not user:
-        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
-
-    # Convert hours to seconds
-    bonus_seconds = int(request.bonus_hours * 3600)
-
-    # Update user subscription
-    update_query = text("""
-        UPDATE user_subscriptions
-        SET bonus_credits_seconds = bonus_credits_seconds + :bonus_seconds
-        WHERE user_id = :user_id
-        RETURNING user_id, bonus_credits_seconds
-    """)
-
-    result = db.execute(update_query, {
-        "user_id": user_id,
-        "bonus_seconds": bonus_seconds
-    }).fetchone()
-
-    if not result:
-        raise HTTPException(status_code=404, detail=f"User {user_id} has no subscription")
-
-    # Create quota transaction
-    transaction_query = text("""
-        INSERT INTO quota_transactions (
-            user_id, transaction_type, amount_seconds, quota_type,
-            description, metadata, created_at
-        ) VALUES (
-            :user_id, 'manual_grant', :amount_seconds, 'bonus',
-            :description, :metadata, NOW()
-        )
-        RETURNING id
-    """)
-
-    metadata = {
-        "granted_by_admin_id": admin.id,
-        "granted_by_admin_email": admin.email,
-        "reason": request.reason
-    }
-
-    db.execute(transaction_query, {
-        "user_id": user_id,
-        "amount_seconds": bonus_seconds,
-        "description": f"Admin grant: {request.reason}",
-        "metadata": json.dumps(metadata)
-    })
-
-    # Create audit log entry
-    audit_query = text("""
-        INSERT INTO admin_audit_log (
-            admin_id, action, target_user_id, details, created_at
-        ) VALUES (
-            :admin_id, 'grant_credits', :target_user_id, :details, NOW()
-        )
-    """)
-
-    audit_details = {
-        "bonus_hours": request.bonus_hours,
-        "bonus_seconds": bonus_seconds,
-        "reason": request.reason,
-        "new_total_seconds": result[1]
-    }
-
-    db.execute(audit_query, {
-        "admin_id": admin.id,
-        "target_user_id": user_id,
-        "details": json.dumps(audit_details)
-    })
-
-    db.commit()
-
-    return {
-        "message": f"Granted {request.bonus_hours} hours to user {user[1]}",
-        "user_id": user_id,
-        "user_email": user[1],
-        "bonus_hours_granted": request.bonus_hours,
-        "new_total_bonus_hours": round(result[1] / 3600, 2),
-        "reason": request.reason
-    }
 
 # Endpoint 9: Active Rooms
 @router.get("/rooms/active")
@@ -1648,26 +1236,6 @@ def update_feature_flag(
         "value": new_value,
         "admin_id": admin.id
     }).fetchone()[0]
-
-    db.commit()
-
-    # Create audit log entry
-    audit_query = text("""
-        INSERT INTO admin_audit_log (admin_id, action, details, created_at)
-        VALUES (:admin_id, 'update_setting', :details, NOW())
-    """)
-
-    audit_details = json.dumps({
-        "key": key,
-        "old_value": old_value,
-        "new_value": new_value,
-        "value_type": value_type
-    })
-
-    db.execute(audit_query, {
-        "admin_id": admin.id,
-        "details": audit_details
-    })
 
     db.commit()
 
@@ -2125,7 +1693,7 @@ def clear_cache(
     """
     Clear cache by type (US-007).
     Supports room_translations, stt_cache, mt_cache, all_stt.
-    Logs action to admin_audit_log.
+    Clears matching Redis keys.
     """
     import redis as redis_sync
 
@@ -2159,22 +1727,6 @@ def clear_cache(
                     keys_deleted += r.delete(*keys)
                 if cursor == 0:
                     break
-
-        # Audit log
-        audit_query = text("""
-            INSERT INTO admin_audit_log (admin_id, action, details, created_at)
-            VALUES (:admin_id, 'cache_clear', :details, NOW())
-        """)
-
-        db.execute(audit_query, {
-            "admin_id": admin.id,
-            "details": json.dumps({
-                "cache_type": cache_type,
-                "room_code": room_code,
-                "keys_deleted": keys_deleted
-            })
-        })
-        db.commit()
 
         return {
             "message": "Cache cleared",

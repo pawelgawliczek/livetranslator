@@ -14,7 +14,7 @@ import os
 # Set TEST_POSTGRES_DSN before importing the cleanup service
 os.environ["TEST_POSTGRES_DSN"] = os.getenv(
     "TEST_POSTGRES_DSN",
-    "postgresql+asyncpg://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator_test"
+    "postgresql+asyncpg://lt_user:${POSTGRES_PASSWORD}@postgres:5432/livetranslator_test"
 )
 
 import pytest
@@ -406,7 +406,7 @@ class TestAdminLeftAtBugFix:
         await test_db_session.refresh(room)
 
         # Create sync session for test database (for WSManager to use)
-        test_db_url = os.getenv("TEST_POSTGRES_DSN", "postgresql+asyncpg://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator_test")
+        test_db_url = os.getenv("TEST_POSTGRES_DSN", "postgresql+asyncpg://lt_user:${POSTGRES_PASSWORD}@postgres:5432/livetranslator_test")
         # Convert asyncpg URL to psycopg2 URL for sync engine
         sync_test_db_url = test_db_url.replace("postgresql+asyncpg://", "postgresql://")
 
@@ -472,7 +472,7 @@ class TestAdminLeftAtBugFix:
         await test_db_session.refresh(room)
 
         # Create sync session for test database (for WSManager to use)
-        test_db_url = os.getenv("TEST_POSTGRES_DSN", "postgresql+asyncpg://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator_test")
+        test_db_url = os.getenv("TEST_POSTGRES_DSN", "postgresql+asyncpg://lt_user:${POSTGRES_PASSWORD}@postgres:5432/livetranslator_test")
         sync_test_db_url = test_db_url.replace("postgresql+asyncpg://", "postgresql://")
 
         sync_engine = create_engine(sync_test_db_url)

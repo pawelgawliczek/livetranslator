@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime
 
 
-POSTGRES_DSN = os.getenv("POSTGRES_DSN", "postgresql://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator")
+POSTGRES_DSN = os.getenv("POSTGRES_DSN", "postgresql://lt_user:${POSTGRES_PASSWORD}@postgres:5432/livetranslator")
 
 
 @pytest_asyncio.fixture

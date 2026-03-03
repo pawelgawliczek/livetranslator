@@ -27,28 +27,10 @@ export default function AdminLayout({ children, onLogout }) {
       icon: '📊',
     },
     {
-      id: 'financial',
-      label: t('admin.menu.financial') || 'Financial',
-      path: '/admin/financial',
-      icon: '💰',
-    },
-    {
       id: 'cost-analytics',
       label: t('admin.menu.costAnalytics') || 'Cost Analytics',
       path: '/admin/cost-analytics',
       icon: '💸',
-    },
-    {
-      id: 'subscriptions',
-      label: t('admin.menu.subscriptions') || 'Subscriptions',
-      path: '/admin/subscriptions',
-      icon: '💳',
-    },
-    {
-      id: 'credits',
-      label: t('admin.menu.credits') || 'Credits',
-      path: '/admin/credits',
-      icon: '🎫',
     },
     {
       id: 'users',
@@ -73,12 +55,6 @@ export default function AdminLayout({ children, onLogout }) {
       label: t('admin.menu.tools') || 'Tools',
       path: '/admin/tools',
       icon: '🔧',
-    },
-    {
-      id: 'audit-logs',
-      label: t('admin.menu.auditLogs') || 'Audit Logs',
-      path: '/admin/audit-logs',
-      icon: '📋',
     },
     {
       id: 'notifications',

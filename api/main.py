@@ -1,13 +1,9 @@
 import asyncio, re, httpx, orjson, structlog
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse, Response
 from pydantic import BaseModel
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 from .metrics import MET_WS_CONNS, MET_STT_EVENTS, MET_MT_REQ, MET_MT_ERR, MET_MT_LAT, generate_latest, CONTENT_TYPE_LATEST
-import asyncpg
 
 from .settings import settings
 from .db import migrate
@@ -24,27 +20,15 @@ from .invites_api import router as invites_router
 from .rooms_api import router as rooms_router
 from .guest_api import router as guest_router
 from .profile_api import router as profile_router
-from .subscription_api import router as subscription_router
-from .billing_api import router as billing_router
 from .user_history_api import router as user_history_router
 from .routers.admin_api import router as admin_router
 from .routers.admin_costs import router as admin_costs_router
-from .routers.admin_subscriptions import router as admin_subscriptions_router
-from .routers.admin_credits import router as admin_credits_router
-from .routers.quota import router as quota_router
 from .routers.transcript import router as transcript_router
-from .routers.payments import router as payments_router
 from .routers.notifications import router as notifications_router
-from .routers.admin_audit import router as admin_audit_router
 from .routers.cost_budgets import router as cost_budgets_router
 from .routers.user import router as user_router
 
 app = FastAPI(title="LiveTranslator API")
-
-# Register rate limiter for payment endpoints
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.include_router(events_router)
 app.include_router(auth_router)
@@ -54,18 +38,11 @@ app.include_router(invites_router)
 app.include_router(rooms_router)
 app.include_router(guest_router)
 app.include_router(profile_router)
-app.include_router(subscription_router)
-app.include_router(billing_router)
 app.include_router(user_history_router)
 app.include_router(admin_router)
 app.include_router(admin_costs_router)
-app.include_router(admin_subscriptions_router)
-app.include_router(admin_credits_router)
-app.include_router(quota_router)
 app.include_router(transcript_router)
-app.include_router(payments_router)
 app.include_router(notifications_router)
-app.include_router(admin_audit_router)
 app.include_router(cost_budgets_router)
 app.include_router(user_router)
 
@@ -100,85 +77,11 @@ presence_manager = PresenceManager(wsman.redis)
 app.state.wsman = wsman
 app.state.presence_manager = presence_manager
 
-# Global async database pool for quota checks (US-005 fix)
-_db_pool = None
-
-async def get_db_pool():
-    """Get or create async database pool."""
-    global _db_pool
-    if _db_pool is None:
-        import os
-        dsn = os.getenv('POSTGRES_DSN')
-        if not dsn:
-            # Construct DSN from individual env vars
-            user = os.getenv('POSTGRES_USER', 'lt_user')
-            password = os.getenv('POSTGRES_PASSWORD', '')
-            host = os.getenv('POSTGRES_HOST', 'postgres')
-            port = os.getenv('POSTGRES_PORT', '5432')
-            db = os.getenv('POSTGRES_DB', 'livetranslator')
-            dsn = f'postgresql://{user}:{password}@{host}:{port}/{db}'
-        _db_pool = await asyncpg.create_pool(dsn, min_size=2, max_size=10)
-    return _db_pool
-
-async def check_expired_grace_periods():
-    """
-    US-007: Background task to downgrade users whose grace period expired.
-    Runs every hour to check for expired grace periods.
-    """
-    while True:
-        try:
-            pool = await get_db_pool()
-            async with pool.acquire() as conn:
-                # Find users whose grace period expired
-                expired = await conn.fetch("""
-                    SELECT user_id, stripe_customer_id
-                    FROM user_subscriptions
-                    WHERE status = 'past_due'
-                      AND grace_period_end IS NOT NULL
-                      AND grace_period_end < NOW()
-                """)
-
-                for row in expired:
-                    # Downgrade to Free tier
-                    await conn.execute("""
-                        UPDATE user_subscriptions
-                        SET
-                            tier_id = 1,
-                            status = 'active',
-                            stripe_subscription_id = NULL,
-                            stripe_customer_id = NULL,
-                            billing_period_end = NOW() + INTERVAL '30 days',
-                            grace_period_end = NULL,
-                            updated_at = NOW()
-                        WHERE user_id = $1
-                    """, row['user_id'])
-
-                    log.warning("grace_period_expired_downgrade",
-                              user_id=row['user_id'],
-                              customer_id=row['stripe_customer_id'])
-
-            if len(expired) > 0:
-                log.info("grace_period_cleanup_complete", count=len(expired))
-
-        except Exception as e:
-            log.error("grace_period_cleanup_error", error=str(e))
-
-        # Check every hour
-        await asyncio.sleep(3600)
-
 @app.on_event("startup")
 async def _startup():
     migrate()
     asyncio.create_task(wsman.run_pubsub())
     asyncio.create_task(presence_manager.cleanup_stale_disconnects())
-    # Initialize database pool for quota checks
-    await get_db_pool()
-    # US-007: Start grace period cleanup task
-    asyncio.create_task(check_expired_grace_periods())
-    # US-011: Start webhook retry worker
-    from api.services.webhook_retry_worker import retry_worker_loop, cleanup_old_webhooks
-    asyncio.create_task(retry_worker_loop())
-    asyncio.create_task(cleanup_old_webhooks())
 
 @app.get("/healthz")
 def healthz():
@@ -286,34 +189,6 @@ async def ws_room(ws: WebSocket, room_id: str):
         await ws.accept()
         await ws.close(code=4401)
         return
-
-    # US-004: Check quota before accepting connection (US-005 fix: use async pool)
-    # Skip quota check for guest users
-    if not str(user_id).startswith('guest:'):
-        try:
-            pool = await get_db_pool()
-            async with pool.acquire() as conn:
-                quota_seconds = await conn.fetchval(
-                    "SELECT get_user_quota_available($1)",
-                    user_id
-                )
-            quota_seconds = quota_seconds or 0
-
-            # Reject if quota < 60 seconds (1 minute minimum)
-            if quota_seconds < 60:
-                await ws.accept()
-                await ws.send_json({
-                    "error": "quota_exhausted",
-                    "message": "Insufficient quota. Please upgrade or purchase credits.",
-                    "quota_available": quota_seconds
-                })
-                await ws.close(code=4402)  # Custom code for quota exhaustion
-                log.warning("quota_check_rejected", user=user_id, quota=quota_seconds)
-                return
-        except Exception as e:
-            log.error("quota_check_error", user=user_id, error=str(e))
-            # Allow connection on quota check failure (fail-open to prevent service disruption)
-            pass
 
     MET_WS_CONNS.inc()
     await wsman.connect(room_id, ws)

@@ -1,16 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import PropTypes from 'prop-types';
 import { useTranslation } from 'react-i18next';
-import GrantCreditsModal from './GrantCreditsModal';
 
 /**
- * UserProfileModal - Display user profile and subscription details
+ * UserProfileModal - Display user profile details
  * Part of US-009: Search and View User Details
- * Updated for US-010: Grant Bonus Credits to User
  */
-export default function UserProfileModal({ user, onClose, token, onUserUpdate }) {
+export default function UserProfileModal({ user, onClose }) {
   const { t } = useTranslation();
-  const [showGrantModal, setShowGrantModal] = useState(false);
 
   const formatDate = (isoString) => {
     if (!isoString) return 'N/A';
@@ -34,18 +31,6 @@ export default function UserProfileModal({ user, onClose, token, onUserUpdate })
 
   const handleContentClick = (e) => {
     e.stopPropagation();
-  };
-
-  const handleOpenGrantModal = () => {
-    setShowGrantModal(true);
-  };
-
-  const handleGrantSuccess = () => {
-    console.log('[UserProfileModal] Credits granted successfully');
-    // Refresh user data if callback provided
-    if (onUserUpdate) {
-      onUserUpdate();
-    }
   };
 
   return (
@@ -90,43 +75,7 @@ export default function UserProfileModal({ user, onClose, token, onUserUpdate })
             </div>
           </div>
 
-          {/* Subscription Section */}
-          <div>
-            <h3 className="text-lg font-semibold mb-4 text-primary">
-              {t('admin.users.modal.subscription')}
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted">{t('admin.users.tier')}</p>
-                <p className="font-medium capitalize">{user.tier_name || 'free'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted">{t('admin.users.modal.monthlyQuota')}</p>
-                <p className="font-medium">
-                  {user.quota_limit_hours !== null ? `${user.quota_limit_hours} hours` : 'Unlimited'}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted">{t('admin.users.quotaUsed')}</p>
-                <p className="font-medium">{user.quota_used_hours} hours</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted">Usage</p>
-                <div className="w-full bg-secondary rounded-full h-2 mt-2">
-                  <div
-                    className="bg-primary h-2 rounded-full"
-                    style={{
-                      width: user.quota_limit_hours
-                        ? `${Math.min((user.quota_used_hours / user.quota_limit_hours) * 100, 100)}%`
-                        : '0%',
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Activity Section - Placeholder for US-010 */}
+          {/* Activity Section */}
           <div>
             <h3 className="text-lg font-semibold mb-4 text-primary">
               {t('admin.users.modal.activity')}
@@ -145,25 +94,8 @@ export default function UserProfileModal({ user, onClose, token, onUserUpdate })
           >
             {t('admin.users.modal.close')}
           </button>
-          <button
-            onClick={handleOpenGrantModal}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-opacity-90 transition"
-          >
-            {t('admin.users.modal.grantCredits')}
-          </button>
         </div>
       </div>
-
-      {/* Grant Credits Modal */}
-      {showGrantModal && (
-        <GrantCreditsModal
-          isOpen={showGrantModal}
-          onClose={() => setShowGrantModal(false)}
-          user={user}
-          token={token}
-          onSuccess={handleGrantSuccess}
-        />
-      )}
     </div>
   );
 }
@@ -173,12 +105,7 @@ UserProfileModal.propTypes = {
     user_id: PropTypes.number.isRequired,
     email: PropTypes.string.isRequired,
     display_name: PropTypes.string,
-    tier_name: PropTypes.string,
-    quota_used_hours: PropTypes.number.isRequired,
-    quota_limit_hours: PropTypes.number,
     signup_date: PropTypes.string,
   }).isRequired,
   onClose: PropTypes.func.isRequired,
-  token: PropTypes.string.isRequired,
-  onUserUpdate: PropTypes.func,
 };

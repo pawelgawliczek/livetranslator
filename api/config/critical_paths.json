@@ -1,0 +1,14 @@
+{
+  "critical_paths": [
+    "api/routers/payments.py",
+    "api/billing_api.py",
+    "api/routers/quota.py",
+    "api/subscription_api.py",
+    "api/auth.py",
+    "api/auth_deps.py",
+    "api/ws_manager.py",
+    "api/routers/stt/router.py",
+    "api/routers/admin_costs.py"
+  ],
+  "last_updated": "2025-11-06"
+}

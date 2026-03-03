@@ -96,7 +96,6 @@ services:
       LT_MODELS_DIR: /models
       LT_MT_BASE_URL: http://mt_worker:8081
       HTTP_TIMEOUT: 30
-      STRIPE_MODE: test  # "test" or "live" - controls which Stripe keys to use
       UVICORN_CMD_ARGS: "--no-access-log --log-level warning"
       LOG_LEVEL: "WARNING"
     depends_on:

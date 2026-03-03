@@ -1,6 +1,6 @@
 # Git Hooks for LiveTranslator
 
-Automated testing on commit to ensure code quality and prevent regressions.
+Automated testing and commit validation to ensure code quality and proper metrics tracking.
 
 ## Quick Setup
 
@@ -8,7 +8,64 @@ Automated testing on commit to ensure code quality and prevent regressions.
 ./setup-git-hooks.sh
 ```
 
-That's it! Hooks are now installed.
+That's it! Both hooks are now installed.
+
+---
+
+## Commit-Msg Hook (NEW!)
+
+**Validates that all commits include a Feature ID** for metrics tracking.
+
+### Required Format
+
+```bash
+git commit -m "feat: Add authentication [Feature-ID-10]"
+git commit -m "fix: Resolve login bug [Feature-10]"
+git commit -m "refactor: Improve API [FID-10]"
+git commit -m "docs: Update README [#10]"
+```
+
+### Valid Feature ID Formats
+
+- `[Feature-ID-10]` - Full format (recommended)
+- `[Feature-10]` - Short format
+- `[FID-10]` - Abbreviated
+- `[#10]` - GitHub-style
+
+### Special Cases (No Feature ID Required)
+
+- **Merge commits** - Automatically detected, no Feature ID needed
+- **Revert commits** - Automatically detected, no Feature ID needed
+- **Emergency fixes** - Add `[no-feature-id]` tag (use sparingly!)
+
+### Examples
+
+**✅ Valid commits:**
+```bash
+git commit -m "feat: Add Essential Mode API [Feature-ID-10]"
+git commit -m "fix: Fix quota deduction race condition [FID-10]"
+git commit -m "test: Add sponsorship tests [#10]"
+git commit -m "Merge branch 'feature/auth'" # Auto-allowed
+```
+
+**❌ Invalid commits (will be blocked):**
+```bash
+git commit -m "feat: Add Essential Mode API"  # Missing Feature ID
+git commit -m "fix stuff"  # Missing Feature ID
+```
+
+**Emergency override (use rarely!):**
+```bash
+git commit -m "hotfix: Critical production bug [no-feature-id]"
+```
+
+### Finding Active Feature IDs
+
+```bash
+# Show recent features
+PGPASSWORD=${POSTGRES_PASSWORD} docker compose exec -T postgres psql -U lt_user -d livetranslator -c \
+  "SELECT id, feature_name, phase FROM ai_development_metrics WHERE completed_at > NOW() - INTERVAL '7 days' ORDER BY id;"
+```
 
 ---
 
@@ -231,7 +288,8 @@ docker compose exec api pytest
 
 ```
 .git-hooks/
-├── pre-commit          # Main hook script
+├── pre-commit          # Test validation hook
+├── commit-msg          # Feature ID validation hook
 └── README.md           # This file
 
 setup-git-hooks.sh      # Installation script
@@ -243,7 +301,7 @@ setup-git-hooks.sh      # Installation script
 
 ```bash
 # Remove hooks
-rm .git/hooks/pre-commit
+rm .git/hooks/pre-commit .git/hooks/commit-msg
 
 # Verify removal
 ls .git/hooks/
@@ -333,6 +391,6 @@ jobs:
 
 ---
 
-**Last Updated**: 2025-10-27
+**Last Updated**: 2025-11-07
 **Maintainer**: Development Team
-**Version**: 1.0.0
+**Version**: 2.0.0 (Added commit-msg hook for Feature ID tracking)

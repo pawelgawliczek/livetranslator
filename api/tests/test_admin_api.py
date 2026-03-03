@@ -514,39 +514,21 @@ class TestUserSearch:
         data = response.json()
         assert data["results"] == []
 
-    def test_search_includes_tier_info(self, client, admin_token, setup_database):
-        """Should include tier and quota information in results"""
-        # This test will verify the response schema includes tier_name, quota_used_hours, etc.
+    def test_search_result_includes_basic_info(self, client, admin_token, setup_database):
+        """Should include basic user information in search results"""
         db = TestingSessionLocal()
         user = User(
-            email="tieruser@example.com",
-            display_name="Tier User",
+            email="basicuser@example.com",
+            display_name="Basic User",
             preferred_lang="en",
             created_at=datetime.utcnow()
         )
         db.add(user)
         db.commit()
-        db.refresh(user)
-
-        # Create subscription (if tables exist)
-        from sqlalchemy import text
-        result = db.execute(text("""
-            SELECT id FROM subscription_tiers WHERE tier_name = 'free' LIMIT 1
-        """)).fetchone()
-
-        if result:
-            tier_id = result[0]
-            db.execute(text("""
-                INSERT INTO user_subscriptions (user_id, tier_id, status, billing_period_end)
-                VALUES (:user_id, :tier_id, 'active', NOW() + INTERVAL '30 days')
-                ON CONFLICT (user_id) DO NOTHING
-            """), {"user_id": user.id, "tier_id": tier_id})
-            db.commit()
-
         db.close()
 
         response = client.get(
-            "/api/admin/users/search?q=tieruser",
+            "/api/admin/users/search?q=basicuser",
             headers={"Authorization": f"Bearer {admin_token}"}
         )
         assert response.status_code == 200
@@ -557,6 +539,4 @@ class TestUserSearch:
             assert "user_id" in result
             assert "email" in result
             assert "display_name" in result
-            assert "tier_name" in result
-            assert "quota_used_hours" in result
             assert "signup_date" in result

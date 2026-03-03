@@ -392,7 +392,7 @@ export default function usePresenceWebSocket({
           setNotifications(prev => [...prev, {
             id: Date.now(),
             type: 'quota_exhausted',
-            message: 'Insufficient quota. Please upgrade or purchase credits.',
+            message: 'Usage limit reached. Please contact the administrator.',
             timestamp: Date.now()
           }]);
         }

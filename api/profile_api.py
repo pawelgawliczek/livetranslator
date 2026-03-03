@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from .db import SessionLocal
-from .models import User, UserSubscription
+from .models import User
 from .auth_deps import get_current_user
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])

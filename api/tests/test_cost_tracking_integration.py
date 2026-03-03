@@ -21,7 +21,7 @@ from decimal import Decimal
 from datetime import datetime
 
 
-POSTGRES_DSN = os.getenv("POSTGRES_DSN", "postgresql://lt_user:CHANGE_ME_BEFORE_DEPLOY@postgres:5432/livetranslator")
+POSTGRES_DSN = os.getenv("POSTGRES_DSN", "postgresql://lt_user:${POSTGRES_PASSWORD}@postgres:5432/livetranslator")
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/5")
 COST_CHANNEL = "cost_events"
 

@@ -172,29 +172,6 @@ def test_update_feature_flag_integer(admin_token, test_db):
         json={"value": str(original_value)}
     )
 
-def test_update_feature_flag_creates_audit_log(admin_token, test_db):
-    """Test feature flag updates are logged in admin_audit_log"""
-    client = TestClient(app)
-
-    # Count existing logs
-    count_before = test_db.execute(
-        text("SELECT COUNT(*) FROM admin_audit_log WHERE action = 'update_setting'")
-    ).scalar()
-
-    # Update flag
-    client.put(
-        "/api/admin/settings/feature-flags/enable_diarization",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        json={"value": "true"}
-    )
-
-    # Verify audit log created
-    count_after = test_db.execute(
-        text("SELECT COUNT(*) FROM admin_audit_log WHERE action = 'update_setting'")
-    ).scalar()
-
-    assert count_after > count_before
-
 def test_get_rate_limits(admin_token):
     """Test GET /settings/rate-limits returns performance settings"""
     client = TestClient(app)

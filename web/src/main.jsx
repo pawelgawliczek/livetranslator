@@ -16,21 +16,13 @@ import AdminCostAnalyticsPage from "./pages/AdminCostAnalyticsPage";
 import AdminMultiSpeakerPage from "./pages/AdminMultiSpeakerPage";
 import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
 import AdminOverviewPage from "./pages/AdminOverviewPage";
-import AdminFinancialPage from "./pages/AdminFinancialPage";
-import AdminSubscriptionsPage from "./pages/AdminSubscriptionsPage";
-import AdminCreditsPage from "./pages/AdminCreditsPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import AdminMetricsPage from "./pages/AdminMetricsPage";
 import AdminSystemPage from "./pages/AdminSystemPage";
 import AdminToolsPage from "./pages/AdminToolsPage";
 import AdminNotificationsPage from "./pages/AdminNotificationsPage";
-import AdminAuditLogsPage from "./pages/AdminAuditLogsPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import NotificationToast from "./components/NotificationToast";
-import SubscriptionPage from "./pages/SubscriptionPage";
-import CheckoutSuccessPage from "./pages/billing/CheckoutSuccessPage";
-import CheckoutCancelPage from "./pages/billing/CheckoutCancelPage";
-import BillingHistoryPage from "./pages/BillingHistoryPage";
 
 function App() {
   const [token, setToken] = React.useState(localStorage.getItem("token") || "");
@@ -107,42 +99,6 @@ function App() {
           }
         />
         <Route
-          path="/admin/financial"
-          element={
-            token ? (
-              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
-                <AdminFinancialPage token={token} onLogout={logout} />
-              </ProtectedAdminRoute>
-            ) : (
-              <Navigate to="/login" />
-            )
-          }
-        />
-        <Route
-          path="/admin/subscriptions"
-          element={
-            token ? (
-              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
-                <AdminSubscriptionsPage token={token} onLogout={logout} />
-              </ProtectedAdminRoute>
-            ) : (
-              <Navigate to="/login" />
-            )
-          }
-        />
-        <Route
-          path="/admin/credits"
-          element={
-            token ? (
-              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
-                <AdminCreditsPage token={token} onLogout={logout} />
-              </ProtectedAdminRoute>
-            ) : (
-              <Navigate to="/login" />
-            )
-          }
-        />
-        <Route
           path="/admin/users"
           element={
             token ? (
@@ -203,18 +159,6 @@ function App() {
           }
         />
         <Route
-          path="/admin/audit-logs"
-          element={
-            token ? (
-              <ProtectedAdminRoute token={token} onUnauthorized={showToast}>
-                <AdminAuditLogsPage token={token} onLogout={logout} />
-              </ProtectedAdminRoute>
-            ) : (
-              <Navigate to="/login" />
-            )
-          }
-        />
-        <Route
           path="/admin/cost-analytics"
           element={
             token ? (
@@ -245,23 +189,6 @@ function App() {
           element={token ? <NotificationsPage token={token} onLogout={logout} /> : <Navigate to="/login" />}
         />
 
-        {/* Phase 4: Billing & Subscription */}
-        <Route
-          path="/subscription"
-          element={token ? <SubscriptionPage token={token} onLogout={logout} /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/billing/success"
-          element={<CheckoutSuccessPage />}
-        />
-        <Route
-          path="/billing/cancel"
-          element={<CheckoutCancelPage />}
-        />
-        <Route
-          path="/billing/history"
-          element={token ? <BillingHistoryPage token={token} onLogout={logout} /> : <Navigate to="/login" />}
-        />
       </Routes>
     </BrowserRouter>
   );

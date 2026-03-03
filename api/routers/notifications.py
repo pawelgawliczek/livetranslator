@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import logging
 
 from ..auth import require_admin, get_optional_current_user, get_db
-from ..models import User, Notification, NotificationDelivery, SubscriptionTier, UserSubscription
+from ..models import User, Notification, NotificationDelivery
 
 logger = logging.getLogger(__name__)
 
@@ -153,17 +153,9 @@ def _get_target_user_ids(target: str, target_user_id: Optional[int], db: Session
         return [row[0] for row in result.fetchall()]
 
     else:
-        # Tier-based targeting (free, plus, pro)
-        result = db.execute(
-            select(UserSubscription.user_id)
-            .join(SubscriptionTier, UserSubscription.tier_id == SubscriptionTier.id)
-            .where(
-                and_(
-                    SubscriptionTier.tier_name == target,
-                    UserSubscription.status == "active"
-                )
-            )
-        )
+        # Tier-based targeting no longer supported (billing removed)
+        # Fall back to all users
+        result = db.execute(select(User.id))
         return [row[0] for row in result.fetchall()]
 
 
@@ -176,18 +168,9 @@ def _calculate_target_count(target: str, target_user_id: Optional[int], db: Sess
         return db.scalar(select(func.count(User.id))) or 0
 
     else:
-        # Tier-based count
-        count = db.scalar(
-            select(func.count(UserSubscription.user_id.distinct()))
-            .join(SubscriptionTier, UserSubscription.tier_id == SubscriptionTier.id)
-            .where(
-                and_(
-                    SubscriptionTier.tier_name == target,
-                    UserSubscription.status == "active"
-                )
-            )
-        )
-        return count or 0
+        # Tier-based count no longer supported (billing removed)
+        # Fall back to all users count
+        return db.scalar(select(func.count(User.id))) or 0
 
 
 def _check_rate_limit(admin_id: int) -> bool:
@@ -391,36 +374,8 @@ def get_notification_detail(
 
     target_count = _calculate_target_count(notification.target, notification.target_user_id, db)
 
-    # Get delivery breakdown by tier (if target is "all")
+    # Delivery breakdown (tier-based breakdown removed with billing)
     delivery_breakdown = {}
-    if notification.target == "all":
-        for tier_name in ["free", "plus", "pro"]:
-            tier_users_query = (
-                select(UserSubscription.user_id)
-                .join(SubscriptionTier, UserSubscription.tier_id == SubscriptionTier.id)
-                .where(
-                    and_(
-                        SubscriptionTier.tier_name == tier_name,
-                        UserSubscription.status == "active"
-                    )
-                )
-            )
-            tier_user_ids = [row[0] for row in db.execute(tier_users_query).fetchall()]
-
-            tier_delivered = db.scalar(
-                select(func.count(NotificationDelivery.id))
-                .where(
-                    and_(
-                        NotificationDelivery.notification_id == notification_id,
-                        NotificationDelivery.user_id.in_(tier_user_ids)
-                    )
-                )
-            ) or 0
-
-            delivery_breakdown[tier_name] = {
-                "delivered": tier_delivered,
-                "target": len(tier_user_ids)
-            }
 
     return {
         "notification": {

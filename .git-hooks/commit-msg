@@ -1,0 +1,83 @@
+#!/bin/bash
+#
+# Commit-msg hook for LiveTranslator
+# Validates that commit messages include a Feature ID
+#
+# Required format:
+#   feat: Add authentication service [Feature-ID-10]
+#   fix: Resolve login bug [Feature-ID-10]
+#   refactor: Improve API client [Feature-ID-10]
+#
+# Valid Feature ID formats:
+#   [Feature-ID-10]
+#   [Feature-10]
+#   [FID-10]
+#   [#10]
+#
+# Special cases (no Feature ID required):
+#   - Commits starting with "Merge"
+#   - Commits starting with "Revert"
+#   - Commits with [no-feature-id] tag (use sparingly)
+#
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Read commit message from file
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Check if commit message is a merge or revert (skip validation)
+if echo "$COMMIT_MSG" | grep -qE '^(Merge|Revert)'; then
+    echo -e "${GREEN}✅ Merge/Revert commit - Feature ID not required${NC}"
+    exit 0
+fi
+
+# Check if commit explicitly opts out (use sparingly!)
+if echo "$COMMIT_MSG" | grep -qiE '\[no-feature-id\]'; then
+    echo -e "${YELLOW}⚠️  Commit opted out of Feature ID requirement${NC}"
+    exit 0
+fi
+
+# Check for Feature ID in various formats
+if echo "$COMMIT_MSG" | grep -qE '\[(Feature-ID-|Feature-|FID-|#)[0-9]+\]'; then
+    # Extract and display the Feature ID
+    FEATURE_ID=$(echo "$COMMIT_MSG" | grep -oE '\[(Feature-ID-|Feature-|FID-|#)[0-9]+\]' | head -1)
+    echo -e "${GREEN}✅ Feature ID found: ${FEATURE_ID}${NC}"
+    exit 0
+fi
+
+# No Feature ID found - show error and examples
+echo ""
+echo -e "${RED}❌ ERROR: Commit message missing Feature ID${NC}"
+echo ""
+echo -e "${YELLOW}Required format examples:${NC}"
+echo "  feat: Add authentication service [Feature-ID-10]"
+echo "  fix: Resolve login bug [Feature-10]"
+echo "  refactor: Improve API client [FID-10]"
+echo "  docs: Update README [#10]"
+echo ""
+echo -e "${BLUE}Valid Feature ID formats:${NC}"
+echo "  [Feature-ID-10]  - Full format (recommended)"
+echo "  [Feature-10]     - Short format"
+echo "  [FID-10]         - Abbreviated"
+echo "  [#10]            - GitHub-style"
+echo ""
+echo -e "${YELLOW}Your commit message:${NC}"
+echo "$COMMIT_MSG"
+echo ""
+echo -e "${BLUE}To see active features:${NC}"
+echo "  SELECT id, feature_name FROM ai_development_metrics WHERE completed_at > NOW() - INTERVAL '7 days';"
+echo ""
+echo -e "${YELLOW}Special cases (no Feature ID required):${NC}"
+echo "  - Merge commits (automatic)"
+echo "  - Revert commits (automatic)"
+echo "  - Emergency fixes: Add [no-feature-id] tag (use sparingly!)"
+echo ""
+exit 1

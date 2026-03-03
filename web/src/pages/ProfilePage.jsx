@@ -28,8 +28,6 @@ export default function ProfilePage({ token, onLogout }) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("settings");
   const [profile, setProfile] = useState(null);
-  const [subscription, setSubscription] = useState(null);
-  const [billing, setBilling] = useState(null);
   const [history, setHistory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -104,24 +102,6 @@ export default function ProfilePage({ token, onLogout }) {
         if (profileData.preferred_mic_device_id) {
           setSelectedMicDeviceId(profileData.preferred_mic_device_id);
         }
-      }
-
-      // Fetch subscription
-      const subRes = await fetch("/api/subscription", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (subRes.ok) {
-        const subData = await subRes.json();
-        setSubscription(subData);
-      }
-
-      // Fetch billing/usage
-      const billingRes = await fetch("/api/billing/usage", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (billingRes.ok) {
-        const billingData = await billingRes.json();
-        setBilling(billingData);
       }
 
       // Fetch history
@@ -242,34 +222,6 @@ export default function ProfilePage({ token, onLogout }) {
     }
   }
 
-  async function handleChangePlan(newPlan) {
-    setMessage("");
-    setError("");
-
-    try {
-      const res = await fetch("/api/subscription", {
-        method: "PATCH",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ plan: newPlan })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setSubscription(data);
-        setMessage(`Plan changed to ${newPlan.toUpperCase()} successfully!`);
-        // Refresh billing data
-        fetchProfileData();
-      } else {
-        setError("Failed to change plan");
-      }
-    } catch (e) {
-      setError("Failed to change plan");
-    }
-  }
-
   async function handleTTSSettingsChange(newSettings) {
     try {
       setTtsSettings(newSettings);
@@ -346,7 +298,7 @@ export default function ProfilePage({ token, onLogout }) {
         )}
 
         <div className="flex gap-2 mb-4 flex-wrap overflow-x-auto">
-          {['settings', 'tts', 'account', 'subscription', 'billing', 'history'].map((tab) => (
+          {['settings', 'tts', 'account', 'history'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -575,62 +527,6 @@ export default function ProfilePage({ token, onLogout }) {
                   {t('profile.changePassword')}
                 </button>
               </form>
-            </div>
-          )}
-
-          {activeTab === "subscription" && (
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-2xl font-bold text-fg mb-6">Subscription & Billing</h2>
-
-              <div className="bg-bg-secondary border border-border rounded-lg p-8 text-center">
-                <svg className="mx-auto h-16 w-16 text-accent mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                </svg>
-                <h3 className="text-xl font-semibold text-fg mb-2">
-                  Manage Your Subscription
-                </h3>
-                <p className="text-muted mb-6">
-                  View plans, upgrade your tier, purchase credits, and manage billing
-                </p>
-                <div className="flex gap-4 justify-center flex-wrap">
-                  <button
-                    onClick={() => navigate('/subscription')}
-                    className="px-6 py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-colors"
-                  >
-                    View Subscription Plans
-                  </button>
-                  <button
-                    onClick={() => navigate('/billing/history')}
-                    className="px-6 py-3 border border-border bg-card text-fg rounded-lg font-medium hover:bg-bg-secondary transition-colors"
-                  >
-                    View Billing History
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "billing" && (
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-2xl font-bold text-fg mb-6">Billing & Usage</h2>
-
-              <div className="bg-bg-secondary border border-border rounded-lg p-8 text-center">
-                <svg className="mx-auto h-16 w-16 text-accent mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-                <h3 className="text-xl font-semibold text-fg mb-2">
-                  View Your Usage & Billing
-                </h3>
-                <p className="text-muted mb-6">
-                  Track your quota usage and view detailed billing information
-                </p>
-                <button
-                  onClick={() => navigate('/subscription')}
-                  className="px-6 py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-colors"
-                >
-                  Go to Subscription & Billing
-                </button>
-              </div>
             </div>
           )}
 

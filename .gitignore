@@ -56,3 +56,10 @@ test_redis_data/
 tests/e2e/test-results/
 tests/e2e/playwright-report/
 tests/e2e/.auth/
+
+# Claude Code
+.claude/
+
+# Local env files
+.env.*
+!.env.example

@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+# Install system dependencies (cloc for LOC counting)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cloc \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    lizard \
+    asyncpg \
+    redis \
+    python-dotenv
+
+WORKDIR /app
+
+# Copy collection scripts
+COPY docker/metrics_collector/collect_metrics.py /app/
+COPY docker/metrics_collector/scheduler.py /app/
+
+# Ensure scripts are executable
+RUN chmod +x /app/scheduler.py
+
+CMD ["python", "-u", "scheduler.py"]

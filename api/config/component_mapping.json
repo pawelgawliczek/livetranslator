@@ -1,0 +1,163 @@
+{
+  "version": "1.0",
+  "last_updated": "2025-11-06",
+  "layers": [
+    {
+      "name": "api",
+      "display_name": "Backend API",
+      "description": "FastAPI backend services, routers, and business logic",
+      "path_prefix": "api/"
+    },
+    {
+      "name": "web",
+      "display_name": "Frontend",
+      "description": "React components, pages, and UI logic",
+      "path_prefix": "web/src/"
+    },
+    {
+      "name": "tests",
+      "display_name": "Test Suite",
+      "description": "Unit, integration, and E2E tests",
+      "path_prefix": "tests/"
+    }
+  ],
+  "components": [
+    {
+      "name": "billing",
+      "display_name": "Billing & Subscriptions",
+      "description": "Handles Stripe payments, subscription management, credit packages, quota enforcement, and billing history. Critical for revenue.",
+      "layer": "api",
+      "is_critical": true,
+      "owner": "backend-team",
+      "files": [
+        "\"api/billing_api.py\"",
+        "\"api/subscription_api.py\"",
+        "\"api/routers/payments.py\"",
+        "\"api/routers/quota.py\"",
+        "\"api/routers/admin_credits.py\""
+      ]
+    },
+    {
+      "name": "authentication",
+      "display_name": "Authentication & Authorization",
+      "description": "User authentication (email/password, Google OAuth), JWT token management, role-based access control (RBAC). Critical for security.",
+      "layer": "api",
+      "is_critical": true,
+      "owner": "backend-team",
+      "files": [
+        "\"api/auth.py\"",
+        "\"api/auth_deps.py\"",
+        "\"api/oauth_api.py\""
+      ]
+    },
+    {
+      "name": "websocket",
+      "display_name": "WebSocket Manager",
+      "description": "Real-time WebSocket connections, presence management, message broadcasting. Critical for live translation UX.",
+      "layer": "api",
+      "is_critical": true,
+      "owner": "backend-team",
+      "files": [
+        "\"api/ws_manager.py\"",
+        "\"api/presence_manager.py\""
+      ]
+    },
+    {
+      "name": "stt",
+      "display_name": "Speech-to-Text Pipeline",
+      "description": "STT routing (5 providers: Speechmatics, Google, Azure, Soniox, OpenAI), language-based provider selection, streaming manager, connection pooling. Critical for core product functionality.",
+      "layer": "api",
+      "is_critical": true,
+      "owner": "backend-team",
+      "files": [
+        "\"api/routers/stt/router.py\"",
+        "\"api/routers/stt/language_router.py\"",
+        "\"api/routers/stt/streaming_manager.py\"",
+        "\"api/routers/stt/speechmatics_backend.py\"",
+        "\"api/routers/stt/speechmatics_streaming.py\"",
+        "\"api/routers/stt/google_v2_backend.py\"",
+        "\"api/routers/stt/google_streaming.py\"",
+        "\"api/routers/stt/azure_backend.py\"",
+        "\"api/routers/stt/azure_streaming.py\"",
+        "\"api/routers/stt/soniox_backend.py\"",
+        "\"api/routers/stt/openai_backend.py\"",
+        "\"api/routers/stt/debug_tracker.py\""
+      ]
+    },
+    {
+      "name": "mt",
+      "display_name": "Machine Translation Pipeline",
+      "description": "MT routing (4 providers: DeepL, Google, Amazon, OpenAI GPT-4o), language-pair optimization, translation caching, Arabic throttling.",
+      "layer": "api",
+      "is_critical": false,
+      "owner": "backend-team",
+      "files": [
+        "\"api/routers/mt/router.py\"",
+        "\"api/routers/mt/deepl_backend.py\"",
+        "\"api/routers/mt/google_backend.py\"",
+        "\"api/routers/mt/amazon_backend.py\"",
+        "\"api/routers/mt/openai_backend.py\"",
+        "\"api/routers/mt/debug_tracker.py\""
+      ]
+    },
+    {
+      "name": "admin",
+      "display_name": "Admin Panel APIs",
+      "description": "Cost analytics, multi-speaker analytics, budget tracking, user management, audit logs, system settings.",
+      "layer": "api",
+      "is_critical": false,
+      "owner": "backend-team",
+      "files": [
+        "\"api/routers/admin_costs.py\"",
+        "\"api/routers/admin_api.py\"",
+        "\"api/routers/admin_audit.py\"",
+        "\"api/routers/admin_subscriptions.py\"",
+        "\"api/routers/cost_budgets.py\"",
+        "\"api/routers/metrics.py\"",
+        "\"api/costs_api.py\""
+      ]
+    },
+    {
+      "name": "frontend-core",
+      "display_name": "Frontend Core",
+      "description": "Room page, authentication pages, layout components, WebSocket hooks, i18n integration.",
+      "layer": "web",
+      "is_critical": false,
+      "owner": "frontend-team",
+      "files": [
+        "\"web/src/pages/RoomPage.jsx\"",
+        "\"web/src/pages/LoginPage.jsx\"",
+        "\"web/src/pages/SignupPage.jsx\"",
+        "\"web/src/components/room/*\"",
+        "\"web/src/hooks/usePresenceWebSocket.jsx\"",
+        "\"web/src/hooks/useVAD.jsx\""
+      ]
+    },
+    {
+      "name": "frontend-admin",
+      "display_name": "Frontend Admin Dashboard",
+      "description": "Admin panel UI components, cost charts, user tables, metrics dashboard.",
+      "layer": "web",
+      "is_critical": false,
+      "owner": "frontend-team",
+      "files": [
+        "\"web/src/pages/Admin*.jsx\"",
+        "\"web/src/components/admin/*\""
+      ]
+    },
+    {
+      "name": "tests",
+      "display_name": "Test Suite",
+      "description": "Unit, integration, and E2E tests. Test complexity is not tracked as tests are intentionally simple.",
+      "layer": "tests",
+      "is_critical": false,
+      "owner": "qa-team",
+      "files": [
+        "\"tests/*\"",
+        "\"api/tests/*\"",
+        "\"web/src/**/*.test.js\"",
+        "\"web/src/**/*.test.jsx\""
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>LiveTranslator</string>
+    
+    <key>CFBundleIdentifier</key>
+    <string>com.livetranslator.ios</string>
+    
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    
+    <!-- URL Scheme for Google OAuth callback -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>livetranslator</string>
+            </array>
+            <key>CFBundleURLName</key>
+            <string>com.livetranslator.ios</string>
+        </dict>
+    </array>
+    
+    <!-- App Transport Security (enforce HTTPS) -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+    </dict>
+    
+    <!-- Microphone permission (for Week 3-4 Essential Mode) -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>LiveTranslator needs access to your microphone for real-time speech translation.</string>
+    
+    <!-- Speech recognition permission (for Week 3-4 Essential Mode) -->
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>LiveTranslator uses speech recognition to transcribe your voice in real-time.</string>
+</dict>
+</plist>

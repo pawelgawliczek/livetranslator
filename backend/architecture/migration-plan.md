@@ -474,7 +474,7 @@ docker compose exec api pytest /app/tests/ -v
 cd ../web && npm test
 
 # Database
-PGPASSWORD=CHANGE_ME_BEFORE_DEPLOY docker compose exec -T postgres psql -U lt_user -d livetranslator
+PGPASSWORD=${POSTGRES_PASSWORD} docker compose exec -T postgres psql -U lt_user -d livetranslator
 ```
 ```
 
