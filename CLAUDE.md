@@ -31,7 +31,7 @@ Use **Project Manager** (`.claude/agents/project-manager.md`) for all requests. 
 
 **CRITICAL: Minimal documentation only!**
 
-**Allowed**: `.claude/DOCUMENTATION.md` + `.claude/test-strategy.md`
+**Allowed**: `docs/DOCUMENTATION.md` + `docs/test-strategy.md`
 **Prohibited**: ❌ PHASE_*.md ❌ *_SUMMARY.md ❌ *_REPORT.md ❌ Tracking files
 
 **Guidelines**: Update core docs at completion only + Delete temp files + Focus on "what changed?" not "how we built it?"
@@ -67,13 +67,13 @@ docker compose exec redis redis-cli -n 5 SUBSCRIBE stt_events
 ## Test Requirements
 
 - Run tests BEFORE code changes
-- TDD: Write tests first (see test-strategy.md)
+- TDD: Write tests first (see docs/test-strategy.md)
 - Targets: Critical 100%, Unit 95%+, Integration 90%+
 - Status: 689 tests, 98.5% passing, ~32s
 
 ## Architecture
 
-**Docs**: `.claude/DOCUMENTATION.md` (2200+ lines)
+**Docs**: `docs/DOCUMENTATION.md`
 
 **Flow**: Browser → Caddy → API → Redis Pub/Sub → Workers → PostgreSQL
 
@@ -127,4 +127,4 @@ OPENAI_API_KEY=sk-...
 
 ---
 
-**Full docs**: `.claude/DOCUMENTATION.md` | **Tests**: `.claude/test-strategy.md`
+**Full docs**: `docs/DOCUMENTATION.md` | **Tests**: `docs/test-strategy.md`
