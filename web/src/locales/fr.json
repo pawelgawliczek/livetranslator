@@ -20,15 +20,12 @@
     "submit": "Soumettre",
     "or": "ou",
     "account": "Compte",
-    "subscription": "Abonnement",
-    "billing": "Facturation",
     "history": "Historique",
     "back_to_rooms": "Retour aux salles"
   },
   "nav": {
     "rooms": "Salles",
     "profile": "Profil",
-    "billing": "Facturation",
     "costs": "Coûts"
   },
   "auth": {
@@ -182,23 +179,6 @@
     "confirmNewPassword2": "Confirmez le nouveau mot de passe",
     "planChangedSuccess": "Plan changé avec succès !",
     "planChangeFailed": "Échec du changement de plan"
-  },
-  "billing": {
-    "title": "Facturation",
-    "currentPlan": "Plan actuel",
-    "usageThisMonth": "Utilisation ce mois-ci",
-    "totalCost": "Coût total",
-    "paymentMethod": "Méthode de paiement",
-    "addPaymentMethod": "Ajouter une méthode de paiement",
-    "billingHistory": "Historique de facturation",
-    "invoice": "Facture",
-    "download": "Télécharger",
-    "date": "Date",
-    "amount": "Montant",
-    "status": "Statut",
-    "paid": "Payé",
-    "pending": "En attente",
-    "failed": "Échoué"
   },
   "costs": {
     "title": "Utilisation et coûts",
@@ -360,8 +340,6 @@
   "profileTabs": {
     "settings": "Paramètres",
     "account": "Compte",
-    "subscription": "Abonnement",
-    "billing": "Facturation et utilisation",
     "history": "Historique des salles",
     "currentPlan": "Plan actuel",
     "status": "Statut",
@@ -380,7 +358,6 @@
     "downgrade": "Rétrograder",
     "upgrade": "Mettre à niveau",
     "switch": "Changer",
-    "currentBillingPeriod": "Période de facturation actuelle",
     "sttMinutesUsed": "Minutes STT utilisées",
     "minutesRemaining": "minutes restantes",
     "sttCost": "Coût STT",

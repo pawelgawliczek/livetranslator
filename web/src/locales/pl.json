@@ -20,15 +20,12 @@
     "submit": "Wyślij",
     "or": "lub",
     "account": "Konto",
-    "subscription": "Subskrypcja",
-    "billing": "Płatności",
     "history": "Historia",
     "back_to_rooms": "Powrót do pokojów"
   },
   "nav": {
     "rooms": "Pokoje",
     "profile": "Profil",
-    "billing": "Płatności",
     "costs": "Koszty"
   },
   "auth": {
@@ -182,23 +179,6 @@
     "confirmNewPassword2": "Potwierdź nowe hasło",
     "planChangedSuccess": "Plan zmieniony pomyślnie!",
     "planChangeFailed": "Nie udało się zmienić planu"
-  },
-  "billing": {
-    "title": "Płatności",
-    "currentPlan": "Obecny plan",
-    "usageThisMonth": "Zużycie w tym miesiącu",
-    "totalCost": "Całkowity koszt",
-    "paymentMethod": "Metoda płatności",
-    "addPaymentMethod": "Dodaj metodę płatności",
-    "billingHistory": "Historia płatności",
-    "invoice": "Faktura",
-    "download": "Pobierz",
-    "date": "Data",
-    "amount": "Kwota",
-    "status": "Status",
-    "paid": "Opłacone",
-    "pending": "Oczekujące",
-    "failed": "Nieudane"
   },
   "costs": {
     "title": "Użycie i koszty",
@@ -381,8 +361,6 @@
   "profileTabs": {
     "settings": "Ustawienia",
     "account": "Konto",
-    "subscription": "Subskrypcja",
-    "billing": "Płatności i użycie",
     "history": "Historia pokojów",
     "currentPlan": "Obecny plan",
     "status": "Status",
@@ -401,7 +379,6 @@
     "downgrade": "Obniż plan",
     "upgrade": "Podwyższ plan",
     "switch": "Zmień",
-    "currentBillingPeriod": "Obecny okres rozliczeniowy",
     "sttMinutesUsed": "Użyte minuty STT",
     "minutesRemaining": "pozostało minut",
     "sttCost": "Koszt STT",

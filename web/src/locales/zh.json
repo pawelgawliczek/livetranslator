@@ -20,15 +20,12 @@
     "submit": "提交",
     "or": "或",
     "account": "账户",
-    "subscription": "订阅",
-    "billing": "账单",
     "history": "历史",
     "back_to_rooms": "返回房间"
   },
   "nav": {
     "rooms": "房间",
     "profile": "个人资料",
-    "billing": "账单",
     "costs": "费用"
   },
   "auth": {
@@ -182,23 +179,6 @@
     "confirmNewPassword2": "确认新密码",
     "planChangedSuccess": "计划更改成功！",
     "planChangeFailed": "更改计划失败"
-  },
-  "billing": {
-    "title": "账单",
-    "currentPlan": "当前计划",
-    "usageThisMonth": "本月使用情况",
-    "totalCost": "总费用",
-    "paymentMethod": "付款方式",
-    "addPaymentMethod": "添加付款方式",
-    "billingHistory": "账单历史",
-    "invoice": "发票",
-    "download": "下载",
-    "date": "日期",
-    "amount": "金额",
-    "status": "状态",
-    "paid": "已付款",
-    "pending": "待处理",
-    "failed": "失败"
   },
   "costs": {
     "title": "使用情况和费用",
@@ -360,8 +340,6 @@
   "profileTabs": {
     "settings": "设置",
     "account": "账户",
-    "subscription": "订阅",
-    "billing": "账单和使用情况",
     "history": "房间历史",
     "currentPlan": "当前计划",
     "status": "状态",
@@ -380,7 +358,6 @@
     "downgrade": "降级",
     "upgrade": "升级",
     "switch": "切换",
-    "currentBillingPeriod": "当前账单期间",
     "sttMinutesUsed": "已使用 STT 分钟数",
     "minutesRemaining": "剩余分钟数",
     "sttCost": "STT 费用",

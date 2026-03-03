@@ -20,15 +20,12 @@
     "submit": "إرسال",
     "or": "أو",
     "account": "الحساب",
-    "subscription": "الاشتراك",
-    "billing": "الفواتير",
     "history": "السجل",
     "back_to_rooms": "العودة إلى الغرف"
   },
   "nav": {
     "rooms": "الغرف",
     "profile": "الملف الشخصي",
-    "billing": "الفواتير",
     "costs": "التكاليف"
   },
   "auth": {
@@ -182,23 +179,6 @@
     "confirmNewPassword2": "تأكيد كلمة المرور الجديدة",
     "planChangedSuccess": "تم تغيير الخطة بنجاح!",
     "planChangeFailed": "فشل تغيير الخطة"
-  },
-  "billing": {
-    "title": "الفواتير",
-    "currentPlan": "الخطة الحالية",
-    "usageThisMonth": "الاستخدام هذا الشهر",
-    "totalCost": "التكلفة الإجمالية",
-    "paymentMethod": "طريقة الدفع",
-    "addPaymentMethod": "إضافة طريقة دفع",
-    "billingHistory": "سجل الفواتير",
-    "invoice": "فاتورة",
-    "download": "تنزيل",
-    "date": "التاريخ",
-    "amount": "المبلغ",
-    "status": "الحالة",
-    "paid": "مدفوع",
-    "pending": "قيد الانتظار",
-    "failed": "فشل"
   },
   "costs": {
     "title": "الاستخدام والتكاليف",
@@ -360,8 +340,6 @@
   "profileTabs": {
     "settings": "الإعدادات",
     "account": "الحساب",
-    "subscription": "الاشتراك",
-    "billing": "الفواتير والاستخدام",
     "history": "سجل الغرف",
     "currentPlan": "الخطة الحالية",
     "status": "الحالة",
@@ -380,7 +358,6 @@
     "downgrade": "تخفيض الدرجة",
     "upgrade": "ترقية",
     "switch": "تبديل",
-    "currentBillingPeriod": "فترة الفوترة الحالية",
     "sttMinutesUsed": "الدقائق المستخدمة من STT",
     "minutesRemaining": "الدقائق المتبقية",
     "sttCost": "تكلفة STT",

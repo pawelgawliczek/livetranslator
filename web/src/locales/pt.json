@@ -20,15 +20,12 @@
     "submit": "Enviar",
     "or": "ou",
     "account": "Conta",
-    "subscription": "Assinatura",
-    "billing": "Faturamento",
     "history": "Histórico",
     "back_to_rooms": "Voltar para salas"
   },
   "nav": {
     "rooms": "Salas",
     "profile": "Perfil",
-    "billing": "Faturamento",
     "costs": "Custos"
   },
   "auth": {
@@ -182,23 +179,6 @@
     "confirmNewPassword2": "Confirme a nova senha",
     "planChangedSuccess": "Plano alterado com sucesso!",
     "planChangeFailed": "Falha ao alterar plano"
-  },
-  "billing": {
-    "title": "Faturamento",
-    "currentPlan": "Plano atual",
-    "usageThisMonth": "Uso este mês",
-    "totalCost": "Custo total",
-    "paymentMethod": "Método de pagamento",
-    "addPaymentMethod": "Adicionar método de pagamento",
-    "billingHistory": "Histórico de faturamento",
-    "invoice": "Fatura",
-    "download": "Baixar",
-    "date": "Data",
-    "amount": "Valor",
-    "status": "Status",
-    "paid": "Pago",
-    "pending": "Pendente",
-    "failed": "Falhado"
   },
   "costs": {
     "title": "Uso e custos",
@@ -360,8 +340,6 @@
   "profileTabs": {
     "settings": "Configurações",
     "account": "Conta",
-    "subscription": "Assinatura",
-    "billing": "Faturamento e uso",
     "history": "Histórico de salas",
     "currentPlan": "Plano atual",
     "status": "Status",
@@ -380,7 +358,6 @@
     "downgrade": "Fazer downgrade",
     "upgrade": "Fazer upgrade",
     "switch": "Trocar",
-    "currentBillingPeriod": "Período de faturamento atual",
     "sttMinutesUsed": "Minutos STT usados",
     "minutesRemaining": "minutos restantes",
     "sttCost": "Custo STT",

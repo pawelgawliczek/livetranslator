@@ -20,15 +20,12 @@
     "submit": "Отправить",
     "or": "или",
     "account": "Аккаунт",
-    "subscription": "Подписка",
-    "billing": "Выставление счетов",
     "history": "История",
     "back_to_rooms": "Вернуться к комнатам"
   },
   "nav": {
     "rooms": "Комнаты",
     "profile": "Профиль",
-    "billing": "Выставление счетов",
     "costs": "Расходы"
   },
   "auth": {
@@ -182,23 +179,6 @@
     "confirmNewPassword2": "Подтвердите новый пароль",
     "planChangedSuccess": "План успешно изменён!",
     "planChangeFailed": "Не удалось изменить план"
-  },
-  "billing": {
-    "title": "Выставление счетов",
-    "currentPlan": "Текущий план",
-    "usageThisMonth": "Использование в этом месяце",
-    "totalCost": "Общая стоимость",
-    "paymentMethod": "Способ оплаты",
-    "addPaymentMethod": "Добавить способ оплаты",
-    "billingHistory": "История выставления счетов",
-    "invoice": "Счёт",
-    "download": "Скачать",
-    "date": "Дата",
-    "amount": "Сумма",
-    "status": "Статус",
-    "paid": "Оплачено",
-    "pending": "Ожидается",
-    "failed": "Не удалось"
   },
   "costs": {
     "title": "Использование и затраты",
@@ -360,8 +340,6 @@
   "profileTabs": {
     "settings": "Настройки",
     "account": "Аккаунт",
-    "subscription": "Подписка",
-    "billing": "Выставление счетов и использование",
     "history": "История комнат",
     "currentPlan": "Текущий план",
     "status": "Статус",
@@ -380,7 +358,6 @@
     "downgrade": "Понизить",
     "upgrade": "Повысить",
     "switch": "Переключить",
-    "currentBillingPeriod": "Текущий расчётный период",
     "sttMinutesUsed": "Использовано минут STT",
     "minutesRemaining": "минут осталось",
     "sttCost": "Стоимость STT",

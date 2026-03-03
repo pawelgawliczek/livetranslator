@@ -20,15 +20,12 @@
     "submit": "Absenden",
     "or": "oder",
     "account": "Konto",
-    "subscription": "Abonnement",
-    "billing": "Abrechnung",
     "history": "Verlauf",
     "back_to_rooms": "Zurück zu den Räumen"
   },
   "nav": {
     "rooms": "Räume",
     "profile": "Profil",
-    "billing": "Abrechnung",
     "costs": "Kosten"
   },
   "auth": {
@@ -182,23 +179,6 @@
     "confirmNewPassword2": "Neues Passwort bestätigen",
     "planChangedSuccess": "Plan erfolgreich geändert!",
     "planChangeFailed": "Planänderung fehlgeschlagen"
-  },
-  "billing": {
-    "title": "Abrechnung",
-    "currentPlan": "Aktueller Plan",
-    "usageThisMonth": "Nutzung diesen Monat",
-    "totalCost": "Gesamtkosten",
-    "paymentMethod": "Zahlungsmethode",
-    "addPaymentMethod": "Zahlungsmethode hinzufügen",
-    "billingHistory": "Abrechnungsverlauf",
-    "invoice": "Rechnung",
-    "download": "Herunterladen",
-    "date": "Datum",
-    "amount": "Betrag",
-    "status": "Status",
-    "paid": "Bezahlt",
-    "pending": "Ausstehend",
-    "failed": "Fehlgeschlagen"
   },
   "costs": {
     "title": "Nutzung und Kosten",
@@ -360,8 +340,6 @@
   "profileTabs": {
     "settings": "Einstellungen",
     "account": "Konto",
-    "subscription": "Abonnement",
-    "billing": "Abrechnung und Nutzung",
     "history": "Raumverlauf",
     "currentPlan": "Aktueller Plan",
     "status": "Status",
@@ -380,7 +358,6 @@
     "downgrade": "Herunterstufen",
     "upgrade": "Upgraden",
     "switch": "Wechseln",
-    "currentBillingPeriod": "Aktueller Abrechnungszeitraum",
     "sttMinutesUsed": "Verwendete STT-Minuten",
     "minutesRemaining": "Minuten verbleibend",
     "sttCost": "STT-Kosten",

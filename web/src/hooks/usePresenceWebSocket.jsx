@@ -326,32 +326,6 @@ export default function usePresenceWebSocket({
             return;
           }
 
-          // US-005: Handle quota exhaustion during session
-          if (data.type === 'quota_exhausted') {
-            console.error('[usePresenceWebSocket] Quota exhausted during session:', data.message);
-            // Show notification to user
-            setNotifications(prev => [...prev, {
-              id: Date.now(),
-              type: 'quota_exhausted',
-              message: data.message || 'Your quota has been exhausted. Please upgrade to continue.',
-              timestamp: Date.now()
-            }]);
-            return;
-          }
-
-          // US-005: Handle quota warning (low quota remaining)
-          if (data.type === 'quota_warning') {
-            console.warn('[usePresenceWebSocket] Low quota warning:', data.remaining_seconds);
-            const remainingMinutes = Math.floor(data.remaining_seconds / 60);
-            setNotifications(prev => [...prev, {
-              id: Date.now(),
-              type: 'quota_warning',
-              message: data.message || `Your quota is running low: ${remainingMinutes} minutes remaining`,
-              timestamp: Date.now()
-            }]);
-            return;
-          }
-
           // Handle presence events
           if (data.type === 'presence_snapshot') {
             handlePresenceSnapshot(data);
@@ -385,17 +359,6 @@ export default function usePresenceWebSocket({
         console.log('[usePresenceWebSocket] Closed', event.code, event.reason);
         setIsConnected(false);
 
-        // US-004: Handle quota exhaustion (code 4402)
-        if (event.code === 4402) {
-          console.warn('[usePresenceWebSocket] Connection rejected: Quota exhausted');
-          // Show notification to user
-          setNotifications(prev => [...prev, {
-            id: Date.now(),
-            type: 'quota_exhausted',
-            message: 'Usage limit reached. Please contact the administrator.',
-            timestamp: Date.now()
-          }]);
-        }
       };
     } catch (e) {
       console.error('[usePresenceWebSocket] Failed to create WebSocket:', e);

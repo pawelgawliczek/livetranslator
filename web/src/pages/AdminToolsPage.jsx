@@ -390,8 +390,6 @@ export default function AdminToolsPage({ token, onLogout }) {
                   <th className="p-3 text-left">User ID</th>
                   <th className="p-3 text-left">Email</th>
                   <th className="p-3 text-left">Display Name</th>
-                  <th className="p-3 text-left">Tier</th>
-                  <th className="p-3 text-left">Quota Used</th>
                   <th className="p-3 text-left">Signup Date</th>
                 </tr>
               </thead>
@@ -401,14 +399,6 @@ export default function AdminToolsPage({ token, onLogout }) {
                     <td className="p-3 font-mono">{user.user_id}</td>
                     <td className="p-3">{user.email}</td>
                     <td className="p-3">{user.display_name || '-'}</td>
-                    <td className="p-3">
-                      <span className="px-2 py-1 rounded bg-accent/20 text-accent text-xs font-semibold">
-                        {user.tier_name}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      {user.quota_used_hours.toFixed(2)}h / {user.quota_limit_hours ? `${user.quota_limit_hours}h` : 'Unlimited'}
-                    </td>
                     <td className="p-3 text-sm">{user.signup_date ? new Date(user.signup_date).toLocaleDateString() : 'N/A'}</td>
                   </tr>
                 ))}

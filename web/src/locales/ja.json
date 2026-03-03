@@ -20,15 +20,12 @@
     "submit": "送信",
     "or": "または",
     "account": "アカウント",
-    "subscription": "サブスクリプション",
-    "billing": "請求",
     "history": "履歴",
     "back_to_rooms": "ルームに戻る"
   },
   "nav": {
     "rooms": "ルーム",
     "profile": "プロフィール",
-    "billing": "請求",
     "costs": "コスト"
   },
   "auth": {
@@ -182,23 +179,6 @@
     "confirmNewPassword2": "新しいパスワードを確認",
     "planChangedSuccess": "プランが正常に変更されました！",
     "planChangeFailed": "プランの変更に失敗しました"
-  },
-  "billing": {
-    "title": "請求",
-    "currentPlan": "現在のプラン",
-    "usageThisMonth": "今月の使用量",
-    "totalCost": "合計コスト",
-    "paymentMethod": "支払い方法",
-    "addPaymentMethod": "支払い方法を追加",
-    "billingHistory": "請求履歴",
-    "invoice": "請求書",
-    "download": "ダウンロード",
-    "date": "日付",
-    "amount": "金額",
-    "status": "ステータス",
-    "paid": "支払い済み",
-    "pending": "保留中",
-    "failed": "失敗"
   },
   "costs": {
     "title": "使用量とコスト",
@@ -360,8 +340,6 @@
   "profileTabs": {
     "settings": "設定",
     "account": "アカウント",
-    "subscription": "サブスクリプション",
-    "billing": "請求と使用量",
     "history": "ルーム履歴",
     "currentPlan": "現在のプラン",
     "status": "ステータス",
@@ -380,7 +358,6 @@
     "downgrade": "ダウングレード",
     "upgrade": "アップグレード",
     "switch": "切り替え",
-    "currentBillingPeriod": "現在の請求期間",
     "sttMinutesUsed": "使用した STT 分数",
     "minutesRemaining": "残り分数",
     "sttCost": "STT コスト",
