@@ -106,7 +106,7 @@ docker compose exec redis redis-cli -n 5 SUBSCRIBE stt_events
 **Required (.env)**:
 ```
 POSTGRES_USER=lt_user
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+POSTGRES_PASSWORD=<your-password>
 POSTGRES_DB=livetranslator
 REDIS_URL=redis://redis:6379/5
 OPENAI_API_KEY=sk-...
@@ -128,6 +128,3 @@ OPENAI_API_KEY=sk-...
 ---
 
 **Full docs**: `.claude/DOCUMENTATION.md` | **Tests**: `.claude/test-strategy.md`
-- 3 1 per billing
-#7 B
-#1 80% everytime this level is crossed. if user had 60% and then he crossed 80% then trigger. if then package is bought and user will again cross 80% then trigger it again
