@@ -14,6 +14,12 @@ We tried Google Translate. The back-and-forth of typing or waiting for it to pro
 
 You hit "quick room" and a QR code appears. The other person scans it with their phone (any phone, Android or iPhone -- it's a PWA). They pick their language, hit enter, and you're both in the same room. You talk, they read what you said in their language. They talk, you read it in yours. Under two seconds from speech to translated text.
 
+<p>
+  <img src="https://pawelgawliczek.cloud/images/quick_scan_qr_code_livetranslator.png" width="160" alt="Create a room" />
+  <img src="https://pawelgawliczek.cloud/images/second_device_join_room_livetranslator.png" width="160" alt="Scan and join" />
+  <img src="https://pawelgawliczek.cloud/images/english_device_livetranslator.png" width="160" alt="English device with live translations" />
+</p>
+
 A single room handles up to five different languages at once. Everyone sees what everyone else is saying, each in their own language.
 
 My dad also started using it to watch English-language TV with Polish subtitles -- he'd point the mic at the screen and read his phone. I hadn't planned for that, but it worked.
