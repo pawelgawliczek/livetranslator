@@ -1,12 +1,22 @@
 # LiveTranslator
 
-Open-source real-time speech translation. You talk, other people read what you said in their language.
+Open-source real-time speech translation. Two people who don't share a language open the app and talk. Each person reads what the other said in their own language, on their own screen, in under two seconds.
 
-## Why I built this
+**[Live app page](https://pawelgawliczek.cloud/apps/livetranslator)** · **[Blog post: how I built it in a week](https://pawelgawliczek.cloud/blog/building-live-translator-in-a-week)**
 
-My wife speaks Arabic. My parents speak Polish. I speak both plus English. Every family call, every dinner with both sides, I'm the interpreter. It's exhausting and I'm bad at it - I miss things, I paraphrase wrong, I can't keep up when two people talk at once.
+## The problem
 
-So I built this. You open a room, everyone joins on their phone or laptop, and as people speak, translations appear on everyone's screen in their own language. The words show up as you talk (partial results every 400ms), then get cleaned up when the sentence finishes. About 2-4 seconds from speech to translated text.
+I live in Egypt. My wife speaks Arabic and English. My parents are Polish and speak no Arabic or English. When they came to visit us in Dahab, I spent two solid weeks as the only language bridge between my parents and everyone around them. Every conversation with my wife, every restaurant order, every interaction with friends went through me. It was exhausting.
+
+We tried Google Translate. The back-and-forth of typing or waiting for it to process killed the flow of conversation. People gave up on it after a few tries.
+
+## What LiveTranslator does
+
+You hit "quick room" and a QR code appears. The other person scans it with their phone (any phone, Android or iPhone -- it's a PWA). They pick their language, hit enter, and you're both in the same room. You talk, they read what you said in their language. They talk, you read it in yours. Under two seconds from speech to translated text.
+
+A single room handles up to five different languages at once. Everyone sees what everyone else is saying, each in their own language.
+
+My dad also started using it to watch English-language TV with Polish subtitles -- he'd point the mic at the screen and read his phone. I hadn't planned for that, but it worked.
 
 ## How it works
 
