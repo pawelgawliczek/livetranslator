@@ -18,6 +18,7 @@ You hit "quick room" and a QR code appears. The other person scans it with their
   <img src="https://pawelgawliczek.cloud/images/quick_scan_qr_code_livetranslator.png" width="160" alt="Create a room" />
   <img src="https://pawelgawliczek.cloud/images/second_device_join_room_livetranslator.png" width="160" alt="Scan and join" />
   <img src="https://pawelgawliczek.cloud/images/english_device_livetranslator.png" width="160" alt="English device with live translations" />
+  <img src="polish_demo.gif" width="160" alt="Polish device receiving live translations" />
 </p>
 
 A single room handles up to five different languages at once. Everyone sees what everyone else is saying, each in their own language.
