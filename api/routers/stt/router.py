@@ -231,10 +231,23 @@ async def router_loop():
                     # Check if there's an existing streaming connection we should reuse
                     existing_connection = streaming_manager.get_connection(room, provider_config["provider"])
                     print(f"[STT Router] DEBUG NEW SEGMENT: room={room}, provider={provider_config['provider']}, existing_connection={existing_connection}")
+
+                    # Determine the language for this segment's provider
+                    if provider_config["provider"] == "speechmatics":
+                        new_segment_lang = language_hint.split('-')[0] if '-' in language_hint else language_hint
+                    else:
+                        new_segment_lang = normalize_language_code(language_hint)
+
                     if existing_connection:
-                        # Reset the connection for the new segment
-                        print(f"[STT Router] ♻️  Reusing existing connection for new segment {segment_id}")
-                        existing_connection.reset_for_new_segment(segment_id)
+                        # Check if language changed — must close and recreate if so
+                        if existing_connection.language != new_segment_lang:
+                            print(f"[STT Router] 🔀 Language changed: {existing_connection.language} → {new_segment_lang}, closing old connection")
+                            await streaming_manager.close_connection(room, provider_config["provider"])
+                            existing_connection = None
+                        else:
+                            # Same language — safe to reuse
+                            print(f"[STT Router] ♻️  Reusing existing connection for new segment {segment_id}")
+                            existing_connection.reset_for_new_segment(segment_id)
                     else:
                         print(f"[STT Router] 🆕 No existing connection found, will create new one")
 
