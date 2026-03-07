@@ -2,7 +2,7 @@
 
 Open-source real-time speech translation. Two people who don't share a language open the app and talk. Each person reads what the other said in their own language, on their own screen, in under two seconds.
 
-**[Live app page](https://pawelgawliczek.cloud/apps/livetranslator)** · **[Blog post: how I built it in a week](https://pawelgawliczek.cloud/blog/building-live-translator-in-a-week)**
+**[Live app page](https://pawelgawliczek.cloud/apps/livetranslator)** · **[Blog post: how I built it in a week](https://pawelgawliczek.cloud/blog/live-translator-for-my-dad)**
 
 ## The problem
 
